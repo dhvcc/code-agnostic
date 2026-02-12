@@ -4,15 +4,15 @@ from typing import Dict
 import click
 from rich.console import Console
 
-from llm_sync.apps import AppsService
-from llm_sync.executor import SyncExecutor
-from llm_sync.models import AppId, EditorStatusRow, EditorSyncStatus, SyncPlan, SyncTarget
-from llm_sync.planner import SyncPlanner
-from llm_sync.repositories.common import CommonRepository
-from llm_sync.repositories.opencode import OpenCodeRepository
-from llm_sync.status import StatusService
-from llm_sync.tui import SyncConsoleUI
-from llm_sync.workspaces import WorkspaceService
+from code_agnostic.apps import AppsService
+from code_agnostic.executor import SyncExecutor
+from code_agnostic.models import AppId, EditorStatusRow, EditorSyncStatus, SyncPlan, SyncTarget
+from code_agnostic.planner import SyncPlanner
+from code_agnostic.repositories.common import CommonRepository
+from code_agnostic.repositories.opencode import OpenCodeRepository
+from code_agnostic.status import StatusService
+from code_agnostic.tui import SyncConsoleUI
+from code_agnostic.workspaces import WorkspaceService
 
 
 def _repos_from_obj(_obj: Dict[str, str]) -> tuple[CommonRepository, OpenCodeRepository]:

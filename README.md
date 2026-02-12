@@ -1,10 +1,10 @@
-# llm-sync
+# Code-agnostic
 
 Centralized hub for LLM coding config: MCP, skills, rules, and agents.
 
-`llm-sync` is built around one idea: keep your AI coding setup in one place, then sync it into editor/app-specific layouts.
+`code-agnostic` is built around one idea: keep your AI coding setup in one place, then sync it into editor/app-specific layouts.
 
-Similar to how OpenCode is provider-agnostic for models, `llm-sync` aims to be app-agnostic for coding clients. App selection is intentionally limited for now and expanding over time.
+Similar to how OpenCode is provider-agnostic for models, `code-agnostic` aims to be app-agnostic for coding clients. App selection is intentionally limited for now and expanding over time.
 
 ## App Feature Matrix
 
@@ -23,13 +23,13 @@ Similar to how OpenCode is provider-agnostic for models, `llm-sync` aims to be a
 ## Install
 
 ```bash
-uv tool install llm-sync
+uv tool install code-agnostic
 ```
 
 Or run without installing:
 
 ```bash
-uvx llm-sync
+uvx code-agnostic
 ```
 
 ## Project Status
@@ -40,14 +40,14 @@ uvx llm-sync
 
 ## Source Of Truth
 
-Shared config root defaults to `~/.config/llm-sync`.
+Shared config root defaults to `~/.config/code-agnostic`.
 
 Expected layout:
 
-- `~/.config/llm-sync/config/mcp.base.json`
-- `~/.config/llm-sync/config/opencode.base.json`
-- `~/.config/llm-sync/skills/<skill>/SKILL.md`
-- `~/.config/llm-sync/agents/*`
+- `~/.config/code-agnostic/config/mcp.base.json`
+- `~/.config/code-agnostic/config/opencode.base.json`
+- `~/.config/code-agnostic/skills/<skill>/SKILL.md`
+- `~/.config/code-agnostic/agents/*`
 
 ## Synced Targets (Current)
 

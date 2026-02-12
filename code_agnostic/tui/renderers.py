@@ -2,10 +2,10 @@ from typing import List, Optional
 
 from rich.console import Console
 
-from llm_sync.models import PlanResult, WorkspaceSyncStatus
-from llm_sync.tui.enums import UIStyle
-from llm_sync.tui.sections import UISection
-from llm_sync.tui.tables import AppsTable, ApplyTable, PlanTable, StatusTable, WorkspaceTable
+from code_agnostic.models import PlanResult, WorkspaceSyncStatus
+from code_agnostic.tui.enums import UIStyle
+from code_agnostic.tui.sections import UISection
+from code_agnostic.tui.tables import AppsTable, ApplyTable, PlanTable, StatusTable, WorkspaceTable
 
 
 class SyncConsoleUI:

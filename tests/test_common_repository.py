@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from llm_sync.errors import InvalidConfigSchemaError, InvalidJsonFormatError
-from llm_sync.repositories.common import CommonRepository
+from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
+from code_agnostic.repositories.common import CommonRepository
 
 
 @pytest.fixture

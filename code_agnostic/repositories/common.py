@@ -1,14 +1,14 @@
 from pathlib import Path
 from typing import Any, Optional
 
-from llm_sync.errors import InvalidConfigSchemaError, InvalidJsonFormatError, MissingConfigFileError
-from llm_sync.repositories.base import ISourceRepository
-from llm_sync.utils import read_json_safe, write_json
+from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError, MissingConfigFileError
+from code_agnostic.repositories.base import ISourceRepository
+from code_agnostic.utils import read_json_safe, write_json
 
 
 class CommonRepository(ISourceRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
-        self._root = root or (Path.home() / ".config" / "llm-sync")
+        self._root = root or (Path.home() / ".config" / "code-agnostic")
 
     @property
     def root(self) -> Path:

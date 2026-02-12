@@ -2,14 +2,14 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from llm_sync.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
-from llm_sync.errors import SyncAppError
-from llm_sync.mappers.base import IConfigMapper
-from llm_sync.mappers.opencode import OpenCodeMapper
-from llm_sync.models import Action, ActionKind, ActionStatus, SyncPlan, SyncTarget
-from llm_sync.repositories.base import ISourceRepository, ITargetRepository
-from llm_sync.utils import is_under, same_json
-from llm_sync.workspaces import WorkspaceService
+from code_agnostic.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
+from code_agnostic.errors import SyncAppError
+from code_agnostic.mappers.base import IConfigMapper
+from code_agnostic.mappers.opencode import OpenCodeMapper
+from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan, SyncTarget
+from code_agnostic.repositories.base import ISourceRepository, ITargetRepository
+from code_agnostic.utils import is_under, same_json
+from code_agnostic.workspaces import WorkspaceService
 
 
 def _canonical_target(path: Path) -> str:

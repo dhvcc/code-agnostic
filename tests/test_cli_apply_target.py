@@ -4,15 +4,15 @@ import json
 from urllib.request import Request, urlopen
 
 from jsonschema import Draft202012Validator
-from llm_sync.__main__ import cli
-from llm_sync.constants import AGENTS_FILENAME
+from code_agnostic.__main__ import cli
+from code_agnostic.constants import AGENTS_FILENAME
 
 
 @functools.lru_cache(maxsize=1)
 def _load_opencode_schema() -> dict:
     request = Request(
         "https://opencode.ai/config.json",
-        headers={"User-Agent": "Mozilla/5.0 llm-sync-tests"},
+        headers={"User-Agent": "Mozilla/5.0 code-agnostic-tests"},
     )
     with urlopen(request, timeout=20) as response:
         payload = response.read().decode("utf-8")

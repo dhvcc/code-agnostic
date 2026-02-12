@@ -32,7 +32,7 @@ def write_json():
 
 @pytest.fixture
 def common_root(tmp_path: Path) -> Path:
-    return tmp_path / ".config" / "llm-sync"
+    return tmp_path / ".config" / "code-agnostic"
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def cli_runner() -> CliRunner:
 
 @pytest.fixture
 def enable_app(cli_runner):
-    from llm_sync.__main__ import cli
+    from code_agnostic.__main__ import cli
 
     def _enable(app: str) -> None:
         result = cli_runner.invoke(cli, ["apps", "enable", app])

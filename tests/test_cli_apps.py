@@ -1,4 +1,4 @@
-from llm_sync.__main__ import cli
+from code_agnostic.__main__ import cli
 
 
 def test_apps_list_shows_all_disabled_by_default(minimal_shared_config, cli_runner) -> None:

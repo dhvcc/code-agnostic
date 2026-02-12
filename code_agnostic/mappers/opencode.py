@@ -1,7 +1,7 @@
 from copy import deepcopy
 from typing import Any
 
-from llm_sync.mappers.base import IConfigMapper
+from code_agnostic.mappers.base import IConfigMapper
 
 
 def _as_command_array(command: Any, args: Any) -> list[str]:

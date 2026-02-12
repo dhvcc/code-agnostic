@@ -1,13 +1,13 @@
 from pathlib import Path
 import json
 
-from llm_sync.errors import InvalidJsonFormatError
-from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.executor import SyncExecutor
-from llm_sync.models import ActionKind, ActionStatus
-from llm_sync.planner import SyncPlanner
-from llm_sync.repositories.common import CommonRepository
-from llm_sync.repositories.opencode import OpenCodeRepository
+from code_agnostic.errors import InvalidJsonFormatError
+from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.executor import SyncExecutor
+from code_agnostic.models import ActionKind, ActionStatus
+from code_agnostic.planner import SyncPlanner
+from code_agnostic.repositories.common import CommonRepository
+from code_agnostic.repositories.opencode import OpenCodeRepository
 
 
 def test_build_plan_and_apply_create_opencode_and_workspace_links(

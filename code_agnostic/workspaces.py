@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from llm_sync.constants import AGENTS_FILENAME, GIT_DIRNAME, WORKSPACE_IGNORED_DIRS, WORKSPACE_RULE_FILES
+from code_agnostic.constants import AGENTS_FILENAME, GIT_DIRNAME, WORKSPACE_IGNORED_DIRS, WORKSPACE_RULE_FILES
 
 
 class WorkspaceService:

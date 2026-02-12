@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from llm_sync.constants import AGENTS_FILENAME, CLAUDE_FILENAME
-from llm_sync.workspaces import WorkspaceService
+from code_agnostic.constants import AGENTS_FILENAME, CLAUDE_FILENAME
+from code_agnostic.workspaces import WorkspaceService
 
 
 def test_resolve_workspace_rules_prefers_agents_md(tmp_path: Path) -> None:

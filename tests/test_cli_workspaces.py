@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from llm_sync.__main__ import cli
-from llm_sync.constants import AGENTS_FILENAME
+from code_agnostic.__main__ import cli
+from code_agnostic.constants import AGENTS_FILENAME
 
 
 def test_workspaces_add_list_remove_commands(tmp_path: Path, minimal_shared_config: Path, cli_runner) -> None:

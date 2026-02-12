@@ -4,11 +4,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Protocol
 
-from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.models import Action, ActionKind, ActionStatus, SyncPlan
-from llm_sync.repositories.base import ISourceRepository, ITargetRepository
-from llm_sync.utils import backup_file, write_json
-from llm_sync.workspaces import WorkspaceService
+from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.repositories.base import ISourceRepository, ITargetRepository
+from code_agnostic.utils import backup_file, write_json
+from code_agnostic.workspaces import WorkspaceService
 
 
 @dataclass

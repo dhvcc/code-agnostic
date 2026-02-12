@@ -2,9 +2,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
-from llm_sync.errors import InvalidConfigSchemaError, InvalidJsonFormatError
-from llm_sync.repositories.base import ITargetRepository
-from llm_sync.utils import read_json_safe
+from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
+from code_agnostic.repositories.base import ITargetRepository
+from code_agnostic.utils import read_json_safe
 
 
 class OpenCodeRepository(ITargetRepository):

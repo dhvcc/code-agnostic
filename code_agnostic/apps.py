@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from llm_sync.models import AppId, AppStatusRow, AppSyncStatus
-from llm_sync.repositories.common import CommonRepository
-from llm_sync.utils import read_json_safe, write_json
+from code_agnostic.models import AppId, AppStatusRow, AppSyncStatus
+from code_agnostic.repositories.common import CommonRepository
+from code_agnostic.utils import read_json_safe, write_json
 
 
 class AppsService:

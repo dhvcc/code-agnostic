@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from llm_sync.__main__ import cli
+from code_agnostic.__main__ import cli
 
 
 def test_plan_shows_invalid_json_error_for_mcp_base(minimal_shared_config: Path, common_root: Path, cli_runner, enable_app) -> None:

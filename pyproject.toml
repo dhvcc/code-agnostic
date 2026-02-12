@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llm-sync"
+name = "code-agnostic"
 version = "0.1.0"
-description = "Sync shared LLM config into OpenCode"
+description = "Centralized hub for LLM coding config: MCP, skills, rules, and agents."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-llm-sync = "llm_sync.__main__:main"
+code-agnostic = "code_agnostic.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["llm_sync*"]
+include = ["code_agnostic*"]

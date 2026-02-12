@@ -1,6 +1,6 @@
 from enum import Enum
 
-from llm_sync.models import ActionStatus
+from code_agnostic.models import ActionStatus
 
 
 class UIStyle(str, Enum):

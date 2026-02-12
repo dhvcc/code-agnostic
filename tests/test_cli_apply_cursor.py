@@ -3,7 +3,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from llm_sync.__main__ import cli
+from code_agnostic.__main__ import cli
 
 
 def _cursor_schema() -> dict:

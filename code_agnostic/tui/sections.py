@@ -2,7 +2,7 @@ from typing import Optional
 
 from rich.panel import Panel
 
-from llm_sync.tui.enums import UIStyle
+from code_agnostic.tui.enums import UIStyle
 
 
 class UISection:

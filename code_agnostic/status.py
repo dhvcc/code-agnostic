@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Any, Optional
 
-from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.models import (
+from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.models import (
     ActionStatus,
     EditorStatusRow,
     EditorSyncStatus,
@@ -12,9 +12,9 @@ from llm_sync.models import (
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
 )
-from llm_sync.repositories.base import ISourceRepository, ITargetRepository
-from llm_sync.utils import is_under
-from llm_sync.workspaces import WorkspaceService
+from code_agnostic.repositories.base import ISourceRepository, ITargetRepository
+from code_agnostic.utils import is_under
+from code_agnostic.workspaces import WorkspaceService
 
 
 class StatusService:

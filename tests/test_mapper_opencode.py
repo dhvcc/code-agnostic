@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.mappers.base import IConfigMapper
-from llm_sync.mappers.opencode import OpenCodeMapper
+from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.mappers.base import IConfigMapper
+from code_agnostic.mappers.opencode import OpenCodeMapper
 
 
 class NativeMapper(IConfigMapper):

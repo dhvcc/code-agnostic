@@ -7,9 +7,9 @@ from rich.panel import Panel
 from rich.table import Column, Table
 from rich.text import Text
 
-from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.models import Action, AppSyncStatus, EditorSyncStatus, PlanResult, RepoSyncStatus, WorkspaceSyncStatus
-from llm_sync.tui.enums import ACTION_STATUS_STYLE, UIStyle
+from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.models import Action, AppSyncStatus, EditorSyncStatus, PlanResult, RepoSyncStatus, WorkspaceSyncStatus
+from code_agnostic.tui.enums import ACTION_STATUS_STYLE, UIStyle
 
 
 class PlanTable:
