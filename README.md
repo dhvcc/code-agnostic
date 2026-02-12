@@ -64,3 +64,14 @@ Cursor paths and payloads are intentionally gated behind app toggles while suppo
 - Workspace sync propagates a root rules file (`AGENTS.md`/`CLAUDE.md`) into git repos as symlinked `AGENTS.md`.
 - Plan/apply/status behavior is stable in intent, but UX and command shape are still being refined.
 - Schema validation is part of tests for generated OpenCode config; Cursor schema coverage is intentionally scoped to fields we manage.
+
+## Roadmap
+
+- Add full rules sync: current behavior only propagates root `AGENTS.md` at global/workspace levels; planned direction is a dedicated `rules/` directory (syntax still being investigated).
+- Finish Cursor IDE support.
+- Expand MCP sync to include auth configuration, not only tool definitions.
+- Add import flows (for example, importing Claude skills) into `code-agnostic` as an onboarding path.
+- Make mappers bidirectional for import/export use cases, with DTO-based transformations.
+- Add dynamic inline TUI selectors for tool enable/disable and import selection (similar interaction model to Mole CLI).
+- Enable shell auto-complete.
+- Explore an optional full-size `textual` TUI mode (`code-agnostic` opens command palette + menus) while keeping one-liner CLI workflows for non-interactive use.
