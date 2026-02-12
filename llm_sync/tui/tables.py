@@ -8,7 +8,7 @@ from rich.table import Column, Table
 from rich.text import Text
 
 from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.models import Action, EditorSyncStatus, PlanResult, RepoSyncStatus, WorkspaceSyncStatus
+from llm_sync.models import Action, AppSyncStatus, EditorSyncStatus, PlanResult, RepoSyncStatus, WorkspaceSyncStatus
 from llm_sync.tui.enums import ACTION_STATUS_STYLE, UIStyle
 
 
@@ -183,3 +183,20 @@ class StatusTable:
         if not blocks:
             return Text("No workspace details.", style=UIStyle.DIM.value)
         return Group(*blocks)
+
+
+class AppsTable:
+    @staticmethod
+    def apps_table(items: List[dict]) -> Table:
+        table = Table(
+            Column(header="App", width=14),
+            Column(header="Status", width=12),
+            Column(header="Detail", overflow="ellipsis"),
+            expand=True,
+            header_style="bold",
+        )
+        for item in items:
+            status = item["status"]
+            style = UIStyle.GREEN.value if status == AppSyncStatus.ENABLED.value else UIStyle.YELLOW.value
+            table.add_row(item["name"], f"[{style}]{status}[/{style}]", item["detail"])
+        return table

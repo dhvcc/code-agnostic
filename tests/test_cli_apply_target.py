@@ -19,7 +19,8 @@ def _load_opencode_schema() -> dict:
     return json.loads(payload)
 
 
-def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, tmp_path: Path, cli_runner) -> None:
+def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+    enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
@@ -39,7 +40,8 @@ def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, 
     assert not workspace_link.exists()
 
 
-def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: Path, cli_runner) -> None:
+def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+    enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
@@ -57,7 +59,8 @@ def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: P
     assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
 
 
-def test_apply_generates_opencode_schema_valid_config(minimal_shared_config: Path, tmp_path: Path, cli_runner) -> None:
+def test_apply_generates_opencode_schema_valid_config(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+    enable_app("opencode")
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
@@ -74,7 +77,9 @@ def test_apply_aborts_on_invalid_opencode_json(
     minimal_shared_config: Path,
     opencode_root: Path,
     cli_runner,
+    enable_app,
 ) -> None:
+    enable_app("opencode")
     config_path = opencode_root / "opencode.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("{oops", encoding="utf-8")

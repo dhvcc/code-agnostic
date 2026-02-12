@@ -4,8 +4,9 @@ from typing import Dict
 import click
 from rich.console import Console
 
+from llm_sync.apps import AppsService
 from llm_sync.executor import SyncExecutor
-from llm_sync.models import EditorStatusRow, EditorSyncStatus, SyncTarget
+from llm_sync.models import AppId, EditorStatusRow, EditorSyncStatus, SyncPlan, SyncTarget
 from llm_sync.planner import SyncPlanner
 from llm_sync.repositories.common import CommonRepository
 from llm_sync.repositories.opencode import OpenCodeRepository
@@ -20,6 +21,24 @@ def _repos_from_obj(_obj: Dict[str, str]) -> tuple[CommonRepository, OpenCodeRep
     return common, opencode
 
 
+def _empty_plan(skipped_reason: str) -> SyncPlan:
+    return SyncPlan(actions=[], errors=[], skipped=[skipped_reason])
+
+
+def _cursor_status_row(apps: AppsService) -> EditorStatusRow:
+    if apps.is_enabled(AppId.CURSOR):
+        return EditorStatusRow(
+            name="cursor",
+            status=EditorSyncStatus.ERROR,
+            detail="enabled but sync is not implemented yet",
+        )
+    return EditorStatusRow(
+        name="cursor",
+        status=EditorSyncStatus.DISABLED,
+        detail="disabled by apps config",
+    )
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def cli(ctx: click.Context) -> None:
@@ -32,11 +51,20 @@ def cli(ctx: click.Context) -> None:
 def plan(obj: Dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
+    apps = AppsService(common)
 
-    try:
-        plan_result = SyncPlanner(common=common, opencode=opencode).build()
-    except Exception as exc:
-        raise click.ClickException(f"Fatal: {exc}")
+    if not apps.is_enabled(AppId.OPENCODE):
+        enabled = apps.enabled_apps()
+        if enabled:
+            names = ", ".join([app.value for app in enabled])
+            plan_result = _empty_plan(f"Enabled apps not implemented for planning yet: {names}")
+        else:
+            plan_result = _empty_plan("No apps enabled for plan (enable 'opencode' first).")
+    else:
+        try:
+            plan_result = SyncPlanner(common=common, opencode=opencode).build()
+        except Exception as exc:
+            raise click.ClickException(f"Fatal: {exc}")
 
     ui.render_plan(plan_result, mode="plan")
 
@@ -55,6 +83,18 @@ def plan(obj: Dict[str, str]) -> None:
 def apply(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
+    apps = AppsService(common)
+
+    if not apps.is_enabled(AppId.OPENCODE):
+        enabled = apps.enabled_apps()
+        if enabled:
+            names = ", ".join([app.value for app in enabled])
+            plan_result = _empty_plan(f"Enabled apps not implemented for apply yet: {names}")
+        else:
+            plan_result = _empty_plan("No apps enabled for apply (enable 'opencode' first).")
+        ui.render_plan(plan_result, mode=f"apply:{target.lower()}")
+        ui.render_apply_result(applied=0, failed=0, failures=[], state_path=str(common.state_md))
+        return
 
     try:
         plan_result = SyncPlanner(common=common, opencode=opencode).build()
@@ -86,30 +126,78 @@ def apply(obj: Dict[str, str], target: str) -> None:
 def status(obj: Dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
+    apps = AppsService(common)
     status_service = StatusService()
 
-    try:
-        plan_result = SyncPlanner(common=common, opencode=opencode).build()
-        editor_rows = status_service.build_editor_status(plan_result, opencode)
-    except Exception as exc:
+    if apps.is_enabled(AppId.OPENCODE):
+        try:
+            plan_result = SyncPlanner(common=common, opencode=opencode).build()
+            editor_rows = status_service.build_editor_status(plan_result, opencode)
+            editor_rows = [row for row in editor_rows if row.name != "cursor"]
+            editor_rows.append(_cursor_status_row(apps))
+        except Exception as exc:
+            editor_rows = [
+                EditorStatusRow(
+                    name="opencode",
+                    status=EditorSyncStatus.ERROR,
+                    detail=f"cannot evaluate ({exc})",
+                ),
+                _cursor_status_row(apps),
+            ]
+        workspace_rows = status_service.build_workspace_status(common)
+    else:
         editor_rows = [
             EditorStatusRow(
                 name="opencode",
-                status=EditorSyncStatus.ERROR,
-                detail=f"cannot evaluate ({exc})",
-            ),
-            EditorStatusRow(
-                name="cursor",
                 status=EditorSyncStatus.DISABLED,
-                detail="not managed",
+                detail="disabled by apps config",
             ),
+            _cursor_status_row(apps),
         ]
+        workspace_rows = []
 
-    workspace_rows = status_service.build_workspace_status(common)
     ui.render_status(
         [item.as_dict() for item in editor_rows],
         [item.as_dict() for item in workspace_rows],
     )
+
+
+@cli.group(help="Enable or disable app sync targets.")
+def apps() -> None:
+    pass
+
+
+@apps.command("list", help="List app sync target status.")
+@click.pass_obj
+def apps_list(obj: Dict[str, str]) -> None:
+    ui = SyncConsoleUI(Console())
+    common, _ = _repos_from_obj(obj)
+    service = AppsService(common)
+    ui.render_apps([row.as_dict() for row in service.list_status_rows()])
+
+
+@apps.command("enable", help="Enable app sync target.")
+@click.argument("name", type=click.Choice([app.value for app in AppId], case_sensitive=False))
+@click.pass_obj
+def apps_enable(obj: Dict[str, str], name: str) -> None:
+    ui = SyncConsoleUI(Console())
+    common, _ = _repos_from_obj(obj)
+    service = AppsService(common)
+    app_id = AppId(name.lower())
+    service.enable(app_id)
+    ui.render_apps([row.as_dict() for row in service.list_status_rows()])
+
+
+@apps.command("disable", help="Disable app sync target.")
+@click.argument("name", type=click.Choice([app.value for app in AppId], case_sensitive=False))
+@click.pass_obj
+def apps_disable(obj: Dict[str, str], name: str) -> None:
+    ui = SyncConsoleUI(Console())
+    common, _ = _repos_from_obj(obj)
+    service = AppsService(common)
+    app_id = AppId(name.lower())
+    service.disable(app_id)
+    ui.render_apps([row.as_dict() for row in service.list_status_rows()])
 
 
 @cli.group(help="Manage workspace roots for repo rule propagation.")

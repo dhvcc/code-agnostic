@@ -5,7 +5,7 @@ from rich.console import Console
 from llm_sync.models import PlanResult, WorkspaceSyncStatus
 from llm_sync.tui.enums import UIStyle
 from llm_sync.tui.sections import UISection
-from llm_sync.tui.tables import ApplyTable, PlanTable, StatusTable, WorkspaceTable
+from llm_sync.tui.tables import AppsTable, ApplyTable, PlanTable, StatusTable, WorkspaceTable
 
 
 class SyncConsoleUI:
@@ -74,3 +74,6 @@ class SyncConsoleUI:
         self.console.print(
             UISection.wrap("workspace repositories", StatusTable.workspace_repos_group(workspaces), style=UIStyle.CYAN.value)
         )
+
+    def render_apps(self, items: List[dict]) -> None:
+        self.console.print(UISection.wrap("apps", AppsTable.apps_table(items), style=UIStyle.BLUE.value))

@@ -50,3 +50,14 @@ def minimal_shared_config(common_root: Path, write_json) -> Path:
 @pytest.fixture
 def cli_runner() -> CliRunner:
     return CliRunner()
+
+
+@pytest.fixture
+def enable_app(cli_runner):
+    from llm_sync.__main__ import cli
+
+    def _enable(app: str) -> None:
+        result = cli_runner.invoke(cli, ["apps", "enable", app])
+        assert result.exit_code == 0
+
+    return _enable

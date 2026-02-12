@@ -4,7 +4,8 @@ from llm_sync.__main__ import cli
 from llm_sync.constants import AGENTS_FILENAME
 
 
-def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Path, tmp_path: Path, cli_runner) -> None:
+def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+    enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()

@@ -42,6 +42,16 @@ class RepoSyncStatus(str, Enum):
     NEEDS_SYNC = "needs_sync"
 
 
+class AppId(str, Enum):
+    OPENCODE = "opencode"
+    CURSOR = "cursor"
+
+
+class AppSyncStatus(str, Enum):
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+
+
 @dataclass
 class Action:
     kind: ActionKind
@@ -144,6 +154,20 @@ class WorkspaceStatusRow:
             "status": self.status.value,
             "detail": self.detail,
             "repos": [repo.as_dict() for repo in self.repos],
+        }
+
+
+@dataclass(frozen=True)
+class AppStatusRow:
+    name: AppId
+    status: AppSyncStatus
+    detail: str
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "name": self.name.value,
+            "status": self.status.value,
+            "detail": self.detail,
         }
 
 
