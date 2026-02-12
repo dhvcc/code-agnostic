@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cursor MCP Config (subset)",
+  "type": "object",
+  "required": ["mcpServers"],
+  "properties": {
+    "mcpServers": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/server"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "localServer": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "env": { "$ref": "#/$defs/stringMap" }
+      },
+      "additionalProperties": true
+    },
+    "remoteServer": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "headers": { "$ref": "#/$defs/stringMap" },
+        "auth": { "$ref": "#/$defs/stringMap" }
+      },
+      "additionalProperties": true
+    },
+    "server": {
+      "oneOf": [
+        { "$ref": "#/$defs/localServer" },
+        { "$ref": "#/$defs/remoteServer" }
+      ]
+    }
+  }
+}
