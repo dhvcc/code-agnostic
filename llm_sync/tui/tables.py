@@ -1,37 +1,58 @@
 from collections import Counter
 from typing import Dict, List
 
+from rich.console import Group
+from rich.padding import Padding
 from rich.panel import Panel
 from rich.table import Column, Table
+from rich.text import Text
 
-from llm_sync.models import EditorSyncStatus, PlanResult
+from llm_sync.constants import AGENTS_FILENAME
+from llm_sync.models import Action, EditorSyncStatus, PlanResult, RepoSyncStatus, WorkspaceSyncStatus
 from llm_sync.tui.enums import ACTION_STATUS_STYLE, UIStyle
 
 
 class PlanTable:
     @staticmethod
-    def summary_panel(plan: PlanResult, mode: str) -> Panel:
+    def summary_block(plan: PlanResult, mode: str):
         counts = Counter(action.status.value for action in plan.actions)
-        counts_line = " ".join([f"{key}:{value}" for key, value in sorted(counts.items())])
-        return Panel.fit(
-            f"[bold]Mode:[/bold] {mode}   [bold]Actions:[/bold] {len(plan.actions)}   [bold]Status:[/bold] {counts_line or 'none'}",
-            title="llm-sync",
-            border_style=UIStyle.BLUE.value,
-        )
+        chips = [f"{key}={value}" for key, value in sorted(counts.items()) if value > 0]
+        if not chips:
+            chips = ["none"]
+
+        table = Table.grid(padding=(0, 2))
+        table.add_column(style="bold")
+        table.add_column()
+        table.add_row("Mode", mode)
+        table.add_row("Actions", str(len(plan.actions)))
+        table.add_row("Statuses", "  ".join(chips))
+        return table
 
     @staticmethod
-    def actions_table(plan: PlanResult) -> Table:
+    def split_actions(plan: PlanResult) -> tuple[list[Action], list[Action]]:
+        app_actions: list[Action] = []
+        workspace_actions: list[Action] = []
+        for action in plan.actions:
+            is_workspace_link = action.path.name == AGENTS_FILENAME
+            if is_workspace_link:
+                workspace_actions.append(action)
+            else:
+                app_actions.append(action)
+        return app_actions, workspace_actions
+
+    @staticmethod
+    def actions_table(actions: list[Action]) -> Table:
         table = Table(
-            Column(header="Action", width=10),
+            Column(header="Type", width=12),
             Column(header="Status", width=10),
-            Column(header="Path", overflow="ellipsis", max_width=56),
-            Column(header="Source", overflow="ellipsis", max_width=56),
-            Column(header="Detail", overflow="ellipsis"),
+            Column(header="Target", overflow="ellipsis", max_width=58),
+            Column(header="Source", overflow="ellipsis", max_width=42),
+            Column(header="Reason", overflow="ellipsis"),
             expand=True,
             header_style="bold",
         )
 
-        for action in plan.actions:
+        for action in actions:
             source = str(action.source) if action.source is not None else ""
             status_value = action.status.value
             status_style = ACTION_STATUS_STYLE.get(action.status, UIStyle.WHITE.value)
@@ -68,6 +89,23 @@ class WorkspaceTable:
             table.add_row(item["name"], item["path"], str(len(item["repos"])))
         return table
 
+    @staticmethod
+    def repos_table(items: List[dict]) -> Table:
+        table = Table(
+            Column(header="Workspace", width=24),
+            Column(header="Repositories", overflow="fold"),
+            expand=True,
+            header_style="bold",
+        )
+        for item in items:
+            repos = item.get("repos", [])
+            if not repos:
+                repo_line = "(no git repos found)"
+            else:
+                repo_line = ", ".join(repos)
+            table.add_row(item["name"], repo_line)
+        return table
+
 
 class StatusTable:
     @staticmethod
@@ -90,3 +128,58 @@ class StatusTable:
             )
             table.add_row(item["name"], f"[{style}]{status}[/{style}]", item["detail"])
         return table
+
+    @staticmethod
+    def workspace_overview(items: List[dict]) -> Table:
+        table = Table(
+            Column(header="Workspace", width=24),
+            Column(header="Status", width=12),
+            Column(header="Repos", width=8, justify="right"),
+            Column(header="Detail", overflow="ellipsis"),
+            expand=True,
+            header_style="bold",
+        )
+        for item in items:
+            status = item["status"]
+            style = (
+                UIStyle.GREEN.value
+                if status == WorkspaceSyncStatus.SYNCED.value
+                else UIStyle.RED.value
+                if status == WorkspaceSyncStatus.ERROR.value
+                else UIStyle.YELLOW.value
+            )
+            table.add_row(
+                item["name"],
+                f"[{style}]{status}[/{style}]",
+                str(len(item.get("repos", []))),
+                item["detail"],
+            )
+        return table
+
+    @staticmethod
+    def workspace_repos_group(items: List[dict]):
+        blocks = []
+        for item in items:
+            repos = item.get("repos", [])
+            heading = Text(f"{item['name']}", style="bold")
+            if not repos:
+                blocks.append(Group(heading, Text("  (no git repos found)", style=UIStyle.DIM.value)))
+                continue
+
+            repo_table = Table(
+                Column(header="Repo", width=28),
+                Column(header="Status", width=12),
+                Column(header="Detail", overflow="ellipsis"),
+                expand=True,
+                header_style="bold",
+            )
+            for repo in repos:
+                status = repo["status"]
+                style = UIStyle.GREEN.value if status == RepoSyncStatus.SYNCED.value else UIStyle.YELLOW.value
+                label = RepoSyncStatus.SYNCED.value if status == RepoSyncStatus.SYNCED.value else "needs sync"
+                repo_table.add_row(repo["repo"], f"[{style}]{label}[/{style}]", repo["detail"])
+            blocks.append(Group(heading, Padding(repo_table, (0, 0, 0, 2))))
+
+        if not blocks:
+            return Text("No workspace details.", style=UIStyle.DIM.value)
+        return Group(*blocks)

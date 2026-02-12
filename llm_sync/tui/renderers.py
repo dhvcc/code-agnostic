@@ -1,11 +1,10 @@
 from typing import List, Optional
 
 from rich.console import Console
-from rich.panel import Panel
-from rich.tree import Tree
 
-from llm_sync.models import PlanResult, RepoSyncStatus, WorkspaceSyncStatus
+from llm_sync.models import PlanResult, WorkspaceSyncStatus
 from llm_sync.tui.enums import UIStyle
+from llm_sync.tui.sections import UISection
 from llm_sync.tui.tables import ApplyTable, PlanTable, StatusTable, WorkspaceTable
 
 
@@ -14,75 +13,64 @@ class SyncConsoleUI:
         self.console = console or Console()
 
     def render_plan(self, plan: PlanResult, mode: str) -> None:
-        self.console.print(PlanTable.summary_panel(plan, mode=mode))
-        self.console.print(PlanTable.actions_table(plan))
+        app_actions, workspace_actions = PlanTable.split_actions(plan)
+
+        self.console.print(UISection.wrap("plan overview", PlanTable.summary_block(plan, mode=mode), style=UIStyle.BLUE.value))
+
+        if app_actions:
+            self.console.print(
+                UISection.wrap("app config sync", PlanTable.actions_table(app_actions), style=UIStyle.CYAN.value)
+            )
+        if workspace_actions:
+            self.console.print(
+                UISection.wrap("workspace links", PlanTable.actions_table(workspace_actions), style=UIStyle.MAGENTA.value)
+            )
+        if not app_actions and not workspace_actions:
+            self.console.print(UISection.note("actions", "No actions required.", style=UIStyle.DIM.value))
 
         if plan.errors:
             errors_text = "\n".join([f"- {item}" for item in plan.errors])
-            self.console.print(Panel(errors_text, title="errors", border_style=UIStyle.RED.value))
+            self.console.print(UISection.note("errors", errors_text, style=UIStyle.RED.value))
 
         if plan.skipped:
             skipped_text = "\n".join([f"- {item}" for item in plan.skipped])
-            self.console.print(Panel(skipped_text, title="skipped", border_style=UIStyle.YELLOW.value))
+            self.console.print(UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value))
 
     def render_apply_result(self, applied: int, failed: int, failures: List[str], state_path: str) -> None:
         self.console.print(ApplyTable.stats_panel(applied=applied, failed=failed, state_path=state_path))
         if failures:
             failure_text = "\n".join([f"- {item}" for item in failures])
-            self.console.print(Panel(failure_text, title="failures", border_style=UIStyle.RED.value))
+            self.console.print(UISection.note("failures", failure_text, style=UIStyle.RED.value))
 
     def render_workspace_saved(self, name: str, path: str, removed: bool = False) -> None:
         verb = "removed" if removed else "added"
         border_style = UIStyle.YELLOW.value if removed else UIStyle.GREEN.value
-        self.console.print(Panel.fit(f"Workspace {verb}: [bold]{name}[/bold]\n{path}", border_style=border_style))
+        self.console.print(UISection.note("workspace", f"Workspace {verb}: [bold]{name}[/bold]\n{path}", style=border_style))
 
     def render_workspaces_overview(self, items: List[dict]) -> None:
         if not items:
-            self.console.print(Panel.fit("No workspaces configured.", border_style=UIStyle.YELLOW.value, title="workspaces"))
+            self.console.print(UISection.note("workspaces", "No workspaces configured.", style=UIStyle.YELLOW.value))
             return
 
-        self.console.print(Panel(WorkspaceTable.overview_table(items), title="workspaces", border_style=UIStyle.BLUE.value))
-
-        for item in items:
-            repos = item["repos"]
-            repo_line = ", ".join(repos[:8])
-            if len(repos) > 8:
-                repo_line += ", ..."
-            if not repo_line:
-                repo_line = "(no git repos found)"
-            self.console.print(f"[bold]{item['name']}[/bold]: {repo_line}")
+        self.console.print(UISection.wrap("workspaces", WorkspaceTable.overview_table(items), style=UIStyle.BLUE.value))
+        self.console.print(UISection.wrap("workspace repositories", WorkspaceTable.repos_table(items), style=UIStyle.CYAN.value))
 
     def render_status(self, editors: List[dict], workspaces: List[dict]) -> None:
-        self.console.print(Panel(StatusTable.editor_table(editors), title="editor status", border_style=UIStyle.BLUE.value))
+        self.console.print(UISection.wrap("app config sync", StatusTable.editor_table(editors), style=UIStyle.BLUE.value))
 
-        root = Tree("[bold]workspace status[/bold]")
         if not workspaces:
-            root.add(f"[{UIStyle.YELLOW.value}]no workspaces configured[/{UIStyle.YELLOW.value}]")
-            self.console.print(root)
+            self.console.print(UISection.note("workspace sync", "No workspaces configured.", style=UIStyle.YELLOW.value))
             return
 
-        for workspace in workspaces:
-            ws_style = (
-                UIStyle.GREEN.value
-                if workspace["status"] == WorkspaceSyncStatus.SYNCED.value
-                else UIStyle.RED.value
-                if workspace["status"] == WorkspaceSyncStatus.ERROR.value
-                else UIStyle.YELLOW.value
-            )
-            ws_node = root.add(
-                f"[{ws_style}]{workspace['name']}[/{ws_style}] - {workspace['detail']} ({workspace['path']})"
-            )
-            repos = workspace.get("repos", [])
-            if not repos:
-                ws_node.add(f"[{UIStyle.DIM.value}](no git repos found)[/{UIStyle.DIM.value}]")
-                continue
-            for repo in repos:
-                repo_style = UIStyle.GREEN.value if repo["status"] == RepoSyncStatus.SYNCED.value else UIStyle.YELLOW.value
-                repo_label = (
-                    RepoSyncStatus.SYNCED.value
-                    if repo["status"] == RepoSyncStatus.SYNCED.value
-                    else RepoSyncStatus.NEEDS_SYNC.value.replace("_", " ")
-                )
-                ws_node.add(f"[{repo_style}]{repo['repo']}[/{repo_style}] - {repo_label}")
+        workspace_style = UIStyle.GREEN.value
+        if any(item.get("status") == WorkspaceSyncStatus.DRIFT.value for item in workspaces):
+            workspace_style = UIStyle.YELLOW.value
+        if any(item.get("status") == WorkspaceSyncStatus.ERROR.value for item in workspaces):
+            workspace_style = UIStyle.RED.value
 
-        self.console.print(root)
+        self.console.print(
+            UISection.wrap("workspace sync", StatusTable.workspace_overview(workspaces), style=workspace_style)
+        )
+        self.console.print(
+            UISection.wrap("workspace repositories", StatusTable.workspace_repos_group(workspaces), style=UIStyle.CYAN.value)
+        )
