@@ -4,7 +4,7 @@ from typing import Dict, List
 from rich.panel import Panel
 from rich.table import Column, Table
 
-from llm_sync.models import PlanResult
+from llm_sync.models import EditorSyncStatus, PlanResult
 from llm_sync.tui.enums import ACTION_STATUS_STYLE, UIStyle
 
 
@@ -81,6 +81,12 @@ class StatusTable:
         )
         for item in items:
             status = item["status"]
-            style = UIStyle.GREEN.value if status == "synced" else UIStyle.YELLOW.value if status == "disabled" else UIStyle.RED.value
+            style = (
+                UIStyle.GREEN.value
+                if status == EditorSyncStatus.SYNCED.value
+                else UIStyle.YELLOW.value
+                if status == EditorSyncStatus.DISABLED.value
+                else UIStyle.RED.value
+            )
             table.add_row(item["name"], f"[{style}]{status}[/{style}]", item["detail"])
         return table

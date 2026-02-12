@@ -2,9 +2,9 @@ from pathlib import Path
 import json
 
 from llm_sync.constants import AGENTS_FILENAME
-from llm_sync.executor import execute_apply
+from llm_sync.executor import SyncExecutor
 from llm_sync.models import ActionKind
-from llm_sync.planner import build_plan
+from llm_sync.planner import SyncPlanner
 from llm_sync.repositories.common import CommonRepository
 from llm_sync.repositories.opencode import OpenCodeRepository
 
@@ -48,7 +48,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     common.add_workspace("workspace-example", workspace_root)
     opencode = OpenCodeRepository(opencode_root)
 
-    plan = build_plan(common, opencode)
+    plan = SyncPlanner(common=common, opencode=opencode).build()
 
     assert plan.errors == []
     assert any(action.kind == ActionKind.WRITE_JSON and action.path == opencode.config_path for action in plan.actions)
@@ -63,7 +63,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     }
     assert workspace_targets.issubset(planned_workspace_targets)
 
-    applied, failed, failures = execute_apply(plan, common, opencode)
+    applied, failed, failures = SyncExecutor(common=common, opencode=opencode).execute(plan)
 
     assert failed == 0
     assert failures == []

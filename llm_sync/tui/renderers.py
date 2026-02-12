@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.tree import Tree
 
-from llm_sync.models import PlanResult
+from llm_sync.models import PlanResult, RepoSyncStatus, WorkspaceSyncStatus
 from llm_sync.tui.enums import UIStyle
 from llm_sync.tui.tables import ApplyTable, PlanTable, StatusTable, WorkspaceTable
 
@@ -62,7 +62,13 @@ class SyncConsoleUI:
             return
 
         for workspace in workspaces:
-            ws_style = UIStyle.GREEN.value if workspace["status"] == "synced" else UIStyle.RED.value if workspace["status"] == "error" else UIStyle.YELLOW.value
+            ws_style = (
+                UIStyle.GREEN.value
+                if workspace["status"] == WorkspaceSyncStatus.SYNCED.value
+                else UIStyle.RED.value
+                if workspace["status"] == WorkspaceSyncStatus.ERROR.value
+                else UIStyle.YELLOW.value
+            )
             ws_node = root.add(
                 f"[{ws_style}]{workspace['name']}[/{ws_style}] - {workspace['detail']} ({workspace['path']})"
             )
@@ -71,8 +77,12 @@ class SyncConsoleUI:
                 ws_node.add(f"[{UIStyle.DIM.value}](no git repos found)[/{UIStyle.DIM.value}]")
                 continue
             for repo in repos:
-                repo_style = UIStyle.GREEN.value if repo["status"] == "synced" else UIStyle.YELLOW.value
-                repo_label = "synced" if repo["status"] == "synced" else "needs sync"
+                repo_style = UIStyle.GREEN.value if repo["status"] == RepoSyncStatus.SYNCED.value else UIStyle.YELLOW.value
+                repo_label = (
+                    RepoSyncStatus.SYNCED.value
+                    if repo["status"] == RepoSyncStatus.SYNCED.value
+                    else RepoSyncStatus.NEEDS_SYNC.value.replace("_", " ")
+                )
                 ws_node.add(f"[{repo_style}]{repo['repo']}[/{repo_style}] - {repo_label}")
 
         self.console.print(root)

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from llm_sync.cli import cli
+from llm_sync.__main__ import cli
 from llm_sync.constants import AGENTS_FILENAME
 
 
