@@ -1,10 +1,11 @@
 import os
 from pathlib import Path
+from typing import Optional
 
-from llm_sync.mappers.opencode import map_mcp_servers_to_opencode
+from llm_sync.mappers.base import IConfigMapper
+from llm_sync.mappers.opencode import OpenCodeMapper
 from llm_sync.models import Action, PlanResult
-from llm_sync.repositories.common import CommonRepository
-from llm_sync.repositories.opencode import OpenCodeRepository
+from llm_sync.repositories.base import ISourceRepository, ITargetRepository
 from llm_sync.utils import is_under, same_json
 from llm_sync.workspaces import list_workspace_repos, resolve_workspace_rules_file
 
@@ -25,14 +26,16 @@ def _plan_symlink(target: Path, source: Path) -> Action:
     return Action("symlink", target, "create", "create symlink", source=source)
 
 
-def build_plan(common: CommonRepository, opencode: OpenCodeRepository) -> PlanResult:
+def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: Optional[IConfigMapper] = None) -> PlanResult:
     actions: list[Action] = []
     errors: list[str] = []
     skipped: list[str] = []
 
+    effective_mapper = mapper or OpenCodeMapper()
+
     mcp_base = common.load_mcp_base()
     opencode_base = common.load_opencode_base()
-    mapped_mcp = map_mcp_servers_to_opencode(mcp_base["mcpServers"])
+    mapped_mcp = effective_mapper.map_mcp_servers(mcp_base["mcpServers"])
 
     existing_config, config_error = opencode.load_config_object()
     if config_error is not None:
@@ -46,16 +49,18 @@ def build_plan(common: CommonRepository, opencode: OpenCodeRepository) -> PlanRe
             actions.append(Action("write_json", opencode.config_path, status, "merge opencode base + canonical mcp", payload=merged_config))
 
     skill_sources = common.list_skill_sources()
-    desired_skill_links = [opencode.skills_dir / source.name for source in skill_sources]
-    for source in skill_sources:
+    mapped_skill_sources = [effective_mapper.map_skill_source(source) for source in skill_sources]
+    desired_skill_links = [opencode.skills_dir / source.name for source in mapped_skill_sources]
+    for source in mapped_skill_sources:
         action = _plan_symlink(opencode.skills_dir / source.name, source)
         actions.append(action)
         if action.status == "conflict":
             skipped.append(f"Skill link skipped (conflict): {action.path}")
 
     agent_sources = common.list_agent_sources()
-    desired_agent_links = [opencode.agents_dir / source.name for source in agent_sources]
-    for source in agent_sources:
+    mapped_agent_sources = [effective_mapper.map_agent_source(source) for source in agent_sources]
+    desired_agent_links = [opencode.agents_dir / source.name for source in mapped_agent_sources]
+    for source in mapped_agent_sources:
         action = _plan_symlink(opencode.agents_dir / source.name, source)
         actions.append(action)
         if action.status == "conflict":
@@ -73,10 +78,11 @@ def build_plan(common: CommonRepository, opencode: OpenCodeRepository) -> PlanRe
         if rules_file is None:
             skipped.append(f"Workspace has no rules file (AGENTS.md/CLAUDE.md), skipped: {workspace_name}")
             continue
+        mapped_rules_file = effective_mapper.map_workspace_rules_source(rules_file)
 
         for repo in list_workspace_repos(workspace_path):
             target = repo / "AGENTS.md"
-            action = _plan_symlink(target, rules_file)
+            action = _plan_symlink(target, mapped_rules_file)
             actions.append(action)
             workspace_links.append(target)
             if action.status == "conflict":
@@ -131,7 +137,7 @@ def build_plan(common: CommonRepository, opencode: OpenCodeRepository) -> PlanRe
     return PlanResult(actions=actions, errors=errors, skipped=skipped)
 
 
-def filter_plan_for_target(plan: PlanResult, target: str, opencode: OpenCodeRepository) -> PlanResult:
+def filter_plan_for_target(plan: PlanResult, target: str, opencode: ITargetRepository) -> PlanResult:
     if target == "all":
         return plan
 

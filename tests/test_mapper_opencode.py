@@ -1,8 +1,15 @@
-from llm_sync.mappers.opencode import map_mcp_servers_to_opencode
+from pathlib import Path
+
+from llm_sync.mappers.base import IConfigMapper
+from llm_sync.mappers.opencode import OpenCodeMapper
+
+
+class NativeMapper(IConfigMapper):
+    pass
 
 
 def test_map_mcp_servers_to_opencode_normalizes_remote_and_local() -> None:
-    mapped = map_mcp_servers_to_opencode(
+    mapped = OpenCodeMapper().map_mcp_servers(
         {
             "remote_server": {
                 "url": "https://example.com/mcp",
@@ -32,3 +39,14 @@ def test_map_mcp_servers_to_opencode_normalizes_remote_and_local() -> None:
         "environment": {"FOO": "bar"},
     }
     assert "invalid_server" not in mapped
+
+
+def test_base_mapper_defaults_to_native_passthrough(tmp_path: Path) -> None:
+    mapper = NativeMapper()
+    source = tmp_path / "AGENTS.md"
+    source.write_text("rules", encoding="utf-8")
+
+    assert mapper.map_mcp_servers({"a": {"url": "https://example.com"}}) == {"a": {"url": "https://example.com"}}
+    assert mapper.map_skill_source(source) == source
+    assert mapper.map_agent_source(source) == source
+    assert mapper.map_workspace_rules_source(source) == source

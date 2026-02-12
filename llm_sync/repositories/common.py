@@ -1,11 +1,11 @@
 from pathlib import Path
 from typing import Any, Optional
 
-from llm_sync.repositories.base import IConfigRepository
+from llm_sync.repositories.base import ISourceRepository
 from llm_sync.utils import read_json, read_json_safe, write_json
 
 
-class CommonRepository(IConfigRepository):
+class CommonRepository(ISourceRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
         self._root = root or (Path.home() / ".config" / "llm-sync")
 

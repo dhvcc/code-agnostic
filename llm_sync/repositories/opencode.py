@@ -2,10 +2,11 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
+from llm_sync.repositories.base import ITargetRepository
 from llm_sync.utils import read_json_safe
 
 
-class OpenCodeRepository:
+class OpenCodeRepository(ITargetRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
         self._root = root or (Path.home() / ".config" / "opencode")
 
