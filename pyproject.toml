@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-sync"
+version = "0.1.0"
+description = "Sync shared LLM config into OpenCode"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "click",
+  "rich"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0"
+]
+
+[project.scripts]
+llm-sync = "llm_sync.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["llm_sync*"]
