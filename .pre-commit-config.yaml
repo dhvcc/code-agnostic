@@ -1,0 +1,41 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-ast
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy-check
+        name: mypy
+        entry: uv
+        args:
+          - run
+          - mypy
+          - code_agnostic
+        pass_filenames: false
+        language: system
+        stages: [pre-push]
+
+      - id: pytest-check
+        name: pytest
+        entry: uv
+        args:
+          - run
+          - pytest
+          - -q
+        pass_filenames: false
+        language: system
+        stages: [pre-push]
