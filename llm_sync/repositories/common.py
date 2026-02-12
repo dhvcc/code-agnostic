@@ -31,10 +31,6 @@ class CommonRepository(ISourceRepository):
         return self.root / ".sync-state.json"
 
     @property
-    def state_md(self) -> Path:
-        return self.root / "STATE.md"
-
-    @property
     def mcp_base_path(self) -> Path:
         return self.config_dir / "mcp.base.json"
 

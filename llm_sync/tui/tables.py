@@ -63,11 +63,10 @@ class PlanTable:
 
 class ApplyTable:
     @staticmethod
-    def stats_panel(applied: int, failed: int, state_path: str) -> Panel:
+    def stats_panel(applied: int, failed: int) -> Panel:
         stats: Dict[str, str] = {
             "applied": str(applied),
             "failed": str(failed),
-            "state": state_path,
         }
         table = Table(show_header=False, box=None)
         for key, value in stats.items():

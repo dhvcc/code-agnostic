@@ -99,10 +99,10 @@ class SyncExecutor:
                 failed += 1
                 failures.append(f"{action.kind.value} failed for {action.path}: {exc}")
 
-        self._persist_state(plan=plan, applied=applied, failed=failed, failures=failures)
+        self._persist_state(plan=plan)
         return applied, failed, failures
 
-    def _persist_state(self, plan: SyncPlan, applied: int, failed: int, failures: list[str]) -> None:
+    def _persist_state(self, plan: SyncPlan) -> None:
         common = self.context.common
         opencode = self.context.opencode
 
@@ -119,21 +119,6 @@ class SyncExecutor:
             "skipped": plan.skipped,
         }
         common.save_state(state)
-
-        summary_lines = [
-            "# LLM Sync State",
-            "",
-            f"- Updated: {updated_at}",
-            f"- Applied changes: {applied}",
-            f"- Failed changes: {failed}",
-            f"- Managed skill links: {len(set(managed_skill_links))}",
-            f"- Managed agent links: {len(set(managed_agent_links))}",
-            f"- Managed workspace links: {len(set(managed_workspace_links))}",
-        ]
-        if failures:
-            summary_lines.extend(["", "## Failures"])
-            summary_lines.extend([f"- {item}" for item in failures])
-        common.state_md.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
 
     def _collect_workspace_links(self, common: ISourceRepository) -> list[str]:
         managed: list[str] = []

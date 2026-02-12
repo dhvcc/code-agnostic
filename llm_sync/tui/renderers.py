@@ -36,8 +36,8 @@ class SyncConsoleUI:
             skipped_text = "\n".join([f"- {item}" for item in plan.skipped])
             self.console.print(UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value))
 
-    def render_apply_result(self, applied: int, failed: int, failures: List[str], state_path: str) -> None:
-        self.console.print(ApplyTable.stats_panel(applied=applied, failed=failed, state_path=state_path))
+    def render_apply_result(self, applied: int, failed: int, failures: List[str]) -> None:
+        self.console.print(ApplyTable.stats_panel(applied=applied, failed=failed))
         if failures:
             failure_text = "\n".join([f"- {item}" for item in failures])
             self.console.print(UISection.note("failures", failure_text, style=UIStyle.RED.value))

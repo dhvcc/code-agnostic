@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any
 
 from llm_sync.models import AppId, AppStatusRow, AppSyncStatus
 from llm_sync.repositories.common import CommonRepository

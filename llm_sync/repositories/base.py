@@ -29,11 +29,6 @@ class ISourceRepository(IConfigRepository):
     def agents_dir(self) -> Path:
         raise NotImplementedError
 
-    @property
-    @abstractmethod
-    def state_md(self) -> Path:
-        raise NotImplementedError
-
     @abstractmethod
     def load_mcp_base(self) -> dict[str, Any]:
         raise NotImplementedError

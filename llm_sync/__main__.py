@@ -93,7 +93,7 @@ def apply(obj: Dict[str, str], target: str) -> None:
         else:
             plan_result = _empty_plan("No apps enabled for apply (enable 'opencode' first).")
         ui.render_plan(plan_result, mode=f"apply:{target.lower()}")
-        ui.render_apply_result(applied=0, failed=0, failures=[], state_path=str(common.state_md))
+        ui.render_apply_result(applied=0, failed=0, failures=[])
         return
 
     try:
@@ -115,7 +115,7 @@ def apply(obj: Dict[str, str], target: str) -> None:
         raise click.ClickException("Apply aborted due to planning/parsing errors above.")
 
     applied, failed, failures = SyncExecutor(common=common, opencode=opencode).execute(scoped_plan)
-    ui.render_apply_result(applied, failed, failures, str(common.state_md))
+    ui.render_apply_result(applied, failed, failures)
 
     if failed:
         raise click.exceptions.Exit(1)
