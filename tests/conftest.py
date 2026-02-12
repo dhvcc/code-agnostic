@@ -2,6 +2,7 @@ import sys
 import json
 from pathlib import Path
 
+from click.testing import CliRunner
 import pytest
 
 
@@ -44,3 +45,8 @@ def minimal_shared_config(common_root: Path, write_json) -> Path:
     write_json(common_root / "config" / "mcp.base.json", {"mcpServers": {}})
     write_json(common_root / "config" / "opencode.base.json", {"$schema": "https://opencode.ai/config.json"})
     return common_root
+
+
+@pytest.fixture
+def cli_runner() -> CliRunner:
+    return CliRunner()

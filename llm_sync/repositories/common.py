@@ -1,8 +1,9 @@
 from pathlib import Path
 from typing import Any, Optional
 
+from llm_sync.errors import InvalidConfigSchemaError, InvalidJsonFormatError, MissingConfigFileError
 from llm_sync.repositories.base import ISourceRepository
-from llm_sync.utils import read_json, read_json_safe, write_json
+from llm_sync.utils import read_json_safe, write_json
 
 
 class CommonRepository(ISourceRepository):
@@ -47,18 +48,22 @@ class CommonRepository(ISourceRepository):
 
     def load_mcp_base(self) -> dict[str, Any]:
         if not self.mcp_base_path.exists():
-            raise ValueError(f"Missing canonical file: {self.mcp_base_path}")
-        payload = read_json(self.mcp_base_path)
+            raise MissingConfigFileError(self.mcp_base_path)
+        payload, error = read_json_safe(self.mcp_base_path)
+        if error is not None:
+            raise InvalidJsonFormatError(self.mcp_base_path, error)
         if not isinstance(payload, dict) or not isinstance(payload.get("mcpServers"), dict):
-            raise ValueError(f"{self.mcp_base_path} must contain object key 'mcpServers'")
+            raise InvalidConfigSchemaError(self.mcp_base_path, "must contain object key 'mcpServers'")
         return payload
 
     def load_opencode_base(self) -> dict[str, Any]:
         if not self.opencode_base_path.exists():
-            raise ValueError(f"Missing canonical file: {self.opencode_base_path}")
-        payload = read_json(self.opencode_base_path)
+            raise MissingConfigFileError(self.opencode_base_path)
+        payload, error = read_json_safe(self.opencode_base_path)
+        if error is not None:
+            raise InvalidJsonFormatError(self.opencode_base_path, error)
         if not isinstance(payload, dict):
-            raise ValueError(f"{self.opencode_base_path} must be a JSON object")
+            raise InvalidConfigSchemaError(self.opencode_base_path, "must be a JSON object")
         return payload
 
     def list_skill_sources(self) -> list[Path]:

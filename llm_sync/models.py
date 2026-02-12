@@ -55,7 +55,7 @@ class Action:
 @dataclass
 class SyncPlan:
     actions: list[Action]
-    errors: list[str]
+    errors: list[Exception]
     skipped: list[str]
 
     def is_valid(self) -> bool:

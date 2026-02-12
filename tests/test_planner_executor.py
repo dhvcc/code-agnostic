@@ -1,9 +1,10 @@
 from pathlib import Path
 import json
 
+from llm_sync.errors import InvalidJsonFormatError
 from llm_sync.constants import AGENTS_FILENAME
 from llm_sync.executor import SyncExecutor
-from llm_sync.models import ActionKind
+from llm_sync.models import ActionKind, ActionStatus
 from llm_sync.planner import SyncPlanner
 from llm_sync.repositories.common import CommonRepository
 from llm_sync.repositories.opencode import OpenCodeRepository
@@ -80,3 +81,83 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
 
     state = common.load_state()
     assert len(state["managed_workspace_links"]) == 2
+
+
+def test_plan_marks_config_create_when_missing(
+    minimal_shared_config: Path,
+    common_root: Path,
+    opencode_root: Path,
+) -> None:
+    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+
+    config_actions = [action for action in plan.actions if action.kind == ActionKind.WRITE_JSON]
+    assert len(config_actions) == 1
+    assert config_actions[0].status == ActionStatus.CREATE
+
+
+def test_plan_marks_config_update_when_existing_but_different(
+    minimal_shared_config: Path,
+    common_root: Path,
+    opencode_root: Path,
+) -> None:
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("{}\n", encoding="utf-8")
+
+    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+
+    config_actions = [action for action in plan.actions if action.kind == ActionKind.WRITE_JSON]
+    assert len(config_actions) == 1
+    assert config_actions[0].status == ActionStatus.UPDATE
+
+
+def test_plan_marks_config_noop_when_already_synced(
+    minimal_shared_config: Path,
+    common_root: Path,
+    opencode_root: Path,
+) -> None:
+    common = CommonRepository(common_root)
+    opencode = OpenCodeRepository(opencode_root)
+    first_plan = SyncPlanner(common=common, opencode=opencode).build()
+    payload = next(action.payload for action in first_plan.actions if action.kind == ActionKind.WRITE_JSON)
+
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    second_plan = SyncPlanner(common=common, opencode=opencode).build()
+    config_actions = [action for action in second_plan.actions if action.kind == ActionKind.WRITE_JSON]
+    assert len(config_actions) == 1
+    assert config_actions[0].status == ActionStatus.NOOP
+
+
+def test_plan_collects_invalid_opencode_json_as_error(
+    minimal_shared_config: Path,
+    common_root: Path,
+    opencode_root: Path,
+) -> None:
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("{not-json", encoding="utf-8")
+
+    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+
+    assert len(plan.errors) == 1
+    assert isinstance(plan.errors[0], InvalidJsonFormatError)
+    assert str(config_path) in str(plan.errors[0])
+
+
+def test_plan_treats_empty_opencode_config_as_update(
+    minimal_shared_config: Path,
+    common_root: Path,
+    opencode_root: Path,
+) -> None:
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("", encoding="utf-8")
+
+    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+
+    config_actions = [action for action in plan.actions if action.kind == ActionKind.WRITE_JSON]
+    assert len(config_actions) == 1
+    assert config_actions[0].status == ActionStatus.UPDATE

@@ -77,7 +77,7 @@ class ITargetRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def load_config_object(self) -> Tuple[dict[str, Any], Optional[str]]:
+    def load_config_object(self) -> Tuple[dict[str, Any], Optional[Exception]]:
         raise NotImplementedError
 
     @abstractmethod

@@ -2,6 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
+from llm_sync.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from llm_sync.repositories.base import ITargetRepository
 from llm_sync.utils import read_json_safe
 
@@ -32,14 +33,14 @@ class OpenCodeRepository(ITargetRepository):
             return singular
         return plural
 
-    def load_config_object(self) -> Tuple[dict[str, Any], Optional[str]]:
+    def load_config_object(self) -> Tuple[dict[str, Any], Optional[Exception]]:
         payload, error = read_json_safe(self.config_path)
         if error is not None:
-            return {}, error
+            return {}, InvalidJsonFormatError(self.config_path, error)
         if payload is None:
             return {}, None
         if not isinstance(payload, dict):
-            return {}, "Config must be a JSON object"
+            return {}, InvalidConfigSchemaError(self.config_path, "must be a JSON object")
         return payload, None
 
     @staticmethod

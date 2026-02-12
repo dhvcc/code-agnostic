@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from llm_sync.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
+from llm_sync.errors import SyncAppError
 from llm_sync.mappers.base import IConfigMapper
 from llm_sync.mappers.opencode import OpenCodeMapper
 from llm_sync.models import Action, ActionKind, ActionStatus, SyncPlan, SyncTarget
@@ -29,7 +30,7 @@ class SyncPlanner:
         self.workspace_service = workspace_service or WorkspaceService()
 
         self.actions: list[Action] = []
-        self.errors: list[str] = []
+        self.errors: list[Exception] = []
         self.skipped: list[str] = []
 
         self._desired_skill_links: list[Path] = []
@@ -45,13 +46,17 @@ class SyncPlanner:
         return SyncPlan(actions=self.actions, errors=self.errors, skipped=self.skipped)
 
     def _plan_opencode_config(self) -> None:
-        mcp_base = self.common.load_mcp_base()
-        opencode_base = self.common.load_opencode_base()
+        try:
+            mcp_base = self.common.load_mcp_base()
+            opencode_base = self.common.load_opencode_base()
+        except SyncAppError as exc:
+            self.errors.append(exc)
+            return
         mapped_mcp = self.mapper.map_mcp_servers(mcp_base["mcpServers"])
 
         existing_config, config_error = self.opencode.load_config_object()
         if config_error is not None:
-            self.errors.append(f"Cannot parse {self.opencode.config_path}: {config_error}")
+            self.errors.append(config_error)
             return
 
         merged_config = self.opencode.merge_config(existing_config, opencode_base, mapped_mcp)
