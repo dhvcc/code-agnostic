@@ -1,6 +1,24 @@
 # llm-sync
 
-OpenCode-first sync for shared LLM configuration.
+Centralized hub for LLM coding config: MCP, skills, rules, and agents.
+
+`llm-sync` is built around one idea: keep your AI coding setup in one place, then sync it into editor/app-specific layouts.
+
+Similar to how OpenCode is provider-agnostic for models, `llm-sync` aims to be app-agnostic for coding clients. App selection is intentionally limited for now and expanding over time.
+
+## App Feature Matrix
+
+| App | MCP Sync | Skills Sync | Agents Sync | Rules Sync | Workspace Sync |
+| --- | --- | --- | --- | --- | --- |
+| OpenCode / OpenCode Desktop | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cursor IDE | ⚠️ | ❌ | ❌ | ❌ | ❌ |
+| Claude Code | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Codex CLI | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Cursor CLI | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+- ✅ supported
+- ⚠️ partial support (Cursor MCP work is planned, including limited tool enable/disable compatibility)
+- ❌ not supported yet
 
 ## Install
 
@@ -8,25 +26,17 @@ OpenCode-first sync for shared LLM configuration.
 uv tool install llm-sync
 ```
 
-
-## Commands
-
-```bash
-llm-sync plan
-llm-sync apply             # sync all targets
-llm-sync apply opencode    # sync OpenCode only
-llm-sync status
-llm-sync workspaces add workspace-example ~/microservice-workspace
-llm-sync workspaces list
-llm-sync workspaces remove workspace-example
-```
-
-Or run directly from this repo:
+Or run without installing:
 
 ```bash
-python3 -m llm_sync plan
-python3 -m llm_sync apply
+uvx llm-sync
 ```
+
+## Project Status
+
+- WIP: CLI surface is evolving quickly between iterations.
+- WIP: file layout and config schemas are not finalized yet.
+- Prefer using current help output for exact command behavior.
 
 ## Source Of Truth
 
@@ -39,16 +49,18 @@ Expected layout:
 - `~/.config/llm-sync/skills/<skill>/SKILL.md`
 - `~/.config/llm-sync/agents/*`
 
-## Targets (OpenCode Only)
+## Synced Targets (Current)
 
 - `~/.config/opencode/opencode.json`
 - `~/.config/opencode/skills/*`
 - `~/.config/opencode/agents/*` (or `~/.config/opencode/agent/*` if that directory already exists)
 
+Cursor paths and payloads are intentionally gated behind app toggles while support is being finalized.
+
 ## Notes
 
-- Cursor sync is intentionally disabled in this version.
-- MCP entries in `mcp.base.json` are normalized to OpenCode schema (`type: remote/local`, command arrays).
-- `plan` is side-effect free; writes only happen in `apply`.
-- Workspace sync propagates a root rules file (`AGENTS.md`/`CLAUDE.md`) to repo subdirectories as symlinked `AGENTS.md`.
-- `status` prints a high-level editor sync view plus a workspace repo tree (git repos only).
+- App sync is opt-in: apps start disabled by default to reduce accidental data changes.
+- OpenCode sync normalizes MCP entries from `mcp.base.json` into OpenCode-compatible `mcp` config.
+- Workspace sync propagates a root rules file (`AGENTS.md`/`CLAUDE.md`) into git repos as symlinked `AGENTS.md`.
+- Plan/apply/status behavior is stable in intent, but UX and command shape are still being refined.
+- Schema validation is part of tests for generated OpenCode config; Cursor schema coverage is intentionally scoped to fields we manage.
