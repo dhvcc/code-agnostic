@@ -5,11 +5,11 @@ import click
 from rich.console import Console
 
 from llm_sync.executor import execute_apply
-from llm_sync.output import render_apply_result, render_plan, render_status, render_workspace_saved, render_workspaces_overview
 from llm_sync.planner import build_plan, filter_plan_for_target
 from llm_sync.repositories.common import CommonRepository
 from llm_sync.repositories.opencode import OpenCodeRepository
 from llm_sync.status import build_editor_status, build_workspace_status
+from llm_sync.tui import SyncConsoleUI
 from llm_sync.workspaces import list_workspace_repos
 
 
@@ -29,7 +29,7 @@ def cli(ctx: click.Context) -> None:
 @cli.command(help="Build and print a dry-run plan.")
 @click.pass_obj
 def plan(obj: Dict[str, str]) -> None:
-    console = Console()
+    ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
 
     try:
@@ -37,7 +37,7 @@ def plan(obj: Dict[str, str]) -> None:
     except Exception as exc:
         raise click.ClickException("Fatal: {0}".format(exc))
 
-    render_plan(console, plan_result, mode="plan")
+    ui.render_plan(plan_result, mode="plan")
 
     if plan_result.errors:
         raise click.exceptions.Exit(1)
@@ -47,7 +47,7 @@ def plan(obj: Dict[str, str]) -> None:
 @click.argument("target", required=False, type=click.Choice(["all", "opencode"], case_sensitive=False), default="all")
 @click.pass_obj
 def apply(obj: Dict[str, str], target: str) -> None:
-    console = Console()
+    ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
 
     try:
@@ -57,13 +57,13 @@ def apply(obj: Dict[str, str], target: str) -> None:
 
     scoped_plan = filter_plan_for_target(plan_result, target.lower(), opencode)
 
-    render_plan(console, scoped_plan, mode="apply:{0}".format(target.lower()))
+    ui.render_plan(scoped_plan, mode="apply:{0}".format(target.lower()))
 
     if scoped_plan.errors:
         raise click.ClickException("Apply aborted due to planning/parsing errors above.")
 
     applied, failed, failures = execute_apply(scoped_plan, common, opencode)
-    render_apply_result(console, applied, failed, failures, str(common.state_md))
+    ui.render_apply_result(applied, failed, failures, str(common.state_md))
 
     if failed:
         raise click.exceptions.Exit(1)
@@ -72,7 +72,7 @@ def apply(obj: Dict[str, str], target: str) -> None:
 @cli.command(help="Show sync status for editors and workspaces.")
 @click.pass_obj
 def status(obj: Dict[str, str]) -> None:
-    console = Console()
+    ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
 
     try:
@@ -92,7 +92,7 @@ def status(obj: Dict[str, str]) -> None:
             },
         ]
     workspaces = build_workspace_status(common)
-    render_status(console, editors, workspaces)
+    ui.render_status(editors, workspaces)
 
 
 def main() -> int:
@@ -117,32 +117,32 @@ def workspaces() -> None:
 @click.argument("path", type=click.Path(path_type=Path))
 @click.pass_obj
 def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
-    console = Console()
+    ui = SyncConsoleUI(Console())
     common, _ = _repos_from_obj(obj)
     try:
         common.add_workspace(name, path)
     except ValueError as exc:
         raise click.ClickException(str(exc))
-    render_workspace_saved(console, name, str(path.expanduser().resolve()))
+    ui.render_workspace_saved(name, str(path.expanduser().resolve()))
 
 
 @workspaces.command("remove", help="Remove a workspace from config by name.")
 @click.argument("name")
 @click.pass_obj
 def workspaces_remove(obj: Dict[str, str], name: str) -> None:
-    console = Console()
+    ui = SyncConsoleUI(Console())
     common, _ = _repos_from_obj(obj)
     existing = {item["name"]: item["path"] for item in common.load_workspaces()}
     removed = common.remove_workspace(name)
     if not removed:
         raise click.ClickException(f"Workspace not found: {name}")
-    render_workspace_saved(console, name, existing.get(name, ""), removed=True)
+    ui.render_workspace_saved(name, existing.get(name, ""), removed=True)
 
 
 @workspaces.command("list", help="List configured workspaces and detected repos.")
 @click.pass_obj
 def workspaces_list(obj: Dict[str, str]) -> None:
-    console = Console()
+    ui = SyncConsoleUI(Console())
     common, _ = _repos_from_obj(obj)
 
     overview: list[dict] = []
@@ -159,7 +159,7 @@ def workspaces_list(obj: Dict[str, str]) -> None:
             }
         )
 
-    render_workspaces_overview(console, overview)
+    ui.render_workspaces_overview(overview)
 
 
 if __name__ == "__main__":
