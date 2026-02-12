@@ -3,6 +3,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from llm_sync.cli import cli
+from llm_sync.constants import AGENTS_FILENAME
 
 
 def test_workspaces_add_list_remove_commands(tmp_path: Path, minimal_shared_config: Path) -> None:
@@ -10,7 +11,7 @@ def test_workspaces_add_list_remove_commands(tmp_path: Path, minimal_shared_conf
 
     workspace_root = tmp_path / "example-workspace"
     workspace_root.mkdir()
-    (workspace_root / "AGENTS.md").write_text("rules", encoding="utf-8")
+    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
 
     add_result = runner.invoke(cli, ["workspaces", "add", "workspace-example", str(workspace_root)])

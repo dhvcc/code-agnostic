@@ -2,9 +2,9 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from llm_sync.models import PlanResult
-from llm_sync.repositories.common import CommonRepository
-from llm_sync.repositories.opencode import OpenCodeRepository
+from llm_sync.constants import AGENTS_FILENAME
+from llm_sync.models import ActionKind, ActionStatus, PlanResult
+from llm_sync.repositories.base import ISourceRepository, ITargetRepository
 from llm_sync.utils import backup_file, write_json
 from llm_sync.workspaces import list_workspace_repos, resolve_workspace_rules_file
 
@@ -23,7 +23,7 @@ def _collect_managed_links(target_root: Path, source_root: Path) -> list[str]:
     return managed
 
 
-def _collect_workspace_links(common: CommonRepository) -> list[str]:
+def _collect_workspace_links(common: ISourceRepository) -> list[str]:
     managed: list[str] = []
     for workspace in common.load_workspaces():
         workspace_path = Path(workspace["path"])
@@ -34,7 +34,7 @@ def _collect_workspace_links(common: CommonRepository) -> list[str]:
             continue
         rules_target = str(rules_file.resolve())
         for repo in list_workspace_repos(workspace_path):
-            target = repo / "AGENTS.md"
+            target = repo / AGENTS_FILENAME
             if not target.is_symlink():
                 continue
             if os.path.realpath(target) == rules_target:
@@ -42,15 +42,15 @@ def _collect_workspace_links(common: CommonRepository) -> list[str]:
     return managed
 
 
-def execute_apply(plan: PlanResult, common: CommonRepository, opencode: OpenCodeRepository) -> tuple[int, int, list[str]]:
+def execute_apply(plan: PlanResult, common: ISourceRepository, opencode: ITargetRepository) -> tuple[int, int, list[str]]:
     applied = 0
     failed = 0
     failures: list[str] = []
 
     for action in plan.actions:
         try:
-            if action.kind == "write_json":
-                if action.status == "noop":
+            if action.kind == ActionKind.WRITE_JSON:
+                if action.status == ActionStatus.NOOP:
                     continue
                 if action.path.exists():
                     backup_file(action.path)
@@ -58,10 +58,10 @@ def execute_apply(plan: PlanResult, common: CommonRepository, opencode: OpenCode
                 applied += 1
                 continue
 
-            if action.kind == "symlink":
-                if action.status == "noop":
+            if action.kind == ActionKind.SYMLINK:
+                if action.status == ActionStatus.NOOP:
                     continue
-                if action.status == "conflict":
+                if action.status == ActionStatus.CONFLICT:
                     failed += 1
                     failures.append(f"Conflict (not overwritten): {action.path}")
                     continue
@@ -76,10 +76,10 @@ def execute_apply(plan: PlanResult, common: CommonRepository, opencode: OpenCode
                 applied += 1
                 continue
 
-            if action.kind == "remove_symlink":
-                if action.status == "noop":
+            if action.kind == ActionKind.REMOVE_SYMLINK:
+                if action.status == ActionStatus.NOOP:
                     continue
-                if action.status == "conflict":
+                if action.status == ActionStatus.CONFLICT:
                     failed += 1
                     failures.append(f"Stale cleanup conflict (not symlink): {action.path}")
                     continue
@@ -89,10 +89,10 @@ def execute_apply(plan: PlanResult, common: CommonRepository, opencode: OpenCode
                 continue
 
             failed += 1
-            failures.append(f"Unknown action kind: {action.kind}")
+            failures.append(f"Unknown action kind: {action.kind.value}")
         except Exception as exc:
             failed += 1
-            failures.append(f"{action.kind} failed for {action.path}: {exc}")
+            failures.append(f"{action.kind.value} failed for {action.path}: {exc}")
 
     managed_skill_links = _collect_managed_links(opencode.skills_dir, common.skills_dir)
     managed_agent_links = _collect_managed_links(opencode.agents_dir, common.agents_dir)

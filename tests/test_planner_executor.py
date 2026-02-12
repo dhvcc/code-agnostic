@@ -1,7 +1,9 @@
 from pathlib import Path
 import json
 
+from llm_sync.constants import AGENTS_FILENAME
 from llm_sync.executor import execute_apply
+from llm_sync.models import ActionKind
 from llm_sync.planner import build_plan
 from llm_sync.repositories.common import CommonRepository
 from llm_sync.repositories.opencode import OpenCodeRepository
@@ -49,15 +51,15 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     plan = build_plan(common, opencode)
 
     assert plan.errors == []
-    assert any(action.kind == "write_json" and action.path == opencode.config_path for action in plan.actions)
+    assert any(action.kind == ActionKind.WRITE_JSON and action.path == opencode.config_path for action in plan.actions)
     workspace_targets = {
-        str(workspace_root / "shop-api" / "AGENTS.md"),
-        str(workspace_root / "shop-web" / "AGENTS.md"),
+        str(workspace_root / "shop-api" / AGENTS_FILENAME),
+        str(workspace_root / "shop-web" / AGENTS_FILENAME),
     }
     planned_workspace_targets = {
         str(action.path)
         for action in plan.actions
-        if action.kind == "symlink" and action.path.name == "AGENTS.md" and "example-workspace" in str(action.path)
+        if action.kind == ActionKind.SYMLINK and action.path.name == AGENTS_FILENAME and "example-workspace" in str(action.path)
     }
     assert workspace_targets.issubset(planned_workspace_targets)
 
@@ -72,7 +74,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     assert opencode_config["mcp"]["sentry"] == {"type": "local", "command": ["npx", "@sentry/mcp-server@latest"]}
 
     for repo_name in ["shop-api", "shop-web"]:
-        link_path = workspace_root / repo_name / "AGENTS.md"
+        link_path = workspace_root / repo_name / AGENTS_FILENAME
         assert link_path.is_symlink()
         assert link_path.resolve() == (workspace_root / "CLAUDE.md").resolve()
 

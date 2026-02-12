@@ -6,23 +6,23 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
-from llm_sync.models import PlanResult
+from llm_sync.models import ActionStatus, PlanResult
 
 
 def _status_style(status: str) -> str:
     mapping = {
-        "create": "green",
-        "update": "cyan",
-        "fix": "yellow",
-        "remove": "magenta",
-        "noop": "dim",
-        "conflict": "red",
+        ActionStatus.CREATE.value: "green",
+        ActionStatus.UPDATE.value: "cyan",
+        ActionStatus.FIX.value: "yellow",
+        ActionStatus.REMOVE.value: "magenta",
+        ActionStatus.NOOP.value: "dim",
+        ActionStatus.CONFLICT.value: "red",
     }
     return mapping.get(status, "white")
 
 
 def render_plan(console: Console, plan: PlanResult, mode: str) -> None:
-    counts = Counter(action.status for action in plan.actions)
+    counts = Counter(action.status.value for action in plan.actions)
     counts_line = " ".join([f"{key}:{value}" for key, value in sorted(counts.items())])
     console.print(
         Panel.fit(
@@ -41,8 +41,9 @@ def render_plan(console: Console, plan: PlanResult, mode: str) -> None:
 
     for action in plan.actions:
         source = str(action.source) if action.source is not None else ""
-        status_text = f"[{_status_style(action.status)}]{action.status}[/{_status_style(action.status)}]"
-        table.add_row(action.kind, status_text, str(action.path), source, action.detail)
+        status_value = action.status.value
+        status_text = f"[{_status_style(status_value)}]{status_value}[/{_status_style(status_value)}]"
+        table.add_row(action.kind.value, status_text, str(action.path), source, action.detail)
 
     console.print(table)
 

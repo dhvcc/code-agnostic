@@ -2,9 +2,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from llm_sync.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
 from llm_sync.mappers.base import IConfigMapper
 from llm_sync.mappers.opencode import OpenCodeMapper
-from llm_sync.models import Action, PlanResult
+from llm_sync.models import Action, ActionKind, ActionStatus, PlanResult
 from llm_sync.repositories.base import ISourceRepository, ITargetRepository
 from llm_sync.utils import is_under, same_json
 from llm_sync.workspaces import list_workspace_repos, resolve_workspace_rules_file
@@ -20,10 +21,10 @@ def _plan_symlink(target: Path, source: Path) -> Action:
         if target.is_symlink():
             current = os.path.realpath(target)
             if current == desired:
-                return Action("symlink", target, "noop", "already linked", source=source)
-            return Action("symlink", target, "fix", "symlink points elsewhere", source=source)
-        return Action("symlink", target, "conflict", "non-symlink path exists", source=source)
-    return Action("symlink", target, "create", "create symlink", source=source)
+                return Action(ActionKind.SYMLINK, target, ActionStatus.NOOP, "already linked", source=source)
+            return Action(ActionKind.SYMLINK, target, ActionStatus.FIX, "symlink points elsewhere", source=source)
+        return Action(ActionKind.SYMLINK, target, ActionStatus.CONFLICT, "non-symlink path exists", source=source)
+    return Action(ActionKind.SYMLINK, target, ActionStatus.CREATE, "create symlink", source=source)
 
 
 def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: Optional[IConfigMapper] = None) -> PlanResult:
@@ -43,10 +44,10 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
     else:
         merged_config = opencode.merge_config(existing_config, opencode_base, mapped_mcp)
         if same_json(opencode.config_path, merged_config):
-            actions.append(Action("write_json", opencode.config_path, "noop", "already in sync", payload=merged_config))
+            actions.append(Action(ActionKind.WRITE_JSON, opencode.config_path, ActionStatus.NOOP, "already in sync", payload=merged_config))
         else:
-            status = "create" if not opencode.config_path.exists() else "update"
-            actions.append(Action("write_json", opencode.config_path, status, "merge opencode base + canonical mcp", payload=merged_config))
+            status = ActionStatus.CREATE if not opencode.config_path.exists() else ActionStatus.UPDATE
+            actions.append(Action(ActionKind.WRITE_JSON, opencode.config_path, status, "merge opencode base + canonical mcp", payload=merged_config))
 
     skill_sources = common.list_skill_sources()
     mapped_skill_sources = [effective_mapper.map_skill_source(source) for source in skill_sources]
@@ -54,7 +55,7 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
     for source in mapped_skill_sources:
         action = _plan_symlink(opencode.skills_dir / source.name, source)
         actions.append(action)
-        if action.status == "conflict":
+        if action.status == ActionStatus.CONFLICT:
             skipped.append(f"Skill link skipped (conflict): {action.path}")
 
     agent_sources = common.list_agent_sources()
@@ -63,7 +64,7 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
     for source in mapped_agent_sources:
         action = _plan_symlink(opencode.agents_dir / source.name, source)
         actions.append(action)
-        if action.status == "conflict":
+        if action.status == ActionStatus.CONFLICT:
             skipped.append(f"Agent link skipped (conflict): {action.path}")
 
     workspace_links: list[Path] = []
@@ -76,16 +77,16 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
 
         rules_file = resolve_workspace_rules_file(workspace_path)
         if rules_file is None:
-            skipped.append(f"Workspace has no rules file (AGENTS.md/CLAUDE.md), skipped: {workspace_name}")
+            skipped.append(f"Workspace has no rules file ({WORKSPACE_RULE_FILES_DISPLAY}), skipped: {workspace_name}")
             continue
         mapped_rules_file = effective_mapper.map_workspace_rules_source(rules_file)
 
         for repo in list_workspace_repos(workspace_path):
-            target = repo / "AGENTS.md"
+            target = repo / AGENTS_FILENAME
             action = _plan_symlink(target, mapped_rules_file)
             actions.append(action)
             workspace_links.append(target)
-            if action.status == "conflict":
+            if action.status == ActionStatus.CONFLICT:
                 skipped.append(f"Workspace rules link skipped (conflict): {target}")
 
     state = common.load_state()
@@ -99,12 +100,12 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
         if not any(is_under(old, root) for root in opencode_roots):
             continue
         if old.is_symlink():
-            actions.append(Action("remove_symlink", old, "remove", "remove stale managed skill symlink"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.REMOVE, "remove stale managed skill symlink"))
         elif old.exists():
-            actions.append(Action("remove_symlink", old, "conflict", "stale managed path is not a symlink"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.CONFLICT, "stale managed path is not a symlink"))
             skipped.append(f"Stale link cleanup skipped (not symlink): {old}")
         else:
-            actions.append(Action("remove_symlink", old, "noop", "stale symlink already absent"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.NOOP, "stale symlink already absent"))
 
     old_agent_links = [Path(item) for item in state.get("managed_agent_links", []) if isinstance(item, str)]
     desired_agent_set = {str(path) for path in desired_agent_links}
@@ -114,12 +115,12 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
         if not any(is_under(old, root) for root in opencode_roots):
             continue
         if old.is_symlink():
-            actions.append(Action("remove_symlink", old, "remove", "remove stale managed agent symlink"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.REMOVE, "remove stale managed agent symlink"))
         elif old.exists():
-            actions.append(Action("remove_symlink", old, "conflict", "stale managed path is not a symlink"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.CONFLICT, "stale managed path is not a symlink"))
             skipped.append(f"Stale link cleanup skipped (not symlink): {old}")
         else:
-            actions.append(Action("remove_symlink", old, "noop", "stale symlink already absent"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.NOOP, "stale symlink already absent"))
 
     old_workspace_links = [Path(item) for item in state.get("managed_workspace_links", []) if isinstance(item, str)]
     desired_workspace_set = {str(path) for path in workspace_links}
@@ -127,12 +128,12 @@ def build_plan(common: ISourceRepository, opencode: ITargetRepository, mapper: O
         if str(old) in desired_workspace_set:
             continue
         if old.is_symlink():
-            actions.append(Action("remove_symlink", old, "remove", "remove stale managed workspace symlink"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.REMOVE, "remove stale managed workspace symlink"))
         elif old.exists():
-            actions.append(Action("remove_symlink", old, "conflict", "stale workspace path is not a symlink"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.CONFLICT, "stale workspace path is not a symlink"))
             skipped.append(f"Stale workspace cleanup skipped (not symlink): {old}")
         else:
-            actions.append(Action("remove_symlink", old, "noop", "stale workspace symlink already absent"))
+            actions.append(Action(ActionKind.REMOVE_SYMLINK, old, ActionStatus.NOOP, "stale workspace symlink already absent"))
 
     return PlanResult(actions=actions, errors=errors, skipped=skipped)
 

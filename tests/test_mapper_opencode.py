@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from llm_sync.constants import AGENTS_FILENAME
 from llm_sync.mappers.base import IConfigMapper
 from llm_sync.mappers.opencode import OpenCodeMapper
 
@@ -43,7 +44,7 @@ def test_map_mcp_servers_to_opencode_normalizes_remote_and_local() -> None:
 
 def test_base_mapper_defaults_to_native_passthrough(tmp_path: Path) -> None:
     mapper = NativeMapper()
-    source = tmp_path / "AGENTS.md"
+    source = tmp_path / AGENTS_FILENAME
     source.write_text("rules", encoding="utf-8")
 
     assert mapper.map_mcp_servers({"a": {"url": "https://example.com"}}) == {"a": {"url": "https://example.com"}}

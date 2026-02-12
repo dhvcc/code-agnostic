@@ -3,6 +3,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from llm_sync.cli import cli
+from llm_sync.constants import AGENTS_FILENAME
 
 
 def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Path, tmp_path: Path) -> None:
@@ -10,7 +11,7 @@ def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Pa
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
-    (workspace_root / "AGENTS.md").write_text("workspace rules", encoding="utf-8")
+    (workspace_root / AGENTS_FILENAME).write_text("workspace rules", encoding="utf-8")
     (workspace_root / "service-api" / ".git").mkdir(parents=True)
     (workspace_root / "service-web" / ".git").mkdir(parents=True)
     (workspace_root / "notes").mkdir()

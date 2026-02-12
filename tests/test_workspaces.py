@@ -1,13 +1,14 @@
 from pathlib import Path
 
+from llm_sync.constants import AGENTS_FILENAME, CLAUDE_FILENAME
 from llm_sync.workspaces import list_workspace_repos, resolve_workspace_rules_file
 
 
 def test_resolve_workspace_rules_prefers_agents_md(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    agents = workspace / "AGENTS.md"
-    claude = workspace / "CLAUDE.md"
+    agents = workspace / AGENTS_FILENAME
+    claude = workspace / CLAUDE_FILENAME
     agents.write_text("agents", encoding="utf-8")
     claude.write_text("claude", encoding="utf-8")
 

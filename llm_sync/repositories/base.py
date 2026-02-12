@@ -19,6 +19,21 @@ class IConfigRepository(ABC):
 
 
 class ISourceRepository(IConfigRepository):
+    @property
+    @abstractmethod
+    def skills_dir(self) -> Path:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def agents_dir(self) -> Path:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def state_md(self) -> Path:
+        raise NotImplementedError
+
     @abstractmethod
     def load_mcp_base(self) -> dict[str, Any]:
         raise NotImplementedError

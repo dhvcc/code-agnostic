@@ -2,8 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-
-WORKSPACE_RULE_FILES = ["AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"]
+from llm_sync.constants import GIT_DIRNAME, WORKSPACE_IGNORED_DIRS, WORKSPACE_RULE_FILES
 
 
 def resolve_workspace_rules_file(workspace_path: Path) -> Optional[Path]:
@@ -22,11 +21,11 @@ def list_workspace_repos(workspace_path: Path) -> list[Path]:
         current = Path(root)
         if current == workspace_real:
             pass
-        elif (current / ".git").exists():
+        elif (current / GIT_DIRNAME).exists():
             repos.append(current)
             dir_names[:] = []
             continue
 
-        dir_names[:] = [name for name in dir_names if not name.startswith(".") and name not in {"node_modules", ".venv"}]
+        dir_names[:] = [name for name in dir_names if not name.startswith(".") and name not in WORKSPACE_IGNORED_DIRS]
 
     return sorted(set(repos))

@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from llm_sync.models import PlanResult
+from llm_sync.constants import AGENTS_FILENAME
+from llm_sync.models import ActionStatus, PlanResult
 from llm_sync.repositories.common import CommonRepository
 from llm_sync.repositories.opencode import OpenCodeRepository
 from llm_sync.utils import is_under
@@ -25,7 +26,7 @@ def _opencode_actions(plan: PlanResult, opencode: OpenCodeRepository) -> List[An
 def _synced_from_actions(actions: List[Any]) -> bool:
     if not actions:
         return True
-    return all(action.status == "noop" for action in actions)
+    return all(action.status == ActionStatus.NOOP for action in actions)
 
 
 def build_editor_status(plan: PlanResult, opencode: OpenCodeRepository) -> List[Dict[str, str]]:
@@ -49,11 +50,11 @@ def build_editor_status(plan: PlanResult, opencode: OpenCodeRepository) -> List[
 
 
 def _repo_sync_status(repo_path: Path, rules_file: Path) -> Dict[str, str]:
-    target = repo_path / "AGENTS.md"
+    target = repo_path / AGENTS_FILENAME
     desired = str(rules_file.resolve())
     if target.is_symlink() and str(target.resolve()) == desired:
         return {"repo": repo_path.name, "status": "synced", "detail": "linked"}
-    return {"repo": repo_path.name, "status": "needs_sync", "detail": "missing or mismatched AGENTS.md"}
+    return {"repo": repo_path.name, "status": "needs_sync", "detail": f"missing or mismatched {AGENTS_FILENAME}"}
 
 
 def build_workspace_status(common: CommonRepository) -> List[Dict[str, Any]]:

@@ -3,6 +3,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from llm_sync.cli import cli
+from llm_sync.constants import AGENTS_FILENAME
 
 
 def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, tmp_path: Path) -> None:
@@ -10,7 +11,7 @@ def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, 
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
-    (workspace_root / "AGENTS.md").write_text("rules", encoding="utf-8")
+    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = runner.invoke(cli, ["workspaces", "add", "workspace-example", str(workspace_root)])
@@ -22,7 +23,7 @@ def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, 
     opencode_config = tmp_path / ".config" / "opencode" / "opencode.json"
     assert opencode_config.exists()
 
-    workspace_link = workspace_root / "service-a" / "AGENTS.md"
+    workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert not workspace_link.exists()
 
 
@@ -31,7 +32,7 @@ def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: P
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
-    (workspace_root / "AGENTS.md").write_text("rules", encoding="utf-8")
+    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = runner.invoke(cli, ["workspaces", "add", "workspace-example", str(workspace_root)])
@@ -40,6 +41,6 @@ def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: P
     apply_result = runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
-    workspace_link = workspace_root / "service-a" / "AGENTS.md"
+    workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (workspace_root / "AGENTS.md").resolve()
+    assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
