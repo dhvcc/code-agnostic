@@ -37,6 +37,18 @@ uvx code-agnostic
 - WIP: file layout and config schemas are not finalized yet.
 - Prefer using current help output for exact command behavior.
 
+## Testing
+
+This repo is built around `uv` workflows.
+
+```bash
+uv sync --dev
+uv run test
+```
+
+- `uv run test` is the default test entrypoint and runs `pytest`.
+- You can pass any pytest args through it, for example: `uv run test -q tests/e2e`.
+
 ## Source Of Truth
 
 Shared config root defaults to `~/.config/code-agnostic`.

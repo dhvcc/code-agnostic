@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 code-agnostic = "code_agnostic.__main__:main"
+test = "pytest:main"
 
 [tool.setuptools.packages.find]
 include = ["code_agnostic*"]
