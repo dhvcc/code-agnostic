@@ -1,8 +1,12 @@
 import re
-import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
 
 from code_agnostic.apps.sync.base import IAppConfigRepository, IAppMCPMapper
 from code_agnostic.apps.sync.models import MCPServerDTO, MCPServerType
@@ -182,6 +186,11 @@ class CodexRepository(IAppConfigRepository):
         return payload
 
     def save_config(self, payload: dict[str, Any]) -> None:
+        serialized = self.serialize_config(payload)
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.config_path.write_text(serialized, encoding="utf-8")
+
+    def serialize_config(self, payload: dict[str, Any]) -> str:
         lines: list[str] = []
         mcp_servers = payload.get("mcp_servers")
         if isinstance(mcp_servers, dict):
@@ -223,9 +232,7 @@ class CodexRepository(IAppConfigRepository):
                         f"mcp_servers.{name}.env_http_headers",
                         {str(k): str(v) for k, v in env_http_headers.items()},
                     )
-
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        self.config_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+        return "\n".join(lines).strip() + "\n"
 
     def load_mcp_payload(self) -> dict[str, Any]:
         payload = self.load_config()

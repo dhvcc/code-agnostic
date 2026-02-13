@@ -18,12 +18,15 @@ class ExecutionContext:
 
 
 class ActionHandler(Protocol):
-    def handle(self, action: Action, context: ExecutionContext) -> tuple[bool, Optional[str]]:
-        ...
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, Optional[str]]: ...
 
 
 class WriteJsonHandler:
-    def handle(self, action: Action, context: ExecutionContext) -> tuple[bool, Optional[str]]:
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, Optional[str]]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if action.path.exists():
@@ -33,7 +36,9 @@ class WriteJsonHandler:
 
 
 class SymlinkHandler:
-    def handle(self, action: Action, context: ExecutionContext) -> tuple[bool, Optional[str]]:
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, Optional[str]]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if action.status == ActionStatus.CONFLICT:
@@ -48,8 +53,26 @@ class SymlinkHandler:
         return True, None
 
 
+class WriteTextHandler:
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, Optional[str]]:
+        if action.status == ActionStatus.NOOP:
+            return False, None
+        if not isinstance(action.payload, str):
+            return False, f"Missing text payload for write action: {action.path}"
+
+        if action.path.exists():
+            backup_file(action.path)
+        action.path.parent.mkdir(parents=True, exist_ok=True)
+        action.path.write_text(action.payload, encoding="utf-8")
+        return True, None
+
+
 class RemoveSymlinkHandler:
-    def handle(self, action: Action, context: ExecutionContext) -> tuple[bool, Optional[str]]:
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, Optional[str]]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if action.status == ActionStatus.CONFLICT:
@@ -71,11 +94,14 @@ class SyncExecutor:
         self.workspace_service = workspace_service or WorkspaceService()
         self.handlers: dict[ActionKind, ActionHandler] = {
             ActionKind.WRITE_JSON: WriteJsonHandler(),
+            ActionKind.WRITE_TEXT: WriteTextHandler(),
             ActionKind.SYMLINK: SymlinkHandler(),
             ActionKind.REMOVE_SYMLINK: RemoveSymlinkHandler(),
         }
 
-    def execute(self, plan: SyncPlan) -> tuple[int, int, list[str]]:
+    def execute(
+        self, plan: SyncPlan, persist_state: bool = True
+    ) -> tuple[int, int, list[str]]:
         applied = 0
         failed = 0
         failures: list[str] = []
@@ -99,15 +125,20 @@ class SyncExecutor:
                 failed += 1
                 failures.append(f"{action.kind.value} failed for {action.path}: {exc}")
 
-        self._persist_state(plan=plan)
+        if persist_state:
+            self._persist_state(plan=plan)
         return applied, failed, failures
 
     def _persist_state(self, plan: SyncPlan) -> None:
         common = self.context.common
         opencode = self.context.opencode
 
-        managed_skill_links = self._collect_managed_links(opencode.skills_dir, common.skills_dir)
-        managed_agent_links = self._collect_managed_links(opencode.agents_dir, common.agents_dir)
+        managed_skill_links = self._collect_managed_links(
+            opencode.skills_dir, common.skills_dir
+        )
+        managed_agent_links = self._collect_managed_links(
+            opencode.agents_dir, common.agents_dir
+        )
         managed_workspace_links = self._collect_workspace_links(common)
 
         updated_at = datetime.now().isoformat(timespec="seconds")
@@ -154,5 +185,7 @@ class SyncExecutor:
         return managed
 
 
-def execute_apply(plan: SyncPlan, common: ISourceRepository, opencode: ITargetRepository) -> tuple[int, int, list[str]]:
+def execute_apply(
+    plan: SyncPlan, common: ISourceRepository, opencode: ITargetRepository
+) -> tuple[int, int, list[str]]:
     return SyncExecutor(common=common, opencode=opencode).execute(plan)

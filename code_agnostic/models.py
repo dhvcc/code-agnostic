@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 class ActionKind(str, Enum):
     WRITE_JSON = "write_json"
+    WRITE_TEXT = "write_text"
     SYMLINK = "symlink"
     REMOVE_SYMLINK = "remove_symlink"
 
@@ -22,6 +23,8 @@ class ActionStatus(str, Enum):
 class SyncTarget(str, Enum):
     ALL = "all"
     OPENCODE = "opencode"
+    CURSOR = "cursor"
+    CODEX = "codex"
 
 
 class EditorSyncStatus(str, Enum):
@@ -45,6 +48,7 @@ class RepoSyncStatus(str, Enum):
 class AppId(str, Enum):
     OPENCODE = "opencode"
     CURSOR = "cursor"
+    CODEX = "codex"
 
 
 class AppSyncStatus(str, Enum):
@@ -60,6 +64,7 @@ class Action:
     detail: str
     source: Optional[Path] = None
     payload: Optional[Any] = None
+    app: Optional[str] = None
 
 
 @dataclass
@@ -80,16 +85,25 @@ class SyncPlan:
         counts["skipped"] = len(self.skipped)
         return counts
 
-    def filter_for_target(self, target: SyncTarget, config_path: Path, skills_root: Path, agents_root: Path) -> "SyncPlan":
+    def filter_for_target(
+        self,
+        target: SyncTarget,
+        config_path: Path,
+        skills_root: Path,
+        agents_root: Path,
+    ) -> "SyncPlan":
         if target == SyncTarget.ALL:
             return self
-        if target != SyncTarget.OPENCODE:
-            return SyncPlan(actions=[], errors=self.errors, skipped=self.skipped)
+        if target in (SyncTarget.CURSOR, SyncTarget.CODEX):
+            filtered = [action for action in self.actions if action.app == target.value]
+            return SyncPlan(actions=filtered, errors=self.errors, skipped=self.skipped)
 
         resolved_skills = skills_root.resolve()
         resolved_agents = agents_root.resolve()
         filtered_actions: list[Action] = []
         for action in self.actions:
+            if action.app in (SyncTarget.CURSOR.value, SyncTarget.CODEX.value):
+                continue
             if action.path == config_path:
                 filtered_actions.append(action)
                 continue
@@ -97,9 +111,13 @@ class SyncPlan:
                 resolved_path = action.path.resolve()
             except Exception:
                 resolved_path = action.path
-            if _is_under(resolved_path, resolved_skills) or _is_under(resolved_path, resolved_agents):
+            if _is_under(resolved_path, resolved_skills) or _is_under(
+                resolved_path, resolved_agents
+            ):
                 filtered_actions.append(action)
-        return SyncPlan(actions=filtered_actions, errors=self.errors, skipped=self.skipped)
+        return SyncPlan(
+            actions=filtered_actions, errors=self.errors, skipped=self.skipped
+        )
 
 
 PlanResult = SyncPlan

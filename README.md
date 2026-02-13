@@ -11,13 +11,12 @@ Similar to how OpenCode is provider-agnostic for models, `code-agnostic` aims to
 | App | MCP Sync | Skills Sync | Agents Sync | Rules Sync | Workspace Sync |
 | --- | --- | --- | --- | --- | --- |
 | OpenCode / OpenCode Desktop | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Cursor IDE | ⚠️ | ❌ | ❌ | ❌ | ❌ |
+| Cursor IDE | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Claude Code | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Codex CLI | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Codex CLI | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Cursor CLI | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 - ✅ supported
-- ⚠️ partial support (Cursor MCP work is planned, including limited tool enable/disable compatibility)
 - ❌ not supported yet
 
 ## Install
@@ -55,7 +54,7 @@ Expected layout:
 - `~/.config/opencode/skills/*`
 - `~/.config/opencode/agents/*` (or `~/.config/opencode/agent/*` if that directory already exists)
 
-Cursor paths and payloads are intentionally gated behind app toggles while support is being finalized.
+Cursor and Codex MCP payload sync are gated behind app toggles.
 
 ## Notes
 
@@ -68,8 +67,7 @@ Cursor paths and payloads are intentionally gated behind app toggles while suppo
 ## Roadmap
 
 - Add full rules sync: current behavior only propagates root `AGENTS.md` at global/workspace levels; planned direction is a dedicated `rules/` directory (syntax still being investigated).
-- Finish Cursor IDE support.
-- Expand MCP sync to include auth configuration, not only tool definitions.
+- Expand MCP sync with broader auth and edge-case coverage.
 - Add import flows (for example, importing Claude skills) into `code-agnostic` as an onboarding path.
 - Make mappers bidirectional for import/export use cases, with DTO-based transformations.
 - Add dynamic inline TUI selectors for tool enable/disable and import selection (similar interaction model to Mole CLI).
