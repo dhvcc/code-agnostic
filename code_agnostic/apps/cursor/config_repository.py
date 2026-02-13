@@ -18,6 +18,14 @@ class CursorConfigRepository(IAppConfigRepository):
     def config_path(self) -> Path:
         return self.root / "mcp.json"
 
+    @property
+    def skills_dir(self) -> Path:
+        return self.root / "skills"
+
+    @property
+    def agents_dir(self) -> Path:
+        return self.root / "agents"
+
     def load_config(self) -> dict[str, Any]:
         payload, error = read_json_safe(self.config_path)
         if error is not None:

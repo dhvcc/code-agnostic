@@ -8,16 +8,28 @@ Similar to how OpenCode is provider-agnostic for models, `code-agnostic` aims to
 
 ## App Feature Matrix
 
-| App | MCP Sync | Skills Sync | Agents Sync | Rules Sync | Workspace Sync |
-| --- | --- | --- | --- | --- | --- |
-| OpenCode / OpenCode Desktop | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Cursor IDE | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Claude Code | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Codex CLI | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Cursor CLI | ❌ | ❌ | ❌ | ❌ | ❌ |
+| App | MCP Sync | Skills Sync | Agents Sync | Workspace Sync |
+| --- | --- | --- | --- | --- |
+| OpenCode / OpenCode Desktop | ✅ | ✅ | ✅ | ✅ |
+| Cursor IDE | ✅ | ✅ | ✅ | ✅ |
+| Codex CLI | ✅ | ✅ | ❌ | ✅ |
 
 - ✅ supported
-- ❌ not supported yet
+- ❌ not supported (Codex does not support agents natively)
+
+### Not Yet Supported
+
+| App | Status |
+| --- | --- |
+| Claude Code | Planned |
+| Windsurf | Not started |
+
+### Limitations
+
+- **Skills/Agents sync** uses symlinks from central `~/.config/code-agnostic/skills/` and `agents/` directories into each app's directory. This means all apps share the same skill/agent content.
+- **Codex** does not support agents or commands natively; only MCP and skills are synced.
+- **Workspace sync** propagates a root rules file (AGENTS.md/CLAUDE.md) into git repos as symlinked AGENTS.md. This is app-agnostic.
+- **Commands sync** (as seen in vsync) is not yet implemented.
 
 ## Install
 

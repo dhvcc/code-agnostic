@@ -209,6 +209,128 @@ def test_skills_agents_symlink_e2e(
         assert agent_link.is_symlink()
 
 
+def test_cursor_skills_agents_symlink_e2e(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    from code_agnostic.__main__ import cli
+
+    enable_app("cursor")
+
+    core_root = tmp_path / ".config" / "code-agnostic"
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill content", encoding="utf-8"
+    )
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text("agent content", encoding="utf-8")
+
+    apply_result = cli_runner.invoke(cli, ["apply"])
+    assert apply_result.exit_code == 0
+
+    cursor_root = tmp_path / ".cursor"
+    skill_link = cursor_root / "skills" / "my-skill"
+    agent_link = cursor_root / "agents" / "planner.md"
+
+    assert skill_link.is_symlink()
+    assert agent_link.is_symlink()
+
+
+def test_codex_skills_symlink_e2e(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    from code_agnostic.__main__ import cli
+
+    enable_app("codex")
+
+    core_root = tmp_path / ".config" / "code-agnostic"
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill content", encoding="utf-8"
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply"])
+    assert apply_result.exit_code == 0
+
+    codex_root = tmp_path / ".codex"
+    skill_link = codex_root / "skills" / "my-skill"
+
+    assert skill_link.is_symlink()
+
+
+def test_cursor_stale_skill_cleanup_e2e(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    from code_agnostic.__main__ import cli
+
+    enable_app("cursor")
+
+    core_root = tmp_path / ".config" / "code-agnostic"
+    (core_root / "skills" / "old-skill").mkdir(parents=True)
+    (core_root / "skills" / "old-skill" / "SKILL.md").write_text(
+        "old", encoding="utf-8"
+    )
+
+    apply1 = cli_runner.invoke(cli, ["apply"])
+    assert apply1.exit_code == 0
+
+    cursor_root = tmp_path / ".cursor"
+    old_link = cursor_root / "skills" / "old-skill"
+    assert old_link.is_symlink()
+
+    import shutil
+
+    shutil.rmtree(core_root / "skills" / "old-skill")
+
+    apply2 = cli_runner.invoke(cli, ["apply"])
+    assert apply2.exit_code == 0
+    assert not old_link.exists()
+
+
+def test_full_roundtrip_skills_agents_all_apps(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    from code_agnostic.__main__ import cli
+
+    enable_app("opencode")
+    enable_app("cursor")
+    enable_app("codex")
+
+    core_root = tmp_path / ".config" / "code-agnostic"
+    (core_root / "skills" / "shared-skill").mkdir(parents=True)
+    (core_root / "skills" / "shared-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
+
+    apply_result = cli_runner.invoke(cli, ["apply"])
+    assert apply_result.exit_code == 0
+
+    opencode_root = tmp_path / ".config" / "opencode"
+    cursor_root = tmp_path / ".cursor"
+    codex_root = tmp_path / ".codex"
+
+    assert (opencode_root / "skills" / "shared-skill").is_symlink()
+    assert (opencode_root / "agents" / "planner.md").is_symlink()
+
+    assert (cursor_root / "skills" / "shared-skill").is_symlink()
+    assert (cursor_root / "agents" / "planner.md").is_symlink()
+
+    assert (codex_root / "skills" / "shared-skill").is_symlink()
+
+
 def test_config_update_propagation(
     minimal_shared_config: Path,
     tmp_path: Path,

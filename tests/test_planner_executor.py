@@ -4,6 +4,14 @@ import json
 from code_agnostic.errors import InvalidJsonFormatError
 from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.executor import SyncExecutor
+from code_agnostic.apps.codex.config_repository import CodexConfigRepository
+from code_agnostic.apps.codex.mapper import CodexMCPMapper
+from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
+from code_agnostic.apps.codex.service import CodexConfigService
+from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
+from code_agnostic.apps.cursor.mapper import CursorMCPMapper
+from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
+from code_agnostic.apps.cursor.service import CursorConfigService
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
@@ -21,6 +29,22 @@ def _opencode_service(
         mapper=OpenCodeMCPMapper(),
         schema_repository=OpenCodeSchemaRepository(),
         base_config_path=core.opencode_base_path,
+    )
+
+
+def _cursor_service(cursor_root: Path) -> CursorConfigService:
+    return CursorConfigService(
+        repository=CursorConfigRepository(root=cursor_root),
+        mapper=CursorMCPMapper(),
+        schema_repository=CursorSchemaRepository(),
+    )
+
+
+def _codex_service(codex_root: Path) -> CodexConfigService:
+    return CodexConfigService(
+        repository=CodexConfigRepository(root=codex_root),
+        mapper=CodexMCPMapper(),
+        schema_repository=CodexSchemaRepository(),
     )
 
 
@@ -223,3 +247,91 @@ def test_plan_treats_empty_opencode_config_as_update(
     ]
     assert len(config_actions) == 1
     assert config_actions[0].status == ActionStatus.UPDATE
+
+
+def test_cursor_build_plan_includes_skill_symlinks(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+
+    core = CoreRepository(core_root)
+    cursor_root = tmp_path / ".cursor"
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+
+    skill_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.SYMLINK and a.scope == "app:cursor:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == cursor_root / "skills" / "my-skill"
+    assert skill_actions[0].status == ActionStatus.CREATE
+
+
+def test_cursor_build_plan_includes_agent_symlinks(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    cursor_root = tmp_path / ".cursor"
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+
+    agent_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.SYMLINK and a.scope == "app:cursor:agents"
+    ]
+    assert len(agent_actions) == 1
+    assert agent_actions[0].path == cursor_root / "agents" / "planner.md"
+    assert agent_actions[0].status == ActionStatus.CREATE
+
+
+def test_codex_build_plan_includes_skill_symlinks(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+
+    core = CoreRepository(core_root)
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    skill_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.SYMLINK and a.scope == "app:codex:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == codex_root / "skills" / "my-skill"
+    assert skill_actions[0].status == ActionStatus.CREATE
+
+
+def test_codex_build_plan_has_no_agent_actions(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    agent_actions = [
+        a for a in plan.actions if a.scope and "agents" in a.scope and a.app == "codex"
+    ]
+    assert agent_actions == []
