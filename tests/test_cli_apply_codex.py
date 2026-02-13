@@ -6,7 +6,6 @@ from urllib.request import Request, urlopen
 from jsonschema import Draft7Validator
 
 from code_agnostic.__main__ import cli
-from code_agnostic.apps.common.schema import _SCHEMA_CACHE
 
 try:
     import tomllib
@@ -99,7 +98,6 @@ def test_apply_codex_uses_local_schema_fallback_on_remote_failure(
     monkeypatch,
 ) -> None:
     enable_app("codex")
-    _SCHEMA_CACHE.clear()
 
     def _fail(*args, **kwargs):
         raise OSError("network unavailable")

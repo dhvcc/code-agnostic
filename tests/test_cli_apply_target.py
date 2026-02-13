@@ -5,7 +5,6 @@ from urllib.request import Request, urlopen
 
 from jsonschema import Draft202012Validator
 from code_agnostic.__main__ import cli
-from code_agnostic.apps.common.schema import _SCHEMA_CACHE
 from code_agnostic.constants import AGENTS_FILENAME
 
 
@@ -148,7 +147,6 @@ def test_apply_opencode_uses_local_schema_fallback_on_remote_failure(
     monkeypatch,
 ) -> None:
     enable_app("opencode")
-    _SCHEMA_CACHE.clear()
 
     def _fail(*args, **kwargs):
         raise OSError("network unavailable")
@@ -158,3 +156,33 @@ def test_apply_opencode_uses_local_schema_fallback_on_remote_failure(
     result = cli_runner.invoke(cli, ["apply", "opencode"])
 
     assert result.exit_code == 0
+
+
+def test_apply_opencode_stale_workspace_links_cleaned(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    enable_app("opencode")
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "ws", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    apply1 = cli_runner.invoke(cli, ["apply", "opencode"])
+    assert apply1.exit_code == 0
+
+    link = workspace_root / "repo-a" / AGENTS_FILENAME
+    assert link.is_symlink()
+
+    remove_result = cli_runner.invoke(cli, ["workspaces", "remove", "ws"])
+    assert remove_result.exit_code == 0
+
+    apply2 = cli_runner.invoke(cli, ["apply", "opencode"])
+    assert apply2.exit_code == 0
+
+    assert not link.is_symlink()

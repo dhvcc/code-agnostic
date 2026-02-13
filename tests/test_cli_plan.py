@@ -38,3 +38,26 @@ def test_plan_target_cursor_includes_workspace_actions(
     assert plan_result.exit_code == 0
     assert "cursor" in plan_result.output
     assert "workspace links" in plan_result.output
+
+
+def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> None:
+    result = cli_runner.invoke(cli, ["plan"])
+
+    assert result.exit_code == 0
+
+
+def test_plan_target_opencode_when_not_enabled(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["plan", "opencode"])
+
+    assert result.exit_code == 0
+
+
+def test_plan_missing_mcp_base_json(tmp_path: Path, cli_runner, enable_app) -> None:
+    core_root = tmp_path / ".config" / "code-agnostic"
+    core_root.mkdir(parents=True, exist_ok=True)
+
+    result = cli_runner.invoke(cli, ["plan"])
+
+    assert result.exit_code == 0

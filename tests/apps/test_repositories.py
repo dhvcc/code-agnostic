@@ -55,3 +55,57 @@ def test_codex_repository_reads_and_writes_mcp(tmp_path: Path) -> None:
     reloaded = repo.load_mcp_payload()
     assert reloaded["local"]["command"] == "uvx"
     assert reloaded["local"]["args"] == ["demo"]
+
+
+def test_opencode_repository_load_mcp_when_file_missing(tmp_path: Path) -> None:
+    root = tmp_path / ".config" / "opencode"
+    repo = OpenCodeConfigRepository(root=root)
+
+    assert repo.load_mcp_payload() == {}
+
+
+def test_opencode_repository_load_config_when_file_empty(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".config" / "opencode"
+    config_path = root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("", encoding="utf-8")
+
+    repo = OpenCodeConfigRepository(root=root)
+
+    assert repo.load_config() == {}
+
+
+def test_cursor_repository_load_mcp_when_file_missing(tmp_path: Path) -> None:
+    root = tmp_path / ".cursor"
+    repo = CursorConfigRepository(root=root)
+
+    assert repo.load_mcp_payload() == {}
+
+
+def test_codex_repository_load_mcp_with_empty_toml(tmp_path: Path) -> None:
+    root = tmp_path / ".codex"
+    config_path = root / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text("", encoding="utf-8")
+
+    repo = CodexConfigRepository(root=root)
+
+    assert repo.load_mcp_payload() == {}
+
+
+def test_codex_repository_roundtrip(tmp_path: Path) -> None:
+    root = tmp_path / ".codex"
+    repo = CodexConfigRepository(root=root)
+
+    payload = {
+        "local": {"command": "uvx", "args": ["demo"]},
+        "remote": {"url": "https://x"},
+    }
+    repo.save_mcp_payload(payload)
+    reloaded = repo.load_mcp_payload()
+
+    assert reloaded["local"]["command"] == "uvx"
+    assert reloaded["local"]["args"] == ["demo"]
+    assert reloaded["remote"]["url"] == "https://x"

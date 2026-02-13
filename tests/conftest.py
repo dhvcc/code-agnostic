@@ -23,6 +23,14 @@ def isolated_home(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
 
+@pytest.fixture(autouse=True)
+def _clear_schema_cache():
+    yield
+    from code_agnostic.apps.common.schema import _SCHEMA_CACHE
+
+    _SCHEMA_CACHE.clear()
+
+
 @pytest.fixture
 def write_json():
     def _write(path: Path, payload: dict) -> None:

@@ -101,3 +101,95 @@ def test_load_mcp_base_raises_schema_error(core_repo: CoreRepository) -> None:
 
     with pytest.raises(InvalidConfigSchemaError):
         repo.load_mcp_base()
+
+
+def test_load_state_with_corrupted_json(
+    tmp_path: Path, core_repo: CoreRepository
+) -> None:
+    repo = core_repo
+    repo.state_json.parent.mkdir(parents=True, exist_ok=True)
+    repo.state_json.write_text("{bad json", encoding="utf-8")
+
+    state = repo.load_state()
+
+    assert state == {
+        "managed_skill_links": [],
+        "managed_agent_links": [],
+        "managed_workspace_links": [],
+    }
+
+
+def test_load_state_coerces_managed_skill_links_string_to_list(
+    tmp_path: Path, core_repo: CoreRepository
+) -> None:
+    repo = core_repo
+    repo.state_json.parent.mkdir(parents=True, exist_ok=True)
+    repo.state_json.write_text(
+        json.dumps({"managed_skill_links": "not-a-list"}), encoding="utf-8"
+    )
+
+    state = repo.load_state()
+
+    assert state["managed_skill_links"] == []
+
+
+def test_list_skill_sources_when_dir_missing(core_repo: CoreRepository) -> None:
+    assert core_repo.list_skill_sources() == []
+
+
+def test_list_skill_sources_skips_child_without_skill_md(
+    core_repo: CoreRepository,
+) -> None:
+    (core_repo.skills_dir / "valid-skill").mkdir(parents=True)
+    (core_repo.skills_dir / "valid-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+    (core_repo.skills_dir / "no-skill-md").mkdir(parents=True)
+
+    sources = core_repo.list_skill_sources()
+
+    assert len(sources) == 1
+    assert sources[0].name == "valid-skill"
+
+
+def test_list_agent_sources_skips_dotfiles(core_repo: CoreRepository) -> None:
+    core_repo.agents_dir.mkdir(parents=True)
+    (core_repo.agents_dir / "planner.md").write_text("agent", encoding="utf-8")
+    (core_repo.agents_dir / ".hidden").write_text("hidden", encoding="utf-8")
+
+    sources = core_repo.list_agent_sources()
+
+    names = [s.name for s in sources]
+    assert "planner.md" in names
+    assert ".hidden" not in names
+
+
+def test_list_agent_sources_when_dir_missing(core_repo: CoreRepository) -> None:
+    assert core_repo.list_agent_sources() == []
+
+
+def test_load_opencode_base_missing_file(core_repo: CoreRepository) -> None:
+    from code_agnostic.errors import MissingConfigFileError
+
+    with pytest.raises(MissingConfigFileError):
+        core_repo.load_opencode_base()
+
+
+def test_load_opencode_base_invalid_json(core_repo: CoreRepository) -> None:
+    core_repo.config_dir.mkdir(parents=True, exist_ok=True)
+    core_repo.opencode_base_path.write_text("{bad", encoding="utf-8")
+
+    with pytest.raises(InvalidJsonFormatError):
+        core_repo.load_opencode_base()
+
+
+def test_load_opencode_base_not_a_dict(core_repo: CoreRepository) -> None:
+    core_repo.config_dir.mkdir(parents=True, exist_ok=True)
+    core_repo.opencode_base_path.write_text('"just a string"', encoding="utf-8")
+
+    with pytest.raises(InvalidConfigSchemaError):
+        core_repo.load_opencode_base()
+
+
+def test_remove_workspace_nonexistent(core_repo: CoreRepository) -> None:
+    assert core_repo.remove_workspace("nonexistent") is False

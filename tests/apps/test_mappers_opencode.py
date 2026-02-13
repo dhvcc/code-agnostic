@@ -64,3 +64,105 @@ def test_opencode_mapper_to_common() -> None:
     assert mapped["oauth"].auth == MCPAuthDTO(
         client_id="cid", client_secret="csecret", scopes=["read"]
     )
+
+
+def test_opencode_mapper_from_common_empty_servers() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.from_common({})
+
+    assert mapped == {}
+
+
+def test_opencode_mapper_from_common_with_env() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.from_common(
+        {
+            "local": MCPServerDTO(
+                name="local",
+                type=MCPServerType.STDIO,
+                command="npx",
+                env={"TOKEN": "secret"},
+            ),
+        }
+    )
+
+    assert mapped["local"]["environment"] == {"TOKEN": "secret"}
+
+
+def test_opencode_mapper_from_common_with_headers() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.from_common(
+        {
+            "remote": MCPServerDTO(
+                name="remote",
+                type=MCPServerType.HTTP,
+                url="https://example.com/mcp",
+                headers={"Authorization": "Bearer token"},
+            ),
+        }
+    )
+
+    assert mapped["remote"]["headers"] == {"Authorization": "Bearer token"}
+
+
+def test_opencode_mapper_to_common_single_element_command() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.to_common({"tool": {"type": "local", "command": ["python"]}})
+
+    assert mapped["tool"].command == "python"
+    assert mapped["tool"].args == []
+
+
+def test_opencode_mapper_to_common_empty_command_skipped() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.to_common({"tool": {"type": "local", "command": []}})
+
+    assert "tool" not in mapped
+
+
+def test_opencode_mapper_to_common_non_dict_server_skipped() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.to_common(
+        {"bad": "not-a-dict", "good": {"type": "remote", "url": "https://x"}}
+    )
+
+    assert "bad" not in mapped
+    assert "good" in mapped
+
+
+def test_opencode_mapper_to_common_server_missing_type_with_command() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.to_common({"tool": {"command": ["npx", "-y", "demo"]}})
+
+    assert "tool" in mapped
+    assert mapped["tool"].type == MCPServerType.STDIO
+
+
+def test_opencode_mapper_to_common_with_environment() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.to_common(
+        {
+            "tool": {
+                "type": "local",
+                "command": ["npx"],
+                "environment": {"TOKEN": "val"},
+            }
+        }
+    )
+
+    assert mapped["tool"].env == {"TOKEN": "val"}
+
+
+def test_opencode_mapper_to_common_with_headers() -> None:
+    mapper = OpenCodeMCPMapper()
+    mapped = mapper.to_common(
+        {
+            "remote": {
+                "type": "remote",
+                "url": "https://x",
+                "headers": {"X-Custom": "value"},
+            }
+        }
+    )
+
+    assert mapped["remote"].headers == {"X-Custom": "value"}
