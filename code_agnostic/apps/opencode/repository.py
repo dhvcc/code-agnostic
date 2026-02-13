@@ -1,12 +1,11 @@
 from pathlib import Path
 from typing import Any, Optional, Tuple
 
-from code_agnostic.apps.sync.apps.opencode.repository import (
-    OpenCodeRepository as AppOpenCodeRepository,
-)
+from code_agnostic.apps.common.interfaces.repositories import ITargetRepository
+from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 
 
-class OpenCodeRepository(AppOpenCodeRepository):
+class OpenCodeRepository(OpenCodeConfigRepository, ITargetRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
         super().__init__(root=root)
 

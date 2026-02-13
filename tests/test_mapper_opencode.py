@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from code_agnostic.constants import AGENTS_FILENAME
-from code_agnostic.mappers.base import IConfigMapper
-from code_agnostic.mappers.opencode import OpenCodeMapper
+from code_agnostic.apps.common.interfaces.mapper import IConfigMapper
+from code_agnostic.apps.opencode.config_mapper import OpenCodeMapper
 
 
 class NativeMapper(IConfigMapper):
@@ -47,7 +47,9 @@ def test_base_mapper_defaults_to_native_passthrough(tmp_path: Path) -> None:
     source = tmp_path / AGENTS_FILENAME
     source.write_text("rules", encoding="utf-8")
 
-    assert mapper.map_mcp_servers({"a": {"url": "https://example.com"}}) == {"a": {"url": "https://example.com"}}
+    assert mapper.map_mcp_servers({"a": {"url": "https://example.com"}}) == {
+        "a": {"url": "https://example.com"}
+    }
     assert mapper.map_skill_source(source) == source
     assert mapper.map_agent_source(source) == source
     assert mapper.map_workspace_rules_source(source) == source

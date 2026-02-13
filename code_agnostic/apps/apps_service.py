@@ -1,17 +1,17 @@
 from pathlib import Path
 
 from code_agnostic.models import AppId, AppStatusRow, AppSyncStatus
-from code_agnostic.repositories.common import CommonRepository
+from code_agnostic.apps.core.repository import CoreRepository
 from code_agnostic.utils import read_json_safe, write_json
 
 
 class AppsService:
-    def __init__(self, common: CommonRepository) -> None:
-        self.common = common
+    def __init__(self, core_repository: CoreRepository) -> None:
+        self.core_repository = core_repository
 
     @property
     def apps_path(self) -> Path:
-        return self.common.config_dir / "apps.json"
+        return self.core_repository.config_dir / "apps.json"
 
     def load_apps(self) -> dict[str, bool]:
         payload, error = read_json_safe(self.apps_path)

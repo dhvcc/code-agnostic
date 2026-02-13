@@ -1,5 +1,5 @@
-from code_agnostic.apps.sync.apps.codex.mapper import CodexMCPMapper
-from code_agnostic.apps.sync.models import MCPServerDTO, MCPServerType
+from code_agnostic.apps.codex.mapper import CodexMCPMapper
+from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
 
 
 def test_codex_mapper_to_common_parses_env_and_headers() -> None:

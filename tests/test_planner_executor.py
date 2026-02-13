@@ -6,13 +6,13 @@ from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.executor import SyncExecutor
 from code_agnostic.models import ActionKind, ActionStatus
 from code_agnostic.planner import SyncPlanner
-from code_agnostic.repositories.common import CommonRepository
-from code_agnostic.repositories.opencode import OpenCodeRepository
+from code_agnostic.apps.core.repository import CoreRepository
+from code_agnostic.apps.opencode.repository import OpenCodeRepository
 
 
 def test_build_plan_and_apply_create_opencode_and_workspace_links(
     tmp_path: Path,
-    common_root: Path,
+    core_root: Path,
     opencode_root: Path,
     write_json,
 ) -> None:
@@ -24,7 +24,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     (workspace_root / "shop-web" / ".git").mkdir(parents=True)
 
     write_json(
-        common_root / "config" / "mcp.base.json",
+        core_root / "config" / "mcp.base.json",
         {
             "mcpServers": {
                 "context7": {"url": "https://mcp.context7.com/mcp"},
@@ -33,26 +33,31 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         },
     )
     write_json(
-        common_root / "config" / "opencode.base.json",
+        core_root / "config" / "opencode.base.json",
         {
             "$schema": "https://opencode.ai/config.json",
             "instructions": ["/tmp/AGENTS.md"],
         },
     )
 
-    (common_root / "skills" / "frontend-design").mkdir(parents=True)
-    (common_root / "skills" / "frontend-design" / "SKILL.md").write_text("skill", encoding="utf-8")
-    (common_root / "agents").mkdir(parents=True)
-    (common_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
+    (core_root / "skills" / "frontend-design").mkdir(parents=True)
+    (core_root / "skills" / "frontend-design" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
 
-    common = CommonRepository(common_root)
-    common.add_workspace("workspace-example", workspace_root)
+    core = CoreRepository(core_root)
+    core.add_workspace("workspace-example", workspace_root)
     opencode = OpenCodeRepository(opencode_root)
 
-    plan = SyncPlanner(common=common, opencode=opencode).build()
+    plan = SyncPlanner(core=core, opencode=opencode).build()
 
     assert plan.errors == []
-    assert any(action.kind == ActionKind.WRITE_JSON and action.path == opencode.config_path for action in plan.actions)
+    assert any(
+        action.kind == ActionKind.WRITE_JSON and action.path == opencode.config_path
+        for action in plan.actions
+    )
     workspace_targets = {
         str(workspace_root / "shop-api" / AGENTS_FILENAME),
         str(workspace_root / "shop-web" / AGENTS_FILENAME),
@@ -60,87 +65,111 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     planned_workspace_targets = {
         str(action.path)
         for action in plan.actions
-        if action.kind == ActionKind.SYMLINK and action.path.name == AGENTS_FILENAME and "example-workspace" in str(action.path)
+        if action.kind == ActionKind.SYMLINK
+        and action.path.name == AGENTS_FILENAME
+        and "example-workspace" in str(action.path)
     }
     assert workspace_targets.issubset(planned_workspace_targets)
 
-    applied, failed, failures = SyncExecutor(common=common, opencode=opencode).execute(plan)
+    applied, failed, failures = SyncExecutor(core=core, opencode=opencode).execute(plan)
 
     assert failed == 0
     assert failures == []
     assert applied > 0
 
     opencode_config = json.loads(opencode.config_path.read_text(encoding="utf-8"))
-    assert opencode_config["mcp"]["context7"] == {"type": "remote", "url": "https://mcp.context7.com/mcp"}
-    assert opencode_config["mcp"]["sentry"] == {"type": "local", "command": ["npx", "@sentry/mcp-server@latest"]}
+    assert opencode_config["mcp"]["context7"] == {
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp",
+    }
+    assert opencode_config["mcp"]["sentry"] == {
+        "type": "local",
+        "command": ["npx", "@sentry/mcp-server@latest"],
+    }
 
     for repo_name in ["shop-api", "shop-web"]:
         link_path = workspace_root / repo_name / AGENTS_FILENAME
         assert link_path.is_symlink()
         assert link_path.resolve() == (workspace_root / "CLAUDE.md").resolve()
 
-    state = common.load_state()
+    state = core.load_state()
     assert len(state["managed_workspace_links"]) == 2
 
 
 def test_plan_marks_config_create_when_missing(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     opencode_root: Path,
 ) -> None:
-    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+    plan = SyncPlanner(
+        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+    ).build()
 
-    config_actions = [action for action in plan.actions if action.kind == ActionKind.WRITE_JSON]
+    config_actions = [
+        action for action in plan.actions if action.kind == ActionKind.WRITE_JSON
+    ]
     assert len(config_actions) == 1
     assert config_actions[0].status == ActionStatus.CREATE
 
 
 def test_plan_marks_config_update_when_existing_but_different(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     opencode_root: Path,
 ) -> None:
     config_path = opencode_root / "opencode.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("{}\n", encoding="utf-8")
 
-    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+    plan = SyncPlanner(
+        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+    ).build()
 
-    config_actions = [action for action in plan.actions if action.kind == ActionKind.WRITE_JSON]
+    config_actions = [
+        action for action in plan.actions if action.kind == ActionKind.WRITE_JSON
+    ]
     assert len(config_actions) == 1
     assert config_actions[0].status == ActionStatus.UPDATE
 
 
 def test_plan_marks_config_noop_when_already_synced(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     opencode_root: Path,
 ) -> None:
-    common = CommonRepository(common_root)
+    core = CoreRepository(core_root)
     opencode = OpenCodeRepository(opencode_root)
-    first_plan = SyncPlanner(common=common, opencode=opencode).build()
-    payload = next(action.payload for action in first_plan.actions if action.kind == ActionKind.WRITE_JSON)
+    first_plan = SyncPlanner(core=core, opencode=opencode).build()
+    payload = next(
+        action.payload
+        for action in first_plan.actions
+        if action.kind == ActionKind.WRITE_JSON
+    )
 
     config_path = opencode_root / "opencode.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    second_plan = SyncPlanner(common=common, opencode=opencode).build()
-    config_actions = [action for action in second_plan.actions if action.kind == ActionKind.WRITE_JSON]
+    second_plan = SyncPlanner(core=core, opencode=opencode).build()
+    config_actions = [
+        action for action in second_plan.actions if action.kind == ActionKind.WRITE_JSON
+    ]
     assert len(config_actions) == 1
     assert config_actions[0].status == ActionStatus.NOOP
 
 
 def test_plan_collects_invalid_opencode_json_as_error(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     opencode_root: Path,
 ) -> None:
     config_path = opencode_root / "opencode.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("{not-json", encoding="utf-8")
 
-    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+    plan = SyncPlanner(
+        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+    ).build()
 
     assert len(plan.errors) == 1
     assert isinstance(plan.errors[0], InvalidJsonFormatError)
@@ -149,15 +178,19 @@ def test_plan_collects_invalid_opencode_json_as_error(
 
 def test_plan_treats_empty_opencode_config_as_update(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     opencode_root: Path,
 ) -> None:
     config_path = opencode_root / "opencode.json"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("", encoding="utf-8")
 
-    plan = SyncPlanner(common=CommonRepository(common_root), opencode=OpenCodeRepository(opencode_root)).build()
+    plan = SyncPlanner(
+        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+    ).build()
 
-    config_actions = [action for action in plan.actions if action.kind == ActionKind.WRITE_JSON]
+    config_actions = [
+        action for action in plan.actions if action.kind == ActionKind.WRITE_JSON
+    ]
     assert len(config_actions) == 1
     assert config_actions[0].status == ActionStatus.UPDATE

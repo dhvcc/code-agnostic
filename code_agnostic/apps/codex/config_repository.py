@@ -6,7 +6,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore
 
-from code_agnostic.apps.sync.base import IAppConfigRepository
+from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 
 
@@ -34,7 +34,7 @@ def _dump_string_table(
     lines.append("")
 
 
-class CodexRepository(IAppConfigRepository):
+class CodexConfigRepository(IAppConfigRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
         self._root = root or (Path.home() / ".codex")
 

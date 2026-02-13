@@ -5,15 +5,18 @@ from pathlib import Path
 from typing import Optional, Protocol
 
 from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.apps.common.interfaces.repositories import (
+    ISourceRepository,
+    ITargetRepository,
+)
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
-from code_agnostic.repositories.base import ISourceRepository, ITargetRepository
 from code_agnostic.utils import backup_file, write_json
 from code_agnostic.workspaces import WorkspaceService
 
 
 @dataclass
 class ExecutionContext:
-    common: ISourceRepository
+    core: ISourceRepository
     opencode: ITargetRepository
 
 
@@ -86,11 +89,11 @@ class RemoveSymlinkHandler:
 class SyncExecutor:
     def __init__(
         self,
-        common: ISourceRepository,
+        core: ISourceRepository,
         opencode: ITargetRepository,
         workspace_service: Optional[WorkspaceService] = None,
     ) -> None:
-        self.context = ExecutionContext(common=common, opencode=opencode)
+        self.context = ExecutionContext(core=core, opencode=opencode)
         self.workspace_service = workspace_service or WorkspaceService()
         self.handlers: dict[ActionKind, ActionHandler] = {
             ActionKind.WRITE_JSON: WriteJsonHandler(),
@@ -130,16 +133,16 @@ class SyncExecutor:
         return applied, failed, failures
 
     def _persist_state(self, plan: SyncPlan) -> None:
-        common = self.context.common
+        core = self.context.core
         opencode = self.context.opencode
 
         managed_skill_links = self._collect_managed_links(
-            opencode.skills_dir, common.skills_dir
+            opencode.skills_dir, core.skills_dir
         )
         managed_agent_links = self._collect_managed_links(
-            opencode.agents_dir, common.agents_dir
+            opencode.agents_dir, core.agents_dir
         )
-        managed_workspace_links = self._collect_workspace_links(common)
+        managed_workspace_links = self._collect_workspace_links(core)
 
         updated_at = datetime.now().isoformat(timespec="seconds")
         state = {
@@ -149,11 +152,11 @@ class SyncExecutor:
             "managed_workspace_links": sorted(set(managed_workspace_links)),
             "skipped": plan.skipped,
         }
-        common.save_state(state)
+        core.save_state(state)
 
-    def _collect_workspace_links(self, common: ISourceRepository) -> list[str]:
+    def _collect_workspace_links(self, core: ISourceRepository) -> list[str]:
         managed: list[str] = []
-        for workspace in common.load_workspaces():
+        for workspace in core.load_workspaces():
             workspace_path = Path(workspace["path"])
             if not workspace_path.exists() or not workspace_path.is_dir():
                 continue
@@ -186,6 +189,6 @@ class SyncExecutor:
 
 
 def execute_apply(
-    plan: SyncPlan, common: ISourceRepository, opencode: ITargetRepository
+    plan: SyncPlan, core: ISourceRepository, opencode: ITargetRepository
 ) -> tuple[int, int, list[str]]:
-    return SyncExecutor(common=common, opencode=opencode).execute(plan)
+    return SyncExecutor(core=core, opencode=opencode).execute(plan)

@@ -5,6 +5,7 @@ from urllib.request import Request, urlopen
 
 from jsonschema import Draft202012Validator
 from code_agnostic.__main__ import cli
+from code_agnostic.apps.common.schema import _SCHEMA_CACHE
 from code_agnostic.constants import AGENTS_FILENAME
 
 
@@ -123,12 +124,12 @@ def test_apply_aborts_on_invalid_opencode_schema(
 
 def test_apply_aborts_when_opencode_base_breaks_schema(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     cli_runner,
     enable_app,
 ) -> None:
     enable_app("opencode")
-    (common_root / "config" / "opencode.base.json").write_text(
+    (core_root / "config" / "opencode.base.json").write_text(
         json.dumps({"theme": 123}),
         encoding="utf-8",
     )
@@ -138,3 +139,22 @@ def test_apply_aborts_when_opencode_base_breaks_schema(
     assert result.exit_code != 0
     assert "Apply aborted" in result.output
     assert "Invalid config schema" in result.output
+
+
+def test_apply_opencode_uses_local_schema_fallback_on_remote_failure(
+    minimal_shared_config: Path,
+    cli_runner,
+    enable_app,
+    monkeypatch,
+) -> None:
+    enable_app("opencode")
+    _SCHEMA_CACHE.clear()
+
+    def _fail(*args, **kwargs):
+        raise OSError("network unavailable")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    result = cli_runner.invoke(cli, ["apply", "opencode"])
+
+    assert result.exit_code == 0

@@ -1,12 +1,16 @@
 from pathlib import Path
 from typing import Any, Optional
 
-from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError, MissingConfigFileError
-from code_agnostic.repositories.base import ISourceRepository
+from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
+from code_agnostic.errors import (
+    InvalidConfigSchemaError,
+    InvalidJsonFormatError,
+    MissingConfigFileError,
+)
 from code_agnostic.utils import read_json_safe, write_json
 
 
-class CommonRepository(ISourceRepository):
+class CoreRepository(ISourceRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
         self._root = root or (Path.home() / ".config" / "code-agnostic")
 
@@ -48,8 +52,12 @@ class CommonRepository(ISourceRepository):
         payload, error = read_json_safe(self.mcp_base_path)
         if error is not None:
             raise InvalidJsonFormatError(self.mcp_base_path, error)
-        if not isinstance(payload, dict) or not isinstance(payload.get("mcpServers"), dict):
-            raise InvalidConfigSchemaError(self.mcp_base_path, "must contain object key 'mcpServers'")
+        if not isinstance(payload, dict) or not isinstance(
+            payload.get("mcpServers"), dict
+        ):
+            raise InvalidConfigSchemaError(
+                self.mcp_base_path, "must contain object key 'mcpServers'"
+            )
         return payload
 
     def load_opencode_base(self) -> dict[str, Any]:
@@ -59,7 +67,9 @@ class CommonRepository(ISourceRepository):
         if error is not None:
             raise InvalidJsonFormatError(self.opencode_base_path, error)
         if not isinstance(payload, dict):
-            raise InvalidConfigSchemaError(self.opencode_base_path, "must be a JSON object")
+            raise InvalidConfigSchemaError(
+                self.opencode_base_path, "must be a JSON object"
+            )
         return payload
 
     def list_skill_sources(self) -> list[Path]:
@@ -140,7 +150,9 @@ class CommonRepository(ISourceRepository):
             raise ValueError("Workspace name cannot be empty")
         normalized_path = path.expanduser().resolve()
         if not normalized_path.exists() or not normalized_path.is_dir():
-            raise ValueError(f"Workspace path does not exist or is not a directory: {normalized_path}")
+            raise ValueError(
+                f"Workspace path does not exist or is not a directory: {normalized_path}"
+            )
 
         workspaces = self.load_workspaces()
         for item in workspaces:

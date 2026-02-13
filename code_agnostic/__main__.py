@@ -4,12 +4,13 @@ from typing import Callable, Dict
 import click
 from rich.console import Console
 
-from code_agnostic.apps import AppsService
-from code_agnostic.apps.sync.common import common_mcp_to_dto
-from code_agnostic.apps.sync.framework import (
+from code_agnostic.apps.apps_service import AppsService
+from code_agnostic.apps.common.utils import common_mcp_to_dto
+from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     create_registered_app_service,
 )
+from code_agnostic.apps.opencode.repository import OpenCodeRepository
 from code_agnostic.errors import SyncAppError
 from code_agnostic.executor import SyncExecutor
 from code_agnostic.models import (
@@ -23,8 +24,7 @@ from code_agnostic.models import (
     SyncTarget,
 )
 from code_agnostic.planner import SyncPlanner
-from code_agnostic.repositories.common import CommonRepository
-from code_agnostic.repositories.opencode import OpenCodeRepository
+from code_agnostic.apps.core.repository import CoreRepository
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.workspaces import WorkspaceService
@@ -48,10 +48,10 @@ def _normalize_target(value: str) -> SyncTarget:
 
 def _repos_from_obj(
     _obj: Dict[str, str],
-) -> tuple[CommonRepository, OpenCodeRepository]:
-    common = CommonRepository()
+) -> tuple[CoreRepository, OpenCodeRepository]:
+    core = CoreRepository()
     opencode = OpenCodeRepository()
-    return common, opencode
+    return core, opencode
 
 
 def _empty_plan(skipped_reason: str) -> SyncPlan:
@@ -69,13 +69,13 @@ def _merge_plans(*plans: SyncPlan) -> SyncPlan:
     return SyncPlan(actions=actions, errors=errors, skipped=skipped)
 
 
-def _build_mcp_app_plan(common: CommonRepository, apps: AppsService) -> SyncPlan:
+def _build_mcp_app_plan(core: CoreRepository, apps: AppsService) -> SyncPlan:
     enabled = set(apps.enabled_apps())
     if not ({AppId.CURSOR, AppId.CODEX} & enabled):
         return SyncPlan(actions=[], errors=[], skipped=[])
 
     try:
-        mcp_base = common.load_mcp_base()
+        mcp_base = core.load_mcp_base()
     except SyncAppError as exc:
         return SyncPlan(actions=[], errors=[exc], skipped=[])
 
@@ -102,12 +102,12 @@ def _build_mcp_app_plan(common: CommonRepository, apps: AppsService) -> SyncPlan
 
 
 def _build_combined_plan(
-    common: CommonRepository, opencode: OpenCodeRepository, apps: AppsService
+    core: CoreRepository, opencode: OpenCodeRepository, apps: AppsService
 ) -> SyncPlan:
     enabled = set(apps.enabled_apps())
 
     workspace_plan = SyncPlanner(
-        common=common,
+        core=core,
         opencode=opencode,
         include_opencode=False,
         include_workspace=True,
@@ -116,12 +116,12 @@ def _build_combined_plan(
     opencode_plan = SyncPlan(actions=[], errors=[], skipped=[])
     if AppId.OPENCODE in enabled:
         opencode_plan = SyncPlanner(
-            common=common,
+            core=core,
             opencode=opencode,
             include_opencode=True,
             include_workspace=False,
         ).build()
-    mcp_apps_plan = _build_mcp_app_plan(common, apps)
+    mcp_apps_plan = _build_mcp_app_plan(core, apps)
 
     combined = _merge_plans(opencode_plan, mcp_apps_plan, workspace_plan)
     if (
@@ -208,11 +208,11 @@ def cli(ctx: click.Context) -> None:
 @click.pass_obj
 def plan(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    common, opencode = _repos_from_obj(obj)
-    apps = AppsService(common)
+    core, opencode = _repos_from_obj(obj)
+    apps = AppsService(core)
 
     try:
-        plan_result = _build_combined_plan(common=common, opencode=opencode, apps=apps)
+        plan_result = _build_combined_plan(core=core, opencode=opencode, apps=apps)
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
@@ -230,11 +230,11 @@ def plan(obj: Dict[str, str], target: str) -> None:
 @click.pass_obj
 def apply(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    common, opencode = _repos_from_obj(obj)
-    apps = AppsService(common)
+    core, opencode = _repos_from_obj(obj)
+    apps = AppsService(core)
 
     try:
-        plan_result = _build_combined_plan(common=common, opencode=opencode, apps=apps)
+        plan_result = _build_combined_plan(core=core, opencode=opencode, apps=apps)
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
@@ -253,7 +253,7 @@ def apply(obj: Dict[str, str], target: str) -> None:
         )
 
     persist_state = _requires_state_persist(scoped_plan)
-    applied, failed, failures = SyncExecutor(common=common, opencode=opencode).execute(
+    applied, failed, failures = SyncExecutor(core=core, opencode=opencode).execute(
         scoped_plan, persist_state=persist_state
     )
     ui.render_apply_result(applied, failed, failures)
@@ -267,12 +267,12 @@ def apply(obj: Dict[str, str], target: str) -> None:
 @click.pass_obj
 def status(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    common, opencode = _repos_from_obj(obj)
-    apps = AppsService(common)
+    core, opencode = _repos_from_obj(obj)
+    apps = AppsService(core)
     status_service = StatusService()
 
     try:
-        plan_result = _build_combined_plan(common=common, opencode=opencode, apps=apps)
+        plan_result = _build_combined_plan(core=core, opencode=opencode, apps=apps)
         editor_rows = [_status_row_for_app(app, plan_result, apps) for app in AppId]
     except Exception as exc:
         editor_rows = [
@@ -290,7 +290,7 @@ def status(obj: Dict[str, str], target: str) -> None:
             row for row in editor_rows if row.name == normalized_target.value
         ]
 
-    workspace_rows = status_service.build_workspace_status(common)
+    workspace_rows = status_service.build_workspace_status(core)
 
     ui.render_status(
         [item.as_dict() for item in editor_rows],
@@ -307,8 +307,8 @@ def apps() -> None:
 @click.pass_obj
 def apps_list(obj: Dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
-    common, _ = _repos_from_obj(obj)
-    service = AppsService(common)
+    core, _ = _repos_from_obj(obj)
+    service = AppsService(core)
     ui.render_apps([row.as_dict() for row in service.list_status_rows()])
 
 
@@ -319,8 +319,8 @@ def apps_list(obj: Dict[str, str]) -> None:
 @click.pass_obj
 def apps_enable(obj: Dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    common, _ = _repos_from_obj(obj)
-    service = AppsService(common)
+    core, _ = _repos_from_obj(obj)
+    service = AppsService(core)
     app_id = AppId(name.lower())
     service.enable(app_id)
     ui.render_apps([row.as_dict() for row in service.list_status_rows()])
@@ -333,8 +333,8 @@ def apps_enable(obj: Dict[str, str], name: str) -> None:
 @click.pass_obj
 def apps_disable(obj: Dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    common, _ = _repos_from_obj(obj)
-    service = AppsService(common)
+    core, _ = _repos_from_obj(obj)
+    service = AppsService(core)
     app_id = AppId(name.lower())
     service.disable(app_id)
     ui.render_apps([row.as_dict() for row in service.list_status_rows()])
@@ -351,9 +351,9 @@ def workspaces() -> None:
 @click.pass_obj
 def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
     ui = SyncConsoleUI(Console())
-    common, _ = _repos_from_obj(obj)
+    core, _ = _repos_from_obj(obj)
     try:
-        common.add_workspace(name, path)
+        core.add_workspace(name, path)
     except ValueError as exc:
         raise click.ClickException(str(exc))
     ui.render_workspace_saved(name, str(path.expanduser().resolve()))
@@ -364,9 +364,9 @@ def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
 @click.pass_obj
 def workspaces_remove(obj: Dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    common, _ = _repos_from_obj(obj)
-    existing = {item["name"]: item["path"] for item in common.load_workspaces()}
-    removed = common.remove_workspace(name)
+    core, _ = _repos_from_obj(obj)
+    existing = {item["name"]: item["path"] for item in core.load_workspaces()}
+    removed = core.remove_workspace(name)
     if not removed:
         raise click.ClickException(f"Workspace not found: {name}")
     ui.render_workspace_saved(name, existing.get(name, ""), removed=True)
@@ -376,11 +376,11 @@ def workspaces_remove(obj: Dict[str, str], name: str) -> None:
 @click.pass_obj
 def workspaces_list(obj: Dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
-    common, _ = _repos_from_obj(obj)
+    core, _ = _repos_from_obj(obj)
     workspace_service = WorkspaceService()
 
     overview: list[dict] = []
-    for item in common.load_workspaces():
+    for item in core.load_workspaces():
         workspace_path = Path(item["path"])
         repos: list[str] = []
         if workspace_path.exists() and workspace_path.is_dir():

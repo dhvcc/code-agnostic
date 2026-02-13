@@ -33,7 +33,7 @@ def write_json():
 
 
 @pytest.fixture
-def common_root(tmp_path: Path) -> Path:
+def core_root(tmp_path: Path) -> Path:
     return tmp_path / ".config" / "code-agnostic"
 
 
@@ -43,13 +43,13 @@ def opencode_root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def minimal_shared_config(common_root: Path, write_json) -> Path:
-    write_json(common_root / "config" / "mcp.base.json", {"mcpServers": {}})
+def minimal_shared_config(core_root: Path, write_json) -> Path:
+    write_json(core_root / "config" / "mcp.base.json", {"mcpServers": {}})
     write_json(
-        common_root / "config" / "opencode.base.json",
+        core_root / "config" / "opencode.base.json",
         {"$schema": "https://opencode.ai/config.json"},
     )
-    return common_root
+    return core_root
 
 
 @pytest.fixture

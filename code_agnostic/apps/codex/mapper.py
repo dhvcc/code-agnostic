@@ -2,8 +2,8 @@ import re
 from copy import deepcopy
 from typing import Any
 
-from code_agnostic.apps.sync.base import IAppMCPMapper
-from code_agnostic.apps.sync.models import MCPServerDTO, MCPServerType
+from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
 
 _ENV_PATTERN = re.compile(r"^\$\{(?:env:)?([A-Z_][A-Z0-9_]*)\}$")
 _BEARER_PATTERN = re.compile(r"^Bearer\s+\$\{(?:env:)?([A-Z_][A-Z0-9_]*)\}$")

@@ -6,6 +6,7 @@ from urllib.request import Request, urlopen
 from jsonschema import Draft7Validator
 
 from code_agnostic.__main__ import cli
+from code_agnostic.apps.common.schema import _SCHEMA_CACHE
 
 try:
     import tomllib
@@ -28,8 +29,6 @@ def _load_local_codex_schema() -> dict:
     schema_path = (
         Path(__file__).resolve().parent.parent
         / "code_agnostic"
-        / "apps"
-        / "sync"
         / "apps"
         / "codex"
         / "schema.json"
@@ -55,13 +54,13 @@ def test_local_codex_schema_matches_upstream_mcp_shape() -> None:
 
 def test_apply_codex_generates_schema_valid_config(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     tmp_path: Path,
     cli_runner,
     enable_app,
 ) -> None:
     enable_app("codex")
-    (common_root / "config" / "mcp.base.json").write_text(
+    (core_root / "config" / "mcp.base.json").write_text(
         json.dumps(
             {
                 "mcpServers": {
@@ -91,3 +90,22 @@ def test_apply_codex_generates_schema_valid_config(
     )
     validator = Draft7Validator(_load_local_codex_schema())
     assert list(validator.iter_errors(codex_payload)) == []
+
+
+def test_apply_codex_uses_local_schema_fallback_on_remote_failure(
+    minimal_shared_config: Path,
+    cli_runner,
+    enable_app,
+    monkeypatch,
+) -> None:
+    enable_app("codex")
+    _SCHEMA_CACHE.clear()
+
+    def _fail(*args, **kwargs):
+        raise OSError("network unavailable")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    result = cli_runner.invoke(cli, ["apply", "codex"])
+
+    assert result.exit_code == 0

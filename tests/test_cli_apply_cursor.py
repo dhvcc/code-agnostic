@@ -11,8 +11,6 @@ def _cursor_schema() -> dict:
         Path(__file__).resolve().parent.parent
         / "code_agnostic"
         / "apps"
-        / "sync"
-        / "apps"
         / "cursor"
         / "schema.json"
     )
@@ -86,13 +84,13 @@ def test_cursor_schema_rejects_server_without_command_or_url() -> None:
 
 def test_apply_cursor_generates_schema_valid_config(
     minimal_shared_config: Path,
-    common_root: Path,
+    core_root: Path,
     tmp_path: Path,
     cli_runner,
     enable_app,
 ) -> None:
     enable_app("cursor")
-    (common_root / "config" / "mcp.base.json").write_text(
+    (core_root / "config" / "mcp.base.json").write_text(
         json.dumps(
             {
                 "mcpServers": {

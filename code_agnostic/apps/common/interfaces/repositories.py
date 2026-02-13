@@ -3,6 +3,34 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 
 
+class IAppConfigRepository(ABC):
+    @property
+    @abstractmethod
+    def root(self) -> Path:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def config_path(self) -> Path:
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_config(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_config(self, payload: dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_mcp_payload(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_mcp_payload(self, payload: dict[str, Any]) -> None:
+        raise NotImplementedError
+
+
 class IConfigRepository(ABC):
     @property
     @abstractmethod
@@ -76,5 +104,7 @@ class ITargetRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def merge_config(self, existing: dict[str, Any], base: dict[str, Any], mapped_mcp: dict[str, Any]) -> dict[str, Any]:
+    def merge_config(
+        self, existing: dict[str, Any], base: dict[str, Any], mapped_mcp: dict[str, Any]
+    ) -> dict[str, Any]:
         raise NotImplementedError

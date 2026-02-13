@@ -2,13 +2,19 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from code_agnostic.apps.sync.apps.opencode.service import validate_opencode_config
+from jsonschema import Draft202012Validator
+
+from code_agnostic.apps.common.interfaces.mapper import IConfigMapper
+from code_agnostic.apps.common.interfaces.repositories import (
+    ISourceRepository,
+    ITargetRepository,
+)
+from code_agnostic.apps.opencode.config_mapper import OpenCodeMapper
+from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
+from code_agnostic.apps.opencode.service import validate_opencode_config
 from code_agnostic.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
 from code_agnostic.errors import SyncAppError
-from code_agnostic.mappers.base import IConfigMapper
-from code_agnostic.mappers.opencode import OpenCodeMapper
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan, SyncTarget
-from code_agnostic.repositories.base import ISourceRepository, ITargetRepository
 from code_agnostic.utils import is_under, same_json
 from code_agnostic.workspaces import WorkspaceService
 
@@ -20,14 +26,14 @@ def _canonical_target(path: Path) -> str:
 class SyncPlanner:
     def __init__(
         self,
-        common: ISourceRepository,
+        core: ISourceRepository,
         opencode: ITargetRepository,
         mapper: Optional[IConfigMapper] = None,
         workspace_service: Optional[WorkspaceService] = None,
         include_opencode: bool = True,
         include_workspace: bool = True,
     ) -> None:
-        self.common = common
+        self.core = core
         self.opencode = opencode
         self.mapper = mapper or OpenCodeMapper()
         self.workspace_service = workspace_service or WorkspaceService()
@@ -57,12 +63,16 @@ class SyncPlanner:
 
     def _plan_opencode_config(self) -> None:
         try:
-            mcp_base = self.common.load_mcp_base()
-            opencode_base = self.common.load_opencode_base()
+            mcp_base = self.core.load_mcp_base()
+            opencode_base = self.core.load_opencode_base()
         except SyncAppError as exc:
             self.errors.append(exc)
             return
         mapped_mcp = self.mapper.map_mcp_servers(mcp_base["mcpServers"])
+
+        schema_validator = Draft202012Validator(
+            OpenCodeSchemaRepository().load_schema()
+        )
 
         existing_config, config_error = self.opencode.load_config_object()
         if config_error is not None:
@@ -70,7 +80,9 @@ class SyncPlanner:
             return
 
         try:
-            validate_opencode_config(existing_config, self.opencode.config_path)
+            validate_opencode_config(
+                existing_config, self.opencode.config_path, schema_validator
+            )
         except Exception as exc:
             self.errors.append(exc)
             return
@@ -79,7 +91,9 @@ class SyncPlanner:
             existing_config, opencode_base, mapped_mcp
         )
         try:
-            validate_opencode_config(merged_config, self.opencode.config_path)
+            validate_opencode_config(
+                merged_config, self.opencode.config_path, schema_validator
+            )
         except Exception as exc:
             self.errors.append(exc)
             return
@@ -114,7 +128,7 @@ class SyncPlanner:
         )
 
     def _plan_skills_links(self) -> None:
-        skill_sources = self.common.list_skill_sources()
+        skill_sources = self.core.list_skill_sources()
         mapped_skill_sources = [
             self.mapper.map_skill_source(source) for source in skill_sources
         ]
@@ -129,7 +143,7 @@ class SyncPlanner:
                 self.skipped.append(f"Skill link skipped (conflict): {action.path}")
 
     def _plan_agents_links(self) -> None:
-        agent_sources = self.common.list_agent_sources()
+        agent_sources = self.core.list_agent_sources()
         mapped_agent_sources = [
             self.mapper.map_agent_source(source) for source in agent_sources
         ]
@@ -144,7 +158,7 @@ class SyncPlanner:
                 self.skipped.append(f"Agent link skipped (conflict): {action.path}")
 
     def _plan_workspace_links(self) -> None:
-        for workspace in self.common.load_workspaces():
+        for workspace in self.core.load_workspaces():
             workspace_name = workspace["name"]
             workspace_path = Path(workspace["path"])
             if not workspace_path.exists() or not workspace_path.is_dir():
@@ -175,7 +189,7 @@ class SyncPlanner:
     def _plan_stale_cleanup(
         self, include_opencode: bool, include_workspace: bool
     ) -> None:
-        state = self.common.load_state()
+        state = self.core.load_state()
         if include_opencode:
             opencode_roots = [
                 self.opencode.skills_dir.resolve(),
@@ -313,11 +327,11 @@ class SyncPlanner:
 
 
 def build_plan(
-    common: ISourceRepository,
+    core: ISourceRepository,
     opencode: ITargetRepository,
     mapper: Optional[IConfigMapper] = None,
 ) -> SyncPlan:
-    return SyncPlanner(common=common, opencode=opencode, mapper=mapper).build()
+    return SyncPlanner(core=core, opencode=opencode, mapper=mapper).build()
 
 
 def filter_plan_for_target(

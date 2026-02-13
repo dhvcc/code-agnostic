@@ -1,16 +1,16 @@
-from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from code_agnostic.apps.sync.base import IAppConfigRepository, IAppMCPMapper
-from code_agnostic.apps.sync.framework import (
+from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
-    load_json_schema,
 )
-from code_agnostic.apps.sync.apps.cursor.mapper import CursorMCPMapper
-from code_agnostic.apps.sync.apps.cursor.repository import CursorRepository
+from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
+from code_agnostic.apps.cursor.mapper import CursorMCPMapper
+from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import ActionKind, ActionStatus, AppId
 
@@ -18,15 +18,24 @@ from code_agnostic.models import ActionKind, ActionStatus, AppId
 class CursorConfigService(RegisteredAppConfigService):
     APP_ID = AppId.CURSOR
 
-    def __init__(self, repository: CursorRepository, mapper: IAppMCPMapper) -> None:
+    def __init__(
+        self,
+        repository: CursorConfigRepository,
+        mapper: IAppMCPMapper,
+        schema_repository: CursorSchemaRepository,
+    ) -> None:
         self._repository = repository
         self._mapper = mapper
-        schema_path = Path(__file__).resolve().parent / "schema.json"
-        self._validator = Draft202012Validator(load_json_schema(schema_path))
+        self._schema_repository = schema_repository
+        self._validator = Draft202012Validator(self._schema_repository.load_schema())
 
     @classmethod
     def create_default(cls) -> "CursorConfigService":
-        return cls(repository=CursorRepository(), mapper=CursorMCPMapper())
+        return cls(
+            repository=CursorConfigRepository(),
+            mapper=CursorMCPMapper(),
+            schema_repository=CursorSchemaRepository(),
+        )
 
     @property
     def app_id(self) -> AppId:

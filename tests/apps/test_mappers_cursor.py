@@ -1,5 +1,5 @@
-from code_agnostic.apps.sync.apps.cursor.mapper import CursorMCPMapper
-from code_agnostic.apps.sync.models import MCPAuthDTO, MCPServerDTO, MCPServerType
+from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
+from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 
 
 def test_cursor_mapper_to_common_parses_oauth_and_stdio() -> None:

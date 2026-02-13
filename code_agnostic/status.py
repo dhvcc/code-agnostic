@@ -1,6 +1,10 @@
 from pathlib import Path
 from typing import Any, Optional
 
+from code_agnostic.apps.common.interfaces.repositories import (
+    ISourceRepository,
+    ITargetRepository,
+)
 from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.models import (
     ActionStatus,
@@ -12,7 +16,6 @@ from code_agnostic.models import (
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
 )
-from code_agnostic.repositories.base import ISourceRepository, ITargetRepository
 from code_agnostic.utils import is_under
 from code_agnostic.workspaces import WorkspaceService
 
@@ -21,14 +24,18 @@ class StatusService:
     def __init__(self, workspace_service: Optional[WorkspaceService] = None) -> None:
         self.workspace_service = workspace_service or WorkspaceService()
 
-    def build_editor_status(self, plan: SyncPlan, target_repo: ITargetRepository) -> list[EditorStatusRow]:
+    def build_editor_status(
+        self, plan: SyncPlan, target_repo: ITargetRepository
+    ) -> list[EditorStatusRow]:
         opencode_actions = self._opencode_actions(plan, target_repo)
         opencode_synced = self._synced_from_actions(opencode_actions)
 
         return [
             EditorStatusRow(
                 name="opencode",
-                status=EditorSyncStatus.SYNCED if opencode_synced else EditorSyncStatus.DRIFT,
+                status=EditorSyncStatus.SYNCED
+                if opencode_synced
+                else EditorSyncStatus.DRIFT,
                 detail="in sync" if opencode_synced else "out of sync",
             ),
             EditorStatusRow(
@@ -38,7 +45,9 @@ class StatusService:
             ),
         ]
 
-    def build_workspace_status(self, source_repo: ISourceRepository) -> list[WorkspaceStatusRow]:
+    def build_workspace_status(
+        self, source_repo: ISourceRepository
+    ) -> list[WorkspaceStatusRow]:
         status_rows: list[WorkspaceStatusRow] = []
 
         for workspace in source_repo.load_workspaces():
@@ -118,7 +127,9 @@ class StatusService:
         target = repo_path / AGENTS_FILENAME
         desired = str(rules_file.resolve())
         if target.is_symlink() and str(target.resolve()) == desired:
-            return WorkspaceRepoStatusRow(repo=repo_path.name, status=RepoSyncStatus.SYNCED, detail="linked")
+            return WorkspaceRepoStatusRow(
+                repo=repo_path.name, status=RepoSyncStatus.SYNCED, detail="linked"
+            )
         return WorkspaceRepoStatusRow(
             repo=repo_path.name,
             status=RepoSyncStatus.NEEDS_SYNC,
@@ -126,11 +137,13 @@ class StatusService:
         )
 
 
-def build_editor_status(plan: SyncPlan, opencode: ITargetRepository) -> list[dict[str, str]]:
+def build_editor_status(
+    plan: SyncPlan, opencode: ITargetRepository
+) -> list[dict[str, str]]:
     rows = StatusService().build_editor_status(plan=plan, target_repo=opencode)
     return [row.as_dict() for row in rows]
 
 
-def build_workspace_status(common: ISourceRepository) -> list[dict[str, Any]]:
-    rows = StatusService().build_workspace_status(source_repo=common)
+def build_workspace_status(core: ISourceRepository) -> list[dict[str, Any]]:
+    rows = StatusService().build_workspace_status(source_repo=core)
     return [row.as_dict() for row in rows]

@@ -1,5 +1,5 @@
-from code_agnostic.apps.sync.models import MCPAuthDTO, MCPServerDTO, MCPServerType
-from code_agnostic.apps.sync.apps.opencode.mapper import OpenCodeMCPMapper
+from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
+from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 
 
 def test_opencode_mapper_from_common() -> None:

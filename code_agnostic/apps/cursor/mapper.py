@@ -1,8 +1,8 @@
 from copy import deepcopy
 from typing import Any
 
-from code_agnostic.apps.sync.base import IAppMCPMapper
-from code_agnostic.apps.sync.models import MCPAuthDTO, MCPServerDTO, MCPServerType
+from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
 
 
 class CursorMCPMapper(IAppMCPMapper):

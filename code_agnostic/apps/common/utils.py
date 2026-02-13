@@ -1,6 +1,6 @@
 from typing import Any
 
-from code_agnostic.apps.sync.models import MCPAuthDTO, MCPServerDTO, MCPServerType
+from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
 
 
 def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:

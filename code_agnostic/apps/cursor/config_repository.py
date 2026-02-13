@@ -1,12 +1,12 @@
 from pathlib import Path
 from typing import Any, Optional
 
-from code_agnostic.apps.sync.base import IAppConfigRepository
+from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from code_agnostic.utils import read_json_safe, write_json
 
 
-class CursorRepository(IAppConfigRepository):
+class CursorConfigRepository(IAppConfigRepository):
     def __init__(self, root: Optional[Path] = None) -> None:
         self._root = root or (Path.home() / ".cursor")
 
