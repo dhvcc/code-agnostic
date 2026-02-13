@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any, Optional
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.constants import AGENTS_FILENAME
@@ -13,7 +12,7 @@ from code_agnostic.workspaces import WorkspaceService
 
 
 class StatusService:
-    def __init__(self, workspace_service: Optional[WorkspaceService] = None) -> None:
+    def __init__(self, workspace_service: WorkspaceService | None = None) -> None:
         self.workspace_service = workspace_service or WorkspaceService()
 
     def build_workspace_status(
@@ -86,8 +85,3 @@ class StatusService:
             status=RepoSyncStatus.NEEDS_SYNC,
             detail=f"missing or mismatched {AGENTS_FILENAME}",
         )
-
-
-def build_workspace_status(core: ISourceRepository) -> list[dict[str, Any]]:
-    rows = StatusService().build_workspace_status(source_repo=core)
-    return [row.as_dict() for row in rows]

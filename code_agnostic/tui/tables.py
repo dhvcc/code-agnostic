@@ -1,5 +1,4 @@
 from collections import Counter
-from typing import Dict, List
 
 from rich.console import Group
 from rich.padding import Padding
@@ -8,13 +7,23 @@ from rich.table import Column, Table
 from rich.text import Text
 
 from code_agnostic.constants import AGENTS_FILENAME
-from code_agnostic.models import Action, AppSyncStatus, EditorSyncStatus, PlanResult, RepoSyncStatus, WorkspaceSyncStatus
+from code_agnostic.models import (
+    Action,
+    AppStatusRow,
+    AppSyncStatus,
+    EditorStatusRow,
+    EditorSyncStatus,
+    RepoSyncStatus,
+    SyncPlan,
+    WorkspaceStatusRow,
+    WorkspaceSyncStatus,
+)
 from code_agnostic.tui.enums import ACTION_STATUS_STYLE, UIStyle
 
 
 class PlanTable:
     @staticmethod
-    def summary_block(plan: PlanResult, mode: str):
+    def summary_block(plan: SyncPlan, mode: str):
         counts = Counter(action.status.value for action in plan.actions)
         chips = [f"{key}={value}" for key, value in sorted(counts.items()) if value > 0]
         if not chips:
@@ -29,7 +38,7 @@ class PlanTable:
         return table
 
     @staticmethod
-    def split_actions(plan: PlanResult) -> tuple[list[Action], list[Action]]:
+    def split_actions(plan: SyncPlan) -> tuple[list[Action], list[Action]]:
         app_actions: list[Action] = []
         workspace_actions: list[Action] = []
         for action in plan.actions:
@@ -57,26 +66,32 @@ class PlanTable:
             status_value = action.status.value
             status_style = ACTION_STATUS_STYLE.get(action.status, UIStyle.WHITE.value)
             status_text = f"[{status_style}]{status_value}[/{status_style}]"
-            table.add_row(action.kind.value, status_text, str(action.path), source, action.detail)
+            table.add_row(
+                action.kind.value, status_text, str(action.path), source, action.detail
+            )
         return table
 
 
 class ApplyTable:
     @staticmethod
     def stats_panel(applied: int, failed: int) -> Panel:
-        stats: Dict[str, str] = {
+        stats: dict[str, str] = {
             "applied": str(applied),
             "failed": str(failed),
         }
         table = Table(show_header=False, box=None)
         for key, value in stats.items():
             table.add_row(f"[bold]{key}[/bold]", value)
-        return Panel(table, title="apply", border_style=UIStyle.GREEN.value if failed == 0 else UIStyle.RED.value)
+        return Panel(
+            table,
+            title="apply",
+            border_style=UIStyle.GREEN.value if failed == 0 else UIStyle.RED.value,
+        )
 
 
 class WorkspaceTable:
     @staticmethod
-    def overview_table(items: List[dict]) -> Table:
+    def overview_table(items: list[dict]) -> Table:
         table = Table(
             Column(header="Workspace", width=24),
             Column(header="Path", overflow="ellipsis"),
@@ -89,7 +104,7 @@ class WorkspaceTable:
         return table
 
     @staticmethod
-    def repos_table(items: List[dict]) -> Table:
+    def repos_table(items: list[dict]) -> Table:
         table = Table(
             Column(header="Workspace", width=24),
             Column(header="Repositories", overflow="fold"),
@@ -108,7 +123,7 @@ class WorkspaceTable:
 
 class StatusTable:
     @staticmethod
-    def editor_table(items: List[dict]) -> Table:
+    def editor_table(items: list[EditorStatusRow]) -> Table:
         table = Table(
             "Editor",
             "Status",
@@ -117,19 +132,19 @@ class StatusTable:
             header_style="bold",
         )
         for item in items:
-            status = item["status"]
+            status = item.status
             style = (
                 UIStyle.GREEN.value
-                if status == EditorSyncStatus.SYNCED.value
+                if status == EditorSyncStatus.SYNCED
                 else UIStyle.YELLOW.value
-                if status == EditorSyncStatus.DISABLED.value
+                if status == EditorSyncStatus.DISABLED
                 else UIStyle.RED.value
             )
-            table.add_row(item["name"], f"[{style}]{status}[/{style}]", item["detail"])
+            table.add_row(item.name, f"[{style}]{status.value}[/{style}]", item.detail)
         return table
 
     @staticmethod
-    def workspace_overview(items: List[dict]) -> Table:
+    def workspace_overview(items: list[WorkspaceStatusRow]) -> Table:
         table = Table(
             Column(header="Workspace", width=24),
             Column(header="Status", width=12),
@@ -139,30 +154,34 @@ class StatusTable:
             header_style="bold",
         )
         for item in items:
-            status = item["status"]
+            status = item.status
             style = (
                 UIStyle.GREEN.value
-                if status == WorkspaceSyncStatus.SYNCED.value
+                if status == WorkspaceSyncStatus.SYNCED
                 else UIStyle.RED.value
-                if status == WorkspaceSyncStatus.ERROR.value
+                if status == WorkspaceSyncStatus.ERROR
                 else UIStyle.YELLOW.value
             )
             table.add_row(
-                item["name"],
-                f"[{style}]{status}[/{style}]",
-                str(len(item.get("repos", []))),
-                item["detail"],
+                item.name,
+                f"[{style}]{status.value}[/{style}]",
+                str(len(item.repos)),
+                item.detail,
             )
         return table
 
     @staticmethod
-    def workspace_repos_group(items: List[dict]):
+    def workspace_repos_group(items: list[WorkspaceStatusRow]):
         blocks = []
         for item in items:
-            repos = item.get("repos", [])
-            heading = Text(f"{item['name']}", style="bold")
+            repos = item.repos
+            heading = Text(item.name, style="bold")
             if not repos:
-                blocks.append(Group(heading, Text("  (no git repos found)", style=UIStyle.DIM.value)))
+                blocks.append(
+                    Group(
+                        heading, Text("  (no git repos found)", style=UIStyle.DIM.value)
+                    )
+                )
                 continue
 
             repo_table = Table(
@@ -173,10 +192,20 @@ class StatusTable:
                 header_style="bold",
             )
             for repo in repos:
-                status = repo["status"]
-                style = UIStyle.GREEN.value if status == RepoSyncStatus.SYNCED.value else UIStyle.YELLOW.value
-                label = RepoSyncStatus.SYNCED.value if status == RepoSyncStatus.SYNCED.value else "needs sync"
-                repo_table.add_row(repo["repo"], f"[{style}]{label}[/{style}]", repo["detail"])
+                status = repo.status
+                style = (
+                    UIStyle.GREEN.value
+                    if status == RepoSyncStatus.SYNCED
+                    else UIStyle.YELLOW.value
+                )
+                label = (
+                    RepoSyncStatus.SYNCED.value
+                    if status == RepoSyncStatus.SYNCED
+                    else "needs sync"
+                )
+                repo_table.add_row(
+                    repo.repo, f"[{style}]{label}[/{style}]", repo.detail
+                )
             blocks.append(Group(heading, Padding(repo_table, (0, 0, 0, 2))))
 
         if not blocks:
@@ -186,7 +215,7 @@ class StatusTable:
 
 class AppsTable:
     @staticmethod
-    def apps_table(items: List[dict]) -> Table:
+    def apps_table(items: list[AppStatusRow]) -> Table:
         table = Table(
             Column(header="App", width=14),
             Column(header="Status", width=12),
@@ -195,7 +224,11 @@ class AppsTable:
             header_style="bold",
         )
         for item in items:
-            status = item["status"]
-            style = UIStyle.GREEN.value if status == AppSyncStatus.ENABLED.value else UIStyle.YELLOW.value
-            table.add_row(item["name"], f"[{style}]{status}[/{style}]", item["detail"])
+            status = item.status
+            style = (
+                UIStyle.GREEN.value
+                if status == AppSyncStatus.ENABLED
+                else UIStyle.YELLOW.value
+            )
+            table.add_row(item.name, f"[{style}]{status.value}[/{style}]", item.detail)
         return table

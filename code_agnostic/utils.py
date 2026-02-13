@@ -2,7 +2,7 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 
 def now_stamp() -> str:
@@ -14,7 +14,7 @@ def read_json(path: Path) -> Any:
         return json.load(handle)
 
 
-def read_json_safe(path: Path) -> Tuple[Optional[Any], Optional[str]]:
+def read_json_safe(path: Path) -> tuple[Any | None, str | None]:
     if not path.exists():
         return None, None
     if path.stat().st_size == 0:
@@ -36,13 +36,6 @@ def backup_file(path: Path) -> Path:
     backup_path = Path(f"{path}.bak-{now_stamp()}")
     shutil.copy2(path, backup_path)
     return backup_path
-
-
-def same_json(path: Path, payload: Any) -> bool:
-    existing, error = read_json_safe(path)
-    if error is not None:
-        return False
-    return existing == payload
 
 
 def is_under(path: Path, root: Path) -> bool:

@@ -1,6 +1,12 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
+
+
+class ISchemaRepository(ABC):
+    @abstractmethod
+    def load_schema(self) -> dict[str, Any]:
+        raise NotImplementedError
 
 
 class IAppConfigRepository(ABC):
@@ -29,6 +35,11 @@ class IAppConfigRepository(ABC):
     @abstractmethod
     def save_mcp_payload(self, payload: dict[str, Any]) -> None:
         raise NotImplementedError
+
+    def serialize_config(self, payload: dict[str, Any]) -> str:
+        import json
+
+        return json.dumps(payload, indent=2) + "\n"
 
 
 class IConfigRepository(ABC):
@@ -62,10 +73,6 @@ class ISourceRepository(IConfigRepository):
         raise NotImplementedError
 
     @abstractmethod
-    def load_opencode_base(self) -> dict[str, Any]:
-        raise NotImplementedError
-
-    @abstractmethod
     def list_skill_sources(self) -> list[Path]:
         raise NotImplementedError
 
@@ -75,36 +82,4 @@ class ISourceRepository(IConfigRepository):
 
     @abstractmethod
     def load_workspaces(self) -> list[dict[str, str]]:
-        raise NotImplementedError
-
-
-class ITargetRepository(ABC):
-    @property
-    @abstractmethod
-    def root(self) -> Path:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def config_path(self) -> Path:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def skills_dir(self) -> Path:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def agents_dir(self) -> Path:
-        raise NotImplementedError
-
-    @abstractmethod
-    def load_config_object(self) -> Tuple[dict[str, Any], Optional[Exception]]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def merge_config(
-        self, existing: dict[str, Any], base: dict[str, Any], mapped_mcp: dict[str, Any]
-    ) -> dict[str, Any]:
         raise NotImplementedError

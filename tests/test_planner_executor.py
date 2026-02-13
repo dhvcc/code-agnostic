@@ -10,7 +10,7 @@ from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaReposito
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.models import ActionKind, ActionStatus
 from code_agnostic.planner import SyncPlanner
-from code_agnostic.apps.core.repository import CoreRepository
+from code_agnostic.core.repository import CoreRepository
 
 
 def _opencode_service(
@@ -20,7 +20,7 @@ def _opencode_service(
         repository=OpenCodeConfigRepository(root=opencode_root),
         mapper=OpenCodeMCPMapper(),
         schema_repository=OpenCodeSchemaRepository(),
-        core_repository=core,
+        base_config_path=core.opencode_base_path,
     )
 
 

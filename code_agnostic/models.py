@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
+
+from code_agnostic.utils import is_under
 
 
 class ActionKind(str, Enum):
@@ -56,10 +58,10 @@ class Action:
     path: Path
     status: ActionStatus
     detail: str
-    source: Optional[Path] = None
-    payload: Optional[Any] = None
-    app: Optional[str] = None
-    scope: Optional[str] = None
+    source: Path | None = None
+    payload: Any | None = None
+    app: str | None = None
+    scope: str | None = None
 
 
 @dataclass
@@ -111,17 +113,14 @@ class SyncPlan:
             if config_path is not None and action.path == config_path:
                 filtered_actions.append(action)
                 continue
-            if skills_root is not None and _is_under(action.path, skills_root):
+            if skills_root is not None and is_under(action.path, skills_root):
                 filtered_actions.append(action)
                 continue
-            if agents_root is not None and _is_under(action.path, agents_root):
+            if agents_root is not None and is_under(action.path, agents_root):
                 filtered_actions.append(action)
         return SyncPlan(
             actions=filtered_actions, errors=self.errors, skipped=self.skipped
         )
-
-
-PlanResult = SyncPlan
 
 
 @dataclass(frozen=True)
@@ -136,26 +135,12 @@ class EditorStatusRow:
     status: EditorSyncStatus
     detail: str
 
-    def as_dict(self) -> dict[str, str]:
-        return {
-            "name": self.name,
-            "status": self.status.value,
-            "detail": self.detail,
-        }
-
 
 @dataclass(frozen=True)
 class WorkspaceRepoStatusRow:
     repo: str
     status: RepoSyncStatus
     detail: str
-
-    def as_dict(self) -> dict[str, str]:
-        return {
-            "repo": self.repo,
-            "status": self.status.value,
-            "detail": self.detail,
-        }
 
 
 @dataclass(frozen=True)
@@ -166,33 +151,9 @@ class WorkspaceStatusRow:
     detail: str
     repos: list[WorkspaceRepoStatusRow]
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "path": self.path,
-            "status": self.status.value,
-            "detail": self.detail,
-            "repos": [repo.as_dict() for repo in self.repos],
-        }
-
 
 @dataclass(frozen=True)
 class AppStatusRow:
     name: str
     status: AppSyncStatus
     detail: str
-
-    def as_dict(self) -> dict[str, str]:
-        return {
-            "name": self.name,
-            "status": self.status.value,
-            "detail": self.detail,
-        }
-
-
-def _is_under(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except Exception:
-        return False

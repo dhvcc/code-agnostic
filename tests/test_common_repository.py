@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
-from code_agnostic.apps.core.repository import CoreRepository
+from code_agnostic.core.repository import CoreRepository
 
 
 @pytest.fixture

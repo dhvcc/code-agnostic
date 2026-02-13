@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.errors import (
@@ -11,7 +11,7 @@ from code_agnostic.utils import read_json_safe, write_json
 
 
 class CoreRepository(ISourceRepository):
-    def __init__(self, root: Optional[Path] = None) -> None:
+    def __init__(self, root: Path | None = None) -> None:
         self._root = root or (Path.home() / ".config" / "code-agnostic")
 
     @property

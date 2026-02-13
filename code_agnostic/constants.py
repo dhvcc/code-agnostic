@@ -1,11 +1,11 @@
-from typing import Final, Tuple
+from typing import Final
 
 
 AGENTS_FILENAME: Final[str] = "AGENTS.md"
 CLAUDE_FILENAME: Final[str] = "CLAUDE.md"
 GIT_DIRNAME: Final[str] = ".git"
 
-WORKSPACE_RULE_FILES: Final[Tuple[str, ...]] = (
+WORKSPACE_RULE_FILES: Final[tuple[str, ...]] = (
     AGENTS_FILENAME,
     AGENTS_FILENAME.lower(),
     CLAUDE_FILENAME,
@@ -13,7 +13,7 @@ WORKSPACE_RULE_FILES: Final[Tuple[str, ...]] = (
 )
 WORKSPACE_RULE_FILES_DISPLAY: Final[str] = "AGENTS.md/CLAUDE.md"
 
-WORKSPACE_IGNORED_DIRS: Final[Tuple[str, ...]] = (
+WORKSPACE_IGNORED_DIRS: Final[tuple[str, ...]] = (
     "node_modules",
     ".venv",
 )

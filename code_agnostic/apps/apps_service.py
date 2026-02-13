@@ -6,7 +6,7 @@ from code_agnostic.apps.common.framework import (
     list_registered_app_services,
 )
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
-from code_agnostic.apps.core.repository import CoreRepository
+from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.executor import SyncExecutor
 from code_agnostic.models import AppStatusRow, AppSyncStatus, SyncPlan
 from code_agnostic.planner import SyncPlanner
@@ -14,12 +14,12 @@ from code_agnostic.utils import read_json_safe, write_json
 
 
 class AppsService:
-    def __init__(self, core_repository: CoreRepository) -> None:
+    def __init__(self, core_repository: ISourceRepository) -> None:
         self.core_repository = core_repository
 
     @property
     def apps_path(self) -> Path:
-        return self.core_repository.config_dir / "apps.json"
+        return self.core_repository.root / "config" / "apps.json"
 
     def available_apps(self) -> list[str]:
         return [app.value for app in list_registered_app_services()]

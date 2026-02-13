@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Callable, Dict
+from collections.abc import Callable
 
 import click
 from rich.console import Console
 
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.apps.common.framework import list_registered_app_services
-from code_agnostic.apps.core.repository import CoreRepository
+from code_agnostic.core.repository import CoreRepository
 from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
@@ -24,10 +24,6 @@ def _target_argument(default: str = "all") -> Callable:
         type=click.Choice(_target_values(), case_sensitive=False),
         default=default,
     )
-
-
-def _core_from_obj(_obj: Dict[str, str]) -> CoreRepository:
-    return CoreRepository()
 
 
 def _status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRow:
@@ -70,9 +66,9 @@ def cli(ctx: click.Context) -> None:
 @cli.command(help="Build and print a dry-run plan.")
 @_target_argument()
 @click.pass_obj
-def plan(obj: Dict[str, str], target: str) -> None:
+def plan(obj: dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     apps = AppsService(core)
 
     try:
@@ -89,9 +85,9 @@ def plan(obj: Dict[str, str], target: str) -> None:
 @cli.command(help="Apply planned sync changes.")
 @_target_argument()
 @click.pass_obj
-def apply(obj: Dict[str, str], target: str) -> None:
+def apply(obj: dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     apps = AppsService(core)
 
     try:
@@ -120,9 +116,9 @@ def apply(obj: Dict[str, str], target: str) -> None:
 @cli.command(help="Show sync status for editors and workspaces.")
 @_target_argument()
 @click.pass_obj
-def status(obj: Dict[str, str], target: str) -> None:
+def status(obj: dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     apps = AppsService(core)
 
     try:
@@ -147,8 +143,8 @@ def status(obj: Dict[str, str], target: str) -> None:
 
     status_service = StatusService()
     ui.render_status(
-        [item.as_dict() for item in editor_rows],
-        [item.as_dict() for item in status_service.build_workspace_status(core)],
+        editor_rows,
+        status_service.build_workspace_status(core),
     )
 
 
@@ -159,33 +155,33 @@ def apps() -> None:
 
 @apps.command("list", help="List app sync target status.")
 @click.pass_obj
-def apps_list(obj: Dict[str, str]) -> None:
+def apps_list(obj: dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     service = AppsService(core)
-    ui.render_apps([row.as_dict() for row in service.list_status_rows()])
+    ui.render_apps(service.list_status_rows())
 
 
 @apps.command("enable", help="Enable app sync target.")
 @click.argument("name", type=click.Choice(_target_values()[1:], case_sensitive=False))
 @click.pass_obj
-def apps_enable(obj: Dict[str, str], name: str) -> None:
+def apps_enable(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     service = AppsService(core)
     service.enable(name.lower())
-    ui.render_apps([row.as_dict() for row in service.list_status_rows()])
+    ui.render_apps(service.list_status_rows())
 
 
 @apps.command("disable", help="Disable app sync target.")
 @click.argument("name", type=click.Choice(_target_values()[1:], case_sensitive=False))
 @click.pass_obj
-def apps_disable(obj: Dict[str, str], name: str) -> None:
+def apps_disable(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     service = AppsService(core)
     service.disable(name.lower())
-    ui.render_apps([row.as_dict() for row in service.list_status_rows()])
+    ui.render_apps(service.list_status_rows())
 
 
 @cli.group(help="Manage workspace roots for repo rule propagation.")
@@ -197,9 +193,9 @@ def workspaces() -> None:
 @click.argument("name")
 @click.argument("path", type=click.Path(path_type=Path))
 @click.pass_obj
-def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
+def workspaces_add(obj: dict[str, str], name: str, path: Path) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     try:
         core.add_workspace(name, path)
     except ValueError as exc:
@@ -210,9 +206,9 @@ def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
 @workspaces.command("remove", help="Remove a workspace from config by name.")
 @click.argument("name")
 @click.pass_obj
-def workspaces_remove(obj: Dict[str, str], name: str) -> None:
+def workspaces_remove(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     existing = {item["name"]: item["path"] for item in core.load_workspaces()}
     removed = core.remove_workspace(name)
     if not removed:
@@ -222,9 +218,9 @@ def workspaces_remove(obj: Dict[str, str], name: str) -> None:
 
 @workspaces.command("list", help="List configured workspaces and detected repos.")
 @click.pass_obj
-def workspaces_list(obj: Dict[str, str]) -> None:
+def workspaces_list(obj: dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
-    core = _core_from_obj(obj)
+    core = CoreRepository()
     workspace_service = WorkspaceService()
 
     overview: list[dict] = []

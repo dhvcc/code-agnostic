@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Optional
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
+from code_agnostic.apps.common.symlink_planning import plan_stale_group, plan_symlink
 from code_agnostic.apps.common.utils import common_mcp_to_dto
 from code_agnostic.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
 from code_agnostic.errors import SyncAppError
-from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.models import Action, ActionStatus, SyncPlan
 from code_agnostic.workspaces import WorkspaceService
 
 
@@ -26,7 +26,7 @@ class SyncPlanner:
         self,
         core: ISourceRepository,
         app_services: list[IAppConfigService],
-        workspace_service: Optional[WorkspaceService] = None,
+        workspace_service: WorkspaceService | None = None,
         include_workspace: bool = True,
     ) -> None:
         self.core = core
@@ -85,8 +85,9 @@ class SyncPlanner:
 
             for repo in self.workspace_service.discover_git_repos(workspace_path):
                 target = repo / AGENTS_FILENAME
-                action = self._plan_symlink(target, rules_file, scope="workspace")
-                action.app = "workspace"
+                action = plan_symlink(
+                    target, rules_file, scope="workspace", app="workspace"
+                )
                 actions.append(action)
                 desired_workspace_links.append(target)
                 if action.status == ActionStatus.CONFLICT:
@@ -103,7 +104,7 @@ class SyncPlanner:
             if isinstance(old_links_raw, list) and isinstance(item, str)
         ]
         actions.extend(
-            self._plan_stale_group(
+            plan_stale_group(
                 old_links=old_links,
                 desired_links=desired_workspace_links,
                 remove_detail="remove stale managed workspace symlink",
@@ -117,102 +118,3 @@ class SyncPlanner:
         )
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
-
-    @staticmethod
-    def _plan_stale_group(
-        old_links: list[Path],
-        desired_links: list[Path],
-        remove_detail: str,
-        conflict_detail: str,
-        noop_detail: str,
-        app: str,
-        scope: str,
-        skipped: list[str],
-        skipped_message: str,
-    ) -> list[Action]:
-        desired = {str(path) for path in desired_links}
-        actions: list[Action] = []
-        for old in old_links:
-            if str(old) in desired:
-                continue
-            if old.is_symlink():
-                actions.append(
-                    Action(
-                        ActionKind.REMOVE_SYMLINK,
-                        old,
-                        ActionStatus.REMOVE,
-                        remove_detail,
-                        app=app,
-                        scope=scope,
-                    )
-                )
-            elif old.exists():
-                actions.append(
-                    Action(
-                        ActionKind.REMOVE_SYMLINK,
-                        old,
-                        ActionStatus.CONFLICT,
-                        conflict_detail,
-                        app=app,
-                        scope=scope,
-                    )
-                )
-                skipped.append(skipped_message.format(path=old))
-            else:
-                actions.append(
-                    Action(
-                        ActionKind.REMOVE_SYMLINK,
-                        old,
-                        ActionStatus.NOOP,
-                        noop_detail,
-                        app=app,
-                        scope=scope,
-                    )
-                )
-        return actions
-
-    @staticmethod
-    def _plan_symlink(target: Path, source: Path, scope: str) -> Action:
-        desired = str(source.resolve())
-        if target.exists() or target.is_symlink():
-            if target.is_symlink():
-                current = str(target.resolve())
-                if current == desired:
-                    return Action(
-                        ActionKind.SYMLINK,
-                        target,
-                        ActionStatus.NOOP,
-                        "already linked",
-                        source=source,
-                        scope=scope,
-                    )
-                return Action(
-                    ActionKind.SYMLINK,
-                    target,
-                    ActionStatus.FIX,
-                    "symlink points elsewhere",
-                    source=source,
-                    scope=scope,
-                )
-            return Action(
-                ActionKind.SYMLINK,
-                target,
-                ActionStatus.CONFLICT,
-                "non-symlink path exists",
-                source=source,
-                scope=scope,
-            )
-        return Action(
-            ActionKind.SYMLINK,
-            target,
-            ActionStatus.CREATE,
-            "create symlink",
-            source=source,
-            scope=scope,
-        )
-
-
-def build_plan(
-    core: ISourceRepository, app_services: list[IAppConfigService]
-) -> SyncPlan:
-    return SyncPlanner(core=core, app_services=app_services).build()

@@ -11,7 +11,10 @@ from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
-from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.apps.common.interfaces.repositories import (
+    IAppConfigRepository,
+    ISchemaRepository,
+)
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import ActionKind, ActionStatus
 
@@ -21,9 +24,9 @@ class CodexConfigService(RegisteredAppConfigService):
 
     def __init__(
         self,
-        repository: CodexConfigRepository,
+        repository: IAppConfigRepository,
         mapper: IAppMCPMapper,
-        schema_repository: CodexSchemaRepository,
+        schema_repository: ISchemaRepository,
     ) -> None:
         self._repository = repository
         self._mapper = mapper
@@ -62,10 +65,6 @@ class CodexConfigService(RegisteredAppConfigService):
             )
 
     def build_action_payload(self, payload: dict[str, Any]) -> Any:
-        if not isinstance(self.repository, CodexConfigRepository):
-            raise InvalidConfigSchemaError(
-                self.repository.config_path, "invalid codex repository"
-            )
         return self.repository.serialize_config(payload)
 
     def set_mcp_payload(
@@ -76,8 +75,6 @@ class CodexConfigService(RegisteredAppConfigService):
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]
     ) -> ActionStatus:
-        if not isinstance(self.repository, CodexConfigRepository):
-            return ActionStatus.UPDATE
         rendered = self.repository.serialize_config(merged)
         existing_text = (
             self.repository.config_path.read_text(encoding="utf-8")

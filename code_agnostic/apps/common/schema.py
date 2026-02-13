@@ -4,10 +4,12 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+from code_agnostic.apps.common.interfaces.repositories import ISchemaRepository
+
 _SCHEMA_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
-class JsonSchemaRepository:
+class JsonSchemaRepository(ISchemaRepository):
     def __init__(
         self,
         *,

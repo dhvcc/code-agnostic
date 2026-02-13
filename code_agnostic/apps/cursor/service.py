@@ -8,7 +8,10 @@ from code_agnostic.apps.common.framework import (
     format_schema_error,
 )
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
-from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.apps.common.interfaces.repositories import (
+    IAppConfigRepository,
+    ISchemaRepository,
+)
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
@@ -21,9 +24,9 @@ class CursorConfigService(RegisteredAppConfigService):
 
     def __init__(
         self,
-        repository: CursorConfigRepository,
+        repository: IAppConfigRepository,
         mapper: IAppMCPMapper,
-        schema_repository: CursorSchemaRepository,
+        schema_repository: ISchemaRepository,
     ) -> None:
         self._repository = repository
         self._mapper = mapper

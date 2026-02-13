@@ -7,7 +7,7 @@ name = "code-agnostic"
 version = "0.1.0"
 description = "Centralized hub for LLM coding config: MCP, skills, rules, and agents."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
   "click",
   "rich",

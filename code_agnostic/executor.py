@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Protocol
+from typing import Protocol
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
@@ -15,13 +15,13 @@ class ExecutionContext:
 class ActionHandler(Protocol):
     def handle(
         self, action: Action, context: ExecutionContext
-    ) -> tuple[bool, Optional[str]]: ...
+    ) -> tuple[bool, str | None]: ...
 
 
 class WriteJsonHandler:
     def handle(
         self, action: Action, context: ExecutionContext
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if action.path.exists():
@@ -33,7 +33,7 @@ class WriteJsonHandler:
 class SymlinkHandler:
     def handle(
         self, action: Action, context: ExecutionContext
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if action.status == ActionStatus.CONFLICT:
@@ -51,7 +51,7 @@ class SymlinkHandler:
 class WriteTextHandler:
     def handle(
         self, action: Action, context: ExecutionContext
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if not isinstance(action.payload, str):
@@ -67,7 +67,7 @@ class WriteTextHandler:
 class RemoveSymlinkHandler:
     def handle(
         self, action: Action, context: ExecutionContext
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
             return False, None
         if action.status == ActionStatus.CONFLICT:
@@ -140,9 +140,3 @@ class SyncExecutor:
             "skipped": plan.skipped,
         }
         core.save_state(state)
-
-
-def execute_apply(
-    plan: SyncPlan, core: ISourceRepository
-) -> tuple[int, int, list[str]]:
-    return SyncExecutor(core=core).execute(plan)
