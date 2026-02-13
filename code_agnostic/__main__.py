@@ -7,6 +7,8 @@ from rich.console import Console
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.apps.common.framework import list_registered_app_services
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.imports.models import ConflictPolicy, ImportSection
+from code_agnostic.imports.service import ImportService
 from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
@@ -241,6 +243,133 @@ def workspaces_list(obj: dict[str, str]) -> None:
         )
 
     ui.render_workspaces_overview(overview)
+
+
+@cli.group(name="import", help="Import existing app config into hub.")
+def import_group() -> None:
+    pass
+
+
+def _parse_import_sections(items: tuple[str, ...]) -> list[ImportSection] | None:
+    if not items:
+        return None
+    return [ImportSection(item.lower()) for item in items]
+
+
+@import_group.command("plan", help="Plan import from source app into hub.")
+@click.argument(
+    "source_app",
+    type=click.Choice([item.value for item in list_registered_app_services()]),
+)
+@click.option(
+    "--include",
+    "includes",
+    type=click.Choice([item.value for item in ImportSection]),
+    multiple=True,
+    help="Repeatable section include (mcp, skills, agents).",
+)
+@click.option(
+    "--exclude",
+    "excludes",
+    type=click.Choice([item.value for item in ImportSection]),
+    multiple=True,
+    help="Repeatable section exclude (mcp, skills, agents).",
+)
+@click.option(
+    "--on-conflict",
+    type=click.Choice([item.value for item in ConflictPolicy]),
+    default=ConflictPolicy.SKIP.value,
+    show_default=True,
+)
+@click.option("--source-root", type=click.Path(path_type=Path))
+@click.option("--follow-symlinks", is_flag=True, default=False)
+@click.pass_obj
+def import_plan(
+    obj: dict[str, str],
+    source_app: str,
+    includes: tuple[str, ...],
+    excludes: tuple[str, ...],
+    on_conflict: str,
+    source_root: Path | None,
+    follow_symlinks: bool,
+) -> None:
+    ui = SyncConsoleUI(Console())
+    core = CoreRepository()
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app=source_app,
+        include=_parse_import_sections(includes),
+        exclude=_parse_import_sections(excludes),
+        conflict_policy=ConflictPolicy(on_conflict),
+        source_root=source_root,
+        follow_symlinks=follow_symlinks,
+    )
+    ui.render_import_plan(plan, mode=f"import:plan:{source_app.lower()}")
+
+    if plan.errors:
+        raise click.exceptions.Exit(1)
+
+
+@import_group.command("apply", help="Apply import from source app into hub.")
+@click.argument(
+    "source_app",
+    type=click.Choice([item.value for item in list_registered_app_services()]),
+)
+@click.option(
+    "--include",
+    "includes",
+    type=click.Choice([item.value for item in ImportSection]),
+    multiple=True,
+    help="Repeatable section include (mcp, skills, agents).",
+)
+@click.option(
+    "--exclude",
+    "excludes",
+    type=click.Choice([item.value for item in ImportSection]),
+    multiple=True,
+    help="Repeatable section exclude (mcp, skills, agents).",
+)
+@click.option(
+    "--on-conflict",
+    type=click.Choice([item.value for item in ConflictPolicy]),
+    default=ConflictPolicy.SKIP.value,
+    show_default=True,
+)
+@click.option("--source-root", type=click.Path(path_type=Path))
+@click.option("--follow-symlinks", is_flag=True, default=False)
+@click.pass_obj
+def import_apply(
+    obj: dict[str, str],
+    source_app: str,
+    includes: tuple[str, ...],
+    excludes: tuple[str, ...],
+    on_conflict: str,
+    source_root: Path | None,
+    follow_symlinks: bool,
+) -> None:
+    ui = SyncConsoleUI(Console())
+    core = CoreRepository()
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app=source_app,
+        include=_parse_import_sections(includes),
+        exclude=_parse_import_sections(excludes),
+        conflict_policy=ConflictPolicy(on_conflict),
+        source_root=source_root,
+        follow_symlinks=follow_symlinks,
+    )
+    ui.render_import_plan(plan, mode=f"import:apply:{source_app.lower()}")
+
+    if plan.errors:
+        raise click.ClickException("Import aborted due to conflicts/errors above.")
+
+    result = service.apply(plan)
+    ui.render_import_apply_result(result)
+
+    if result.failed:
+        raise click.exceptions.Exit(1)
 
 
 def main() -> int:

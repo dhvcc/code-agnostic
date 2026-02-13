@@ -63,3 +63,32 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
             )
 
     return mapped
+
+
+def dto_to_common_mcp(servers: dict[str, MCPServerDTO]) -> dict[str, Any]:
+    mapped: dict[str, Any] = {}
+    for name in sorted(servers):
+        server = servers[name]
+        item: dict[str, Any] = {}
+
+        if server.command:
+            item["command"] = server.command
+            item["args"] = [str(arg) for arg in server.args]
+        elif server.url:
+            item["url"] = server.url
+        else:
+            continue
+
+        if server.headers:
+            item["headers"] = {str(k): str(v) for k, v in server.headers.items()}
+        if server.env:
+            item["env"] = {str(k): str(v) for k, v in server.env.items()}
+        if server.auth is not None:
+            item["auth"] = {
+                "client_id": server.auth.client_id,
+                "client_secret": server.auth.client_secret,
+                "scopes": [str(scope) for scope in server.auth.scopes],
+            }
+
+        mapped[name] = item
+    return mapped

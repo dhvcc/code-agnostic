@@ -1,5 +1,6 @@
 from rich.console import Console
 
+from code_agnostic.imports.models import ImportApplyResult, ImportPlan
 from code_agnostic.models import (
     AppStatusRow,
     EditorStatusRow,
@@ -12,6 +13,7 @@ from code_agnostic.tui.sections import UISection
 from code_agnostic.tui.tables import (
     AppsTable,
     ApplyTable,
+    ImportTable,
     PlanTable,
     StatusTable,
     WorkspaceTable,
@@ -67,6 +69,16 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
             )
+
+        self.console.print(
+            UISection.note(
+                "next",
+                "Enable target app sync, then run apply.\n"
+                "- code-agnostic apps enable <app>\n"
+                "- code-agnostic apply <app>",
+                style=UIStyle.DIM.value,
+            )
+        )
 
     def render_apply_result(
         self, applied: int, failed: int, failures: list[str]
@@ -164,4 +176,58 @@ class SyncConsoleUI:
             UISection.wrap(
                 "apps", AppsTable.apps_table(items), style=UIStyle.BLUE.value
             )
+        )
+
+    def render_import_plan(self, plan: ImportPlan, mode: str) -> None:
+        mcp_actions, skill_actions, agent_actions = ImportTable.split_actions(plan)
+
+        self.console.print(
+            UISection.wrap(
+                "import overview",
+                ImportTable.summary_block(plan, mode=mode),
+                style=UIStyle.BLUE.value,
+            )
+        )
+
+        if mcp_actions:
+            self.console.print(
+                UISection.wrap(
+                    "mcp import",
+                    ImportTable.actions_table(mcp_actions),
+                    style=UIStyle.CYAN.value,
+                )
+            )
+        if skill_actions:
+            self.console.print(
+                UISection.wrap(
+                    "skills import",
+                    ImportTable.actions_table(skill_actions),
+                    style=UIStyle.MAGENTA.value,
+                )
+            )
+        if agent_actions:
+            self.console.print(
+                UISection.wrap(
+                    "agents import",
+                    ImportTable.actions_table(agent_actions),
+                    style=UIStyle.GREEN.value,
+                )
+            )
+
+        if plan.errors:
+            errors_text = "\n".join([f"- {item}" for item in plan.errors])
+            self.console.print(
+                UISection.note("errors", errors_text, style=UIStyle.RED.value)
+            )
+        if plan.skipped:
+            skipped_text = "\n".join([f"- {item}" for item in plan.skipped])
+            self.console.print(
+                UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
+            )
+
+    def render_import_apply_result(self, result: ImportApplyResult) -> None:
+        self.render_apply_result(
+            applied=result.applied,
+            failed=result.failed,
+            failures=result.failures,
         )

@@ -8,11 +8,11 @@ Similar to how OpenCode is provider-agnostic for models, `code-agnostic` aims to
 
 ## App Feature Matrix
 
-| App | MCP Sync | Skills Sync | Agents Sync | Workspace Sync |
-| --- | --- | --- | --- | --- |
-| OpenCode / OpenCode Desktop | ✅ | ✅ | ✅ | ✅ |
-| Cursor IDE | ✅ | ✅ | ✅ | ✅ |
-| Codex CLI | ✅ | ✅ | ❌ | ✅ |
+| App | MCP Sync | Skills Sync | Agents Sync | Workspace Sync | Import |
+| --- | --- | --- | --- | --- | --- |
+| OpenCode / OpenCode Desktop | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cursor IDE | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Codex CLI | ✅ | ✅ | ❌ | ✅ | ✅ |
 
 - ✅ supported
 - ❌ not supported (Codex does not support agents natively)
@@ -89,6 +89,40 @@ Cursor and Codex MCP payload sync are gated behind app toggles.
 - Workspace actions are app-agnostic building blocks and are included even when targeting a specific app.
 - Plan/apply/status behavior is stable in intent, but UX and command shape are still being refined.
 - Schema validation is part of tests for generated OpenCode config; Cursor schema coverage is intentionally scoped to fields we manage.
+
+## Import Existing App Config
+
+Use import when you already have MCP/skills/agents configured in a source app and want to migrate into `code-agnostic` as the new source of truth.
+
+Recommended flow:
+
+```bash
+code-agnostic import plan codex
+code-agnostic import apply codex
+```
+
+Useful options:
+
+- Import defaults to all supported sections for the source app.
+- `--exclude skills --exclude agents` (repeatable)
+- `--include mcp --include skills --include agents` (repeatable, optional narrowing)
+- `--on-conflict skip|overwrite|fail` (default: `skip`)
+- `--source-root <path>` (import from a custom app root)
+- `--follow-symlinks` (off by default)
+
+Conflict behavior:
+
+- MCP is merged into existing `mcp.base.json`.
+- Existing identical MCP entries are no-op.
+- Existing conflicting MCP entries are skipped by default (`--on-conflict skip`).
+- Skills/agents are additive by name; same-name conflicts are skipped by default, or overwritten with `--on-conflict overwrite`.
+
+After importing, enable target apps and sync outward:
+
+```bash
+code-agnostic apps enable cursor
+code-agnostic apply cursor
+```
 
 ## Roadmap
 

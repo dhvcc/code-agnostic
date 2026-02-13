@@ -7,6 +7,7 @@ from rich.table import Column, Table
 from rich.text import Text
 
 from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.imports.models import ImportAction, ImportActionStatus, ImportPlan
 from code_agnostic.models import (
     Action,
     AppStatusRow,
@@ -19,6 +20,15 @@ from code_agnostic.models import (
     WorkspaceSyncStatus,
 )
 from code_agnostic.tui.enums import ACTION_STATUS_STYLE, UIStyle
+
+
+IMPORT_STATUS_STYLE = {
+    ImportActionStatus.CREATE: UIStyle.GREEN.value,
+    ImportActionStatus.UPDATE: UIStyle.CYAN.value,
+    ImportActionStatus.NOOP: UIStyle.DIM.value,
+    ImportActionStatus.SKIP: UIStyle.YELLOW.value,
+    ImportActionStatus.CONFLICT: UIStyle.RED.value,
+}
 
 
 class PlanTable:
@@ -232,3 +242,62 @@ class AppsTable:
             )
             table.add_row(item.name, f"[{style}]{status.value}[/{style}]", item.detail)
         return table
+
+
+class ImportTable:
+    @staticmethod
+    def summary_block(plan: ImportPlan, mode: str):
+        counts = Counter(action.status.value for action in plan.actions)
+        chips = [f"{key}={value}" for key, value in sorted(counts.items()) if value > 0]
+        if not chips:
+            chips = ["none"]
+
+        table = Table.grid(padding=(0, 2))
+        table.add_column(style="bold")
+        table.add_column()
+        table.add_row("Mode", mode)
+        table.add_row("Source", plan.source_app)
+        table.add_row("Sections", ", ".join(section.value for section in plan.sections))
+        table.add_row("Actions", str(len(plan.actions)))
+        table.add_row("Statuses", "  ".join(chips))
+        return table
+
+    @staticmethod
+    def actions_table(actions: list[ImportAction]) -> Table:
+        table = Table(
+            Column(header="Section", width=10),
+            Column(header="Status", width=10),
+            Column(header="Source", overflow="ellipsis", max_width=50),
+            Column(header="Target", overflow="ellipsis", max_width=50),
+            Column(header="Detail", overflow="ellipsis"),
+            expand=True,
+            header_style="bold",
+        )
+
+        for action in actions:
+            style = IMPORT_STATUS_STYLE.get(action.status, UIStyle.WHITE.value)
+            status_text = f"[{style}]{action.status.value}[/{style}]"
+            table.add_row(
+                action.section.value,
+                status_text,
+                str(action.source) if action.source is not None else "",
+                str(action.target) if action.target is not None else "",
+                action.detail,
+            )
+        return table
+
+    @staticmethod
+    def split_actions(
+        plan: ImportPlan,
+    ) -> tuple[list[ImportAction], list[ImportAction], list[ImportAction]]:
+        mcp: list[ImportAction] = []
+        skills: list[ImportAction] = []
+        agents: list[ImportAction] = []
+        for action in plan.actions:
+            if action.section.value == "mcp":
+                mcp.append(action)
+            elif action.section.value == "skills":
+                skills.append(action)
+            elif action.section.value == "agents":
+                agents.append(action)
+        return mcp, skills, agents
