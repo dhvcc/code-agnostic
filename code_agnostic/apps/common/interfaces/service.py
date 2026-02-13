@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.models import MCPServerDTO
-from code_agnostic.models import Action, ActionKind, ActionStatus, AppId
+from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 
 
 class IAppConfigService(ABC):
@@ -65,4 +67,13 @@ class IAppConfigService(ABC):
             detail=f"sync {self.app_id.value} config from common mcp base",
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
+        )
+
+    def build_plan(
+        self,
+        common_servers: dict[str, MCPServerDTO],
+        source_repository: ISourceRepository,
+    ) -> SyncPlan:
+        return SyncPlan(
+            actions=[self.build_action(common_servers)], errors=[], skipped=[]
         )

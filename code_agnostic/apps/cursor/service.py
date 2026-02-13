@@ -2,6 +2,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -12,7 +13,7 @@ from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
 from code_agnostic.errors import InvalidConfigSchemaError
-from code_agnostic.models import ActionKind, ActionStatus, AppId
+from code_agnostic.models import ActionKind, ActionStatus
 
 
 class CursorConfigService(RegisteredAppConfigService):

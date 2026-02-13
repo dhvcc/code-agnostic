@@ -2,6 +2,7 @@ from typing import Any
 
 from jsonschema import Draft7Validator
 
+from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -12,7 +13,7 @@ from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.errors import InvalidConfigSchemaError
-from code_agnostic.models import ActionKind, ActionStatus, AppId
+from code_agnostic.models import ActionKind, ActionStatus
 
 
 class CodexConfigService(RegisteredAppConfigService):

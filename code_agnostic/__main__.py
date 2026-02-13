@@ -5,184 +5,48 @@ import click
 from rich.console import Console
 
 from code_agnostic.apps.apps_service import AppsService
-from code_agnostic.apps.common.utils import common_mcp_to_dto
-from code_agnostic.apps.common.framework import (
-    RegisteredAppConfigService,
-    create_registered_app_service,
-)
-from code_agnostic.apps.opencode.repository import OpenCodeRepository
-from code_agnostic.errors import SyncAppError
-from code_agnostic.executor import SyncExecutor
-from code_agnostic.models import (
-    Action,
-    ActionKind,
-    ActionStatus,
-    AppId,
-    EditorStatusRow,
-    EditorSyncStatus,
-    SyncPlan,
-    SyncTarget,
-)
-from code_agnostic.planner import SyncPlanner
+from code_agnostic.apps.common.framework import list_registered_app_services
 from code_agnostic.apps.core.repository import CoreRepository
+from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.workspaces import WorkspaceService
 
 
-TARGET_VALUES = [target.value for target in SyncTarget]
+def _target_values() -> list[str]:
+    return ["all", *[app.value for app in list_registered_app_services()]]
 
 
-def _target_argument(default: str = SyncTarget.ALL.value) -> Callable:
+def _target_argument(default: str = "all") -> Callable:
     return click.argument(
         "target",
         required=False,
-        type=click.Choice(TARGET_VALUES, case_sensitive=False),
+        type=click.Choice(_target_values(), case_sensitive=False),
         default=default,
     )
 
 
-def _normalize_target(value: str) -> SyncTarget:
-    return SyncTarget(value.lower())
+def _core_from_obj(_obj: Dict[str, str]) -> CoreRepository:
+    return CoreRepository()
 
 
-def _repos_from_obj(
-    _obj: Dict[str, str],
-) -> tuple[CoreRepository, OpenCodeRepository]:
-    core = CoreRepository()
-    opencode = OpenCodeRepository()
-    return core, opencode
-
-
-def _empty_plan(skipped_reason: str) -> SyncPlan:
-    return SyncPlan(actions=[], errors=[], skipped=[skipped_reason])
-
-
-def _merge_plans(*plans: SyncPlan) -> SyncPlan:
-    actions: list[Action] = []
-    errors: list[Exception] = []
-    skipped: list[str] = []
-    for plan in plans:
-        actions.extend(plan.actions)
-        errors.extend(plan.errors)
-        skipped.extend(plan.skipped)
-    return SyncPlan(actions=actions, errors=errors, skipped=skipped)
-
-
-def _build_mcp_app_plan(core: CoreRepository, apps: AppsService) -> SyncPlan:
-    enabled = set(apps.enabled_apps())
-    if not ({AppId.CURSOR, AppId.CODEX} & enabled):
-        return SyncPlan(actions=[], errors=[], skipped=[])
-
-    try:
-        mcp_base = core.load_mcp_base()
-    except SyncAppError as exc:
-        return SyncPlan(actions=[], errors=[exc], skipped=[])
-
-    desired_common = common_mcp_to_dto(mcp_base.get("mcpServers", {}))
-    actions: list[Action] = []
-    errors: list[Exception] = []
-
-    services: list[RegisteredAppConfigService] = []
-    for app in sorted(enabled, key=lambda item: item.value):
-        if app == AppId.OPENCODE:
-            continue
-        try:
-            services.append(create_registered_app_service(app))
-        except KeyError:
-            continue
-
-    for service in services:
-        try:
-            actions.append(service.build_action(desired_common))
-        except SyncAppError as exc:
-            errors.append(exc)
-
-    return SyncPlan(actions=actions, errors=errors, skipped=[])
-
-
-def _build_combined_plan(
-    core: CoreRepository, opencode: OpenCodeRepository, apps: AppsService
-) -> SyncPlan:
-    enabled = set(apps.enabled_apps())
-
-    workspace_plan = SyncPlanner(
-        core=core,
-        opencode=opencode,
-        include_opencode=False,
-        include_workspace=True,
-    ).build()
-
-    opencode_plan = SyncPlan(actions=[], errors=[], skipped=[])
-    if AppId.OPENCODE in enabled:
-        opencode_plan = SyncPlanner(
-            core=core,
-            opencode=opencode,
-            include_opencode=True,
-            include_workspace=False,
-        ).build()
-    mcp_apps_plan = _build_mcp_app_plan(core, apps)
-
-    combined = _merge_plans(opencode_plan, mcp_apps_plan, workspace_plan)
-    if (
-        not enabled
-        and not combined.actions
-        and not combined.errors
-        and not combined.skipped
-    ):
-        return _empty_plan("No apps enabled for sync.")
-    return combined
-
-
-def _scope_plan_for_target(
-    plan: SyncPlan, target: SyncTarget, opencode: OpenCodeRepository
-) -> SyncPlan:
-    if target == SyncTarget.ALL:
-        return plan
-    return plan.filter_for_target(
-        target=target,
-        config_path=opencode.config_path,
-        skills_root=opencode.skills_dir,
-        agents_root=opencode.agents_dir,
-    )
-
-
-def _requires_state_persist(scoped_plan: SyncPlan) -> bool:
-    for action in scoped_plan.actions:
-        if action.kind in (ActionKind.SYMLINK, ActionKind.REMOVE_SYMLINK):
-            return True
-        if action.app in (None, AppId.OPENCODE.value):
-            return True
-    return False
-
-
-def _status_row_for_app(
-    app: AppId, plan: SyncPlan, apps: AppsService
-) -> EditorStatusRow:
-    if not apps.is_enabled(app):
+def _status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRow:
+    if not apps.is_enabled(app_name):
         return EditorStatusRow(
-            name=app.value,
+            name=app_name,
             status=EditorSyncStatus.DISABLED,
             detail="disabled by apps config",
         )
 
-    if app == AppId.OPENCODE:
-        relevant = [
-            action
-            for action in plan.actions
-            if action.app is None or action.app == AppId.OPENCODE.value
-        ]
-    else:
-        relevant = [action for action in plan.actions if action.app == app.value]
+    relevant = [action for action in plan.actions if action.app == app_name]
 
-    if plan.errors:
-        for error in plan.errors:
-            if app.value in str(error).lower():
-                return EditorStatusRow(
-                    name=app.value,
-                    status=EditorSyncStatus.ERROR,
-                    detail=f"cannot evaluate ({error})",
-                )
+    for error in plan.errors:
+        if app_name in str(error).lower():
+            return EditorStatusRow(
+                name=app_name,
+                status=EditorSyncStatus.ERROR,
+                detail=f"cannot evaluate ({error})",
+            )
 
     synced = (
         all(action.status == ActionStatus.NOOP for action in relevant)
@@ -190,7 +54,7 @@ def _status_row_for_app(
         else True
     )
     return EditorStatusRow(
-        name=app.value,
+        name=app_name,
         status=EditorSyncStatus.SYNCED if synced else EditorSyncStatus.DRIFT,
         detail="in sync" if synced else "out of sync",
     )
@@ -199,7 +63,7 @@ def _status_row_for_app(
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """OpenCode-first config sync."""
+    """App-based config sync."""
     ctx.obj = {}
 
 
@@ -208,18 +72,15 @@ def cli(ctx: click.Context) -> None:
 @click.pass_obj
 def plan(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    core, opencode = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     apps = AppsService(core)
 
     try:
-        plan_result = _build_combined_plan(core=core, opencode=opencode, apps=apps)
+        scoped_plan = apps.plan_for_target(target)
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
-    normalized_target = _normalize_target(target)
-    scoped_plan = _scope_plan_for_target(plan_result, normalized_target, opencode)
-
-    ui.render_plan(scoped_plan, mode=f"plan:{normalized_target.value}")
+    ui.render_plan(scoped_plan, mode=f"plan:{target.lower()}")
 
     if scoped_plan.errors:
         raise click.exceptions.Exit(1)
@@ -230,18 +91,15 @@ def plan(obj: Dict[str, str], target: str) -> None:
 @click.pass_obj
 def apply(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    core, opencode = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     apps = AppsService(core)
 
     try:
-        plan_result = _build_combined_plan(core=core, opencode=opencode, apps=apps)
+        scoped_plan = apps.plan_for_target(target)
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
-    normalized_target = _normalize_target(target)
-    scoped_plan = _scope_plan_for_target(plan_result, normalized_target, opencode)
-
-    ui.render_plan(scoped_plan, mode=f"apply:{normalized_target.value}")
+    ui.render_plan(scoped_plan, mode=f"apply:{target.lower()}")
 
     if not scoped_plan.actions and not scoped_plan.errors:
         ui.render_apply_result(applied=0, failed=0, failures=[])
@@ -252,10 +110,7 @@ def apply(obj: Dict[str, str], target: str) -> None:
             "Apply aborted due to planning/parsing errors above."
         )
 
-    persist_state = _requires_state_persist(scoped_plan)
-    applied, failed, failures = SyncExecutor(core=core, opencode=opencode).execute(
-        scoped_plan, persist_state=persist_state
-    )
+    applied, failed, failures = apps.execute_plan(scoped_plan)
     ui.render_apply_result(applied, failed, failures)
 
     if failed:
@@ -267,34 +122,33 @@ def apply(obj: Dict[str, str], target: str) -> None:
 @click.pass_obj
 def status(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
-    core, opencode = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     apps = AppsService(core)
-    status_service = StatusService()
 
     try:
-        plan_result = _build_combined_plan(core=core, opencode=opencode, apps=apps)
-        editor_rows = [_status_row_for_app(app, plan_result, apps) for app in AppId]
+        plan_result = apps.plan_for_target("all")
+        editor_rows = [
+            _status_row_for_app(app_name, plan_result, apps)
+            for app_name in apps.available_apps()
+        ]
     except Exception as exc:
         editor_rows = [
             EditorStatusRow(
-                name=app.value,
+                name=app_name,
                 status=EditorSyncStatus.ERROR,
                 detail=f"cannot evaluate ({exc})",
             )
-            for app in AppId
+            for app_name in apps.available_apps()
         ]
 
-    normalized_target = _normalize_target(target)
-    if normalized_target != SyncTarget.ALL:
-        editor_rows = [
-            row for row in editor_rows if row.name == normalized_target.value
-        ]
+    normalized_target = target.lower()
+    if normalized_target != "all":
+        editor_rows = [row for row in editor_rows if row.name == normalized_target]
 
-    workspace_rows = status_service.build_workspace_status(core)
-
+    status_service = StatusService()
     ui.render_status(
         [item.as_dict() for item in editor_rows],
-        [item.as_dict() for item in workspace_rows],
+        [item.as_dict() for item in status_service.build_workspace_status(core)],
     )
 
 
@@ -307,36 +161,30 @@ def apps() -> None:
 @click.pass_obj
 def apps_list(obj: Dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
-    core, _ = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     service = AppsService(core)
     ui.render_apps([row.as_dict() for row in service.list_status_rows()])
 
 
 @apps.command("enable", help="Enable app sync target.")
-@click.argument(
-    "name", type=click.Choice([app.value for app in AppId], case_sensitive=False)
-)
+@click.argument("name", type=click.Choice(_target_values()[1:], case_sensitive=False))
 @click.pass_obj
 def apps_enable(obj: Dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    core, _ = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     service = AppsService(core)
-    app_id = AppId(name.lower())
-    service.enable(app_id)
+    service.enable(name.lower())
     ui.render_apps([row.as_dict() for row in service.list_status_rows()])
 
 
 @apps.command("disable", help="Disable app sync target.")
-@click.argument(
-    "name", type=click.Choice([app.value for app in AppId], case_sensitive=False)
-)
+@click.argument("name", type=click.Choice(_target_values()[1:], case_sensitive=False))
 @click.pass_obj
 def apps_disable(obj: Dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    core, _ = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     service = AppsService(core)
-    app_id = AppId(name.lower())
-    service.disable(app_id)
+    service.disable(name.lower())
     ui.render_apps([row.as_dict() for row in service.list_status_rows()])
 
 
@@ -351,7 +199,7 @@ def workspaces() -> None:
 @click.pass_obj
 def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
     ui = SyncConsoleUI(Console())
-    core, _ = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     try:
         core.add_workspace(name, path)
     except ValueError as exc:
@@ -364,7 +212,7 @@ def workspaces_add(obj: Dict[str, str], name: str, path: Path) -> None:
 @click.pass_obj
 def workspaces_remove(obj: Dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
-    core, _ = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     existing = {item["name"]: item["path"] for item in core.load_workspaces()}
     removed = core.remove_workspace(name)
     if not removed:
@@ -376,7 +224,7 @@ def workspaces_remove(obj: Dict[str, str], name: str) -> None:
 @click.pass_obj
 def workspaces_list(obj: Dict[str, str]) -> None:
     ui = SyncConsoleUI(Console())
-    core, _ = _repos_from_obj(obj)
+    core = _core_from_obj(obj)
     workspace_service = WorkspaceService()
 
     overview: list[dict] = []

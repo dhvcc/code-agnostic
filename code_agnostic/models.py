@@ -45,12 +45,6 @@ class RepoSyncStatus(str, Enum):
     NEEDS_SYNC = "needs_sync"
 
 
-class AppId(str, Enum):
-    OPENCODE = "opencode"
-    CURSOR = "cursor"
-    CODEX = "codex"
-
-
 class AppSyncStatus(str, Enum):
     ENABLED = "enabled"
     DISABLED = "disabled"
@@ -65,6 +59,7 @@ class Action:
     source: Optional[Path] = None
     payload: Optional[Any] = None
     app: Optional[str] = None
+    scope: Optional[str] = None
 
 
 @dataclass
@@ -87,23 +82,22 @@ class SyncPlan:
 
     def filter_for_target(
         self,
-        target: SyncTarget,
-        config_path: Path,
-        skills_root: Path,
-        agents_root: Path,
+        target: str,
+        config_path: Path | None = None,
+        skills_root: Path | None = None,
+        agents_root: Path | None = None,
     ) -> "SyncPlan":
-        if target == SyncTarget.ALL:
+        normalized = target.lower()
+        if normalized == SyncTarget.ALL.value:
             return self
-        if target in (SyncTarget.CURSOR, SyncTarget.CODEX):
+        if normalized in (SyncTarget.CURSOR.value, SyncTarget.CODEX.value):
             filtered = [
                 action
                 for action in self.actions
-                if action.app in (target.value, "workspace")
+                if action.app in (normalized, "workspace")
             ]
             return SyncPlan(actions=filtered, errors=self.errors, skipped=self.skipped)
 
-        resolved_skills = skills_root.resolve()
-        resolved_agents = agents_root.resolve()
         filtered_actions: list[Action] = []
         for action in self.actions:
             if action.app in (SyncTarget.CURSOR.value, SyncTarget.CODEX.value):
@@ -111,16 +105,16 @@ class SyncPlan:
             if action.app == "workspace":
                 filtered_actions.append(action)
                 continue
-            if action.path == config_path:
+            if action.app in (None, SyncTarget.OPENCODE.value):
                 filtered_actions.append(action)
                 continue
-            try:
-                resolved_path = action.path.resolve()
-            except Exception:
-                resolved_path = action.path
-            if _is_under(resolved_path, resolved_skills) or _is_under(
-                resolved_path, resolved_agents
-            ):
+            if config_path is not None and action.path == config_path:
+                filtered_actions.append(action)
+                continue
+            if skills_root is not None and _is_under(action.path, skills_root):
+                filtered_actions.append(action)
+                continue
+            if agents_root is not None and _is_under(action.path, agents_root):
                 filtered_actions.append(action)
         return SyncPlan(
             actions=filtered_actions, errors=self.errors, skipped=self.skipped
@@ -184,13 +178,13 @@ class WorkspaceStatusRow:
 
 @dataclass(frozen=True)
 class AppStatusRow:
-    name: AppId
+    name: str
     status: AppSyncStatus
     detail: str
 
     def as_dict(self) -> dict[str, str]:
         return {
-            "name": self.name.value,
+            "name": self.name,
             "status": self.status.value,
             "detail": self.detail,
         }

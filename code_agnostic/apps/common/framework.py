@@ -1,8 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from typing import Any, ClassVar, cast
 
+from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
-from code_agnostic.models import AppId
 
 
 def format_schema_error(error: Any) -> str:

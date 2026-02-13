@@ -4,10 +4,24 @@ import json
 from code_agnostic.errors import InvalidJsonFormatError
 from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.executor import SyncExecutor
+from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
+from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
+from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
+from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.models import ActionKind, ActionStatus
 from code_agnostic.planner import SyncPlanner
 from code_agnostic.apps.core.repository import CoreRepository
-from code_agnostic.apps.opencode.repository import OpenCodeRepository
+
+
+def _opencode_service(
+    core: CoreRepository, opencode_root: Path
+) -> OpenCodeConfigService:
+    return OpenCodeConfigService(
+        repository=OpenCodeConfigRepository(root=opencode_root),
+        mapper=OpenCodeMCPMapper(),
+        schema_repository=OpenCodeSchemaRepository(),
+        core_repository=core,
+    )
 
 
 def test_build_plan_and_apply_create_opencode_and_workspace_links(
@@ -49,13 +63,15 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
 
     core = CoreRepository(core_root)
     core.add_workspace("workspace-example", workspace_root)
-    opencode = OpenCodeRepository(opencode_root)
+    opencode_config_path = opencode_root / "opencode.json"
 
-    plan = SyncPlanner(core=core, opencode=opencode).build()
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
 
     assert plan.errors == []
     assert any(
-        action.kind == ActionKind.WRITE_JSON and action.path == opencode.config_path
+        action.kind == ActionKind.WRITE_JSON and action.path == opencode_config_path
         for action in plan.actions
     )
     workspace_targets = {
@@ -71,13 +87,13 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     }
     assert workspace_targets.issubset(planned_workspace_targets)
 
-    applied, failed, failures = SyncExecutor(core=core, opencode=opencode).execute(plan)
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
 
     assert failed == 0
     assert failures == []
     assert applied > 0
 
-    opencode_config = json.loads(opencode.config_path.read_text(encoding="utf-8"))
+    opencode_config = json.loads(opencode_config_path.read_text(encoding="utf-8"))
     assert opencode_config["mcp"]["context7"] == {
         "type": "remote",
         "url": "https://mcp.context7.com/mcp",
@@ -93,7 +109,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         assert link_path.resolve() == (workspace_root / "CLAUDE.md").resolve()
 
     state = core.load_state()
-    assert len(state["managed_workspace_links"]) == 2
+    assert len(state["managed_links"]["workspace"]) == 2
 
 
 def test_plan_marks_config_create_when_missing(
@@ -101,8 +117,10 @@ def test_plan_marks_config_create_when_missing(
     core_root: Path,
     opencode_root: Path,
 ) -> None:
+    core = CoreRepository(core_root)
     plan = SyncPlanner(
-        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+        core=core,
+        app_services=[_opencode_service(core, opencode_root)],
     ).build()
 
     config_actions = [
@@ -121,8 +139,10 @@ def test_plan_marks_config_update_when_existing_but_different(
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("{}\n", encoding="utf-8")
 
+    core = CoreRepository(core_root)
     plan = SyncPlanner(
-        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+        core=core,
+        app_services=[_opencode_service(core, opencode_root)],
     ).build()
 
     config_actions = [
@@ -138,8 +158,10 @@ def test_plan_marks_config_noop_when_already_synced(
     opencode_root: Path,
 ) -> None:
     core = CoreRepository(core_root)
-    opencode = OpenCodeRepository(opencode_root)
-    first_plan = SyncPlanner(core=core, opencode=opencode).build()
+    first_plan = SyncPlanner(
+        core=core,
+        app_services=[_opencode_service(core, opencode_root)],
+    ).build()
     payload = next(
         action.payload
         for action in first_plan.actions
@@ -150,7 +172,10 @@ def test_plan_marks_config_noop_when_already_synced(
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    second_plan = SyncPlanner(core=core, opencode=opencode).build()
+    second_plan = SyncPlanner(
+        core=core,
+        app_services=[_opencode_service(core, opencode_root)],
+    ).build()
     config_actions = [
         action for action in second_plan.actions if action.kind == ActionKind.WRITE_JSON
     ]
@@ -167,8 +192,10 @@ def test_plan_collects_invalid_opencode_json_as_error(
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("{not-json", encoding="utf-8")
 
+    core = CoreRepository(core_root)
     plan = SyncPlanner(
-        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+        core=core,
+        app_services=[_opencode_service(core, opencode_root)],
     ).build()
 
     assert len(plan.errors) == 1
@@ -185,8 +212,10 @@ def test_plan_treats_empty_opencode_config_as_update(
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text("", encoding="utf-8")
 
+    core = CoreRepository(core_root)
     plan = SyncPlanner(
-        core=CoreRepository(core_root), opencode=OpenCodeRepository(opencode_root)
+        core=core,
+        app_services=[_opencode_service(core, opencode_root)],
     ).build()
 
     config_actions = [
