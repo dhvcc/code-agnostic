@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from code_agnostic.apps.sync.apps.opencode.service import validate_opencode_config
 from code_agnostic.constants import AGENTS_FILENAME, WORKSPACE_RULE_FILES_DISPLAY
 from code_agnostic.errors import SyncAppError
 from code_agnostic.mappers.base import IConfigMapper
@@ -68,9 +69,21 @@ class SyncPlanner:
             self.errors.append(config_error)
             return
 
+        try:
+            validate_opencode_config(existing_config, self.opencode.config_path)
+        except Exception as exc:
+            self.errors.append(exc)
+            return
+
         merged_config = self.opencode.merge_config(
             existing_config, opencode_base, mapped_mcp
         )
+        try:
+            validate_opencode_config(merged_config, self.opencode.config_path)
+        except Exception as exc:
+            self.errors.append(exc)
+            return
+
         if same_json(self.opencode.config_path, merged_config):
             self.actions.append(
                 Action(

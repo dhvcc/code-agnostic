@@ -101,3 +101,40 @@ def test_apply_aborts_on_invalid_opencode_json(
     assert "Apply aborted" in result.output
     assert "Invalid JSON format" in result.output
     assert "opencode" in result.output
+
+
+def test_apply_aborts_on_invalid_opencode_schema(
+    minimal_shared_config: Path,
+    opencode_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps({"theme": 123}), encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["apply"])
+
+    assert result.exit_code != 0
+    assert "Apply aborted" in result.output
+    assert "Invalid config schema" in result.output
+
+
+def test_apply_aborts_when_opencode_base_breaks_schema(
+    minimal_shared_config: Path,
+    common_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+    (common_root / "config" / "opencode.base.json").write_text(
+        json.dumps({"theme": 123}),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply"])
+
+    assert result.exit_code != 0
+    assert "Apply aborted" in result.output
+    assert "Invalid config schema" in result.output
