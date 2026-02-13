@@ -1,48 +1,19 @@
-from copy import deepcopy
 from typing import Any
 
+from code_agnostic.apps.sync import OpenCodeMCPMapper, common_mcp_to_dto
 from code_agnostic.mappers.base import IConfigMapper
-
-
-def _as_command_array(command: Any, args: Any) -> list[str]:
-    if isinstance(command, list):
-        base = [str(item) for item in command]
-    elif isinstance(command, str):
-        base = [command]
-    else:
-        base = []
-
-    if isinstance(args, list):
-        base.extend(str(item) for item in args)
-    return base
 
 
 class OpenCodeMapper(IConfigMapper):
     def map_mcp_servers(self, mcp_servers: dict[str, Any]) -> dict[str, Any]:
-        mapped: dict[str, Any] = {}
-        for name, server in mcp_servers.items():
-            if not isinstance(server, dict):
+        dto = common_mcp_to_dto(mcp_servers)
+        mapped = OpenCodeMCPMapper().from_common(dto)
+        for name, raw in mcp_servers.items():
+            if not isinstance(raw, dict) or name not in mapped:
                 continue
-
-            out: dict[str, Any] = {}
-
-            if "url" in server:
-                out["type"] = "remote"
-                out["url"] = server["url"]
-            elif "command" in server:
-                command_list = _as_command_array(server.get("command"), server.get("args"))
-                if not command_list:
-                    continue
-                out["type"] = "local"
-                out["command"] = command_list
-            else:
-                continue
-
-            for passthrough_key in ["headers", "environment", "enabled", "oauth", "timeout"]:
-                if passthrough_key in server:
-                    out[passthrough_key] = deepcopy(server[passthrough_key])
-
-            mapped[name] = out
+            for key in ["enabled", "timeout"]:
+                if key in raw:
+                    mapped[name][key] = raw[key]
         return mapped
 
 

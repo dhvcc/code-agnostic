@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
   "click",
-  "rich"
+  "rich",
+  "jsonschema>=4.0"
 ]
 
 [project.optional-dependencies]
@@ -27,3 +28,7 @@ code-agnostic = "code_agnostic.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["code_agnostic*"]
+
+[tool.setuptools.package-data]
+"code_agnostic.apps.sync.apps.cursor" = ["schema.json"]
+"code_agnostic.apps.sync.apps.codex" = ["schema.json"]

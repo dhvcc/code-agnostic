@@ -7,7 +7,15 @@ from code_agnostic.__main__ import cli
 
 
 def _cursor_schema() -> dict:
-    schema_path = Path(__file__).parent / "schemas" / "cursor-mcp.schema.json"
+    schema_path = (
+        Path(__file__).resolve().parent.parent
+        / "code_agnostic"
+        / "apps"
+        / "sync"
+        / "apps"
+        / "cursor"
+        / "schema.json"
+    )
     return json.loads(schema_path.read_text(encoding="utf-8"))
 
 
@@ -74,3 +82,33 @@ def test_cursor_schema_rejects_server_without_command_or_url() -> None:
 
     errors = list(validator.iter_errors(invalid_payload))
     assert errors
+
+
+def test_apply_cursor_generates_schema_valid_config(
+    minimal_shared_config: Path,
+    common_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("cursor")
+    (common_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "local": {"command": "npx", "args": ["-y", "local-server"]},
+                    "remote": {"url": "https://example.com/mcp"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "cursor"])
+
+    assert result.exit_code == 0
+    payload = json.loads(
+        (tmp_path / ".cursor" / "mcp.json").read_text(encoding="utf-8")
+    )
+    validator = Draft202012Validator(_cursor_schema())
+    assert list(validator.iter_errors(payload)) == []

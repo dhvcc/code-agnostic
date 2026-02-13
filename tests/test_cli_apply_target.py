@@ -19,7 +19,9 @@ def _load_opencode_schema() -> dict:
     return json.loads(payload)
 
 
-def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+def test_apply_opencode_includes_workspace_repo_links(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
     enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
@@ -27,7 +29,9 @@ def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, 
     (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
-    add_result = cli_runner.invoke(cli, ["workspaces", "add", "workspace-example", str(workspace_root)])
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+    )
     assert add_result.exit_code == 0
 
     apply_result = cli_runner.invoke(cli, ["apply", "opencode"])
@@ -37,10 +41,13 @@ def test_apply_opencode_skips_workspace_repo_links(minimal_shared_config: Path, 
     assert opencode_config.exists()
 
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
-    assert not workspace_link.exists()
+    assert workspace_link.is_symlink()
+    assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
 
 
-def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+def test_apply_default_syncs_everything(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
     enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
@@ -48,7 +55,9 @@ def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: P
     (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
-    add_result = cli_runner.invoke(cli, ["workspaces", "add", "workspace-example", str(workspace_root)])
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+    )
     assert add_result.exit_code == 0
 
     apply_result = cli_runner.invoke(cli, ["apply"])
@@ -59,7 +68,9 @@ def test_apply_default_syncs_everything(minimal_shared_config: Path, tmp_path: P
     assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
 
 
-def test_apply_generates_opencode_schema_valid_config(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+def test_apply_generates_opencode_schema_valid_config(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
     enable_app("opencode")
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0

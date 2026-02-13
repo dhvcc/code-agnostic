@@ -61,6 +61,8 @@ Cursor and Codex MCP payload sync are gated behind app toggles.
 - App sync is opt-in: apps start disabled by default to reduce accidental data changes.
 - OpenCode sync normalizes MCP entries from `mcp.base.json` into OpenCode-compatible `mcp` config.
 - Workspace sync propagates a root rules file (`AGENTS.md`/`CLAUDE.md`) into git repos as symlinked `AGENTS.md`.
+- `plan`, `apply`, and `status` all accept an optional target argument: `all|opencode|cursor|codex`.
+- Workspace actions are app-agnostic building blocks and are included even when targeting a specific app.
 - Plan/apply/status behavior is stable in intent, but UX and command shape are still being refined.
 - Schema validation is part of tests for generated OpenCode config; Cursor schema coverage is intentionally scoped to fields we manage.
 

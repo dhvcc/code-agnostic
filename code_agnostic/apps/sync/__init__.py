@@ -1,8 +1,21 @@
 from code_agnostic.apps.sync.common import common_mcp_to_dto
-from code_agnostic.apps.sync.codex import CodexMCPMapper, CodexRepository
-from code_agnostic.apps.sync.cursor import CursorMCPMapper, CursorRepository
+from code_agnostic.apps.sync.codex import (
+    CodexConfigService,
+    CodexMCPMapper,
+    CodexRepository,
+)
+from code_agnostic.apps.sync.cursor import (
+    CursorConfigService,
+    CursorMCPMapper,
+    CursorRepository,
+)
 from code_agnostic.apps.sync.models import MCPAuthDTO, MCPServerDTO, MCPServerType
-from code_agnostic.apps.sync.opencode import OpenCodeMCPMapper, OpenCodeRepository
+from code_agnostic.apps.sync.opencode import (
+    OpenCodeConfigService,
+    OpenCodeMCPMapper,
+    OpenCodeRepository,
+)
+from code_agnostic.apps.sync.services import IAppConfigService
 
 __all__ = [
     "MCPAuthDTO",
@@ -15,4 +28,8 @@ __all__ = [
     "OpenCodeRepository",
     "CursorRepository",
     "CodexRepository",
+    "IAppConfigService",
+    "OpenCodeConfigService",
+    "CursorConfigService",
+    "CodexConfigService",
 ]

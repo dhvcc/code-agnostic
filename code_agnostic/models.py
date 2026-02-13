@@ -95,7 +95,11 @@ class SyncPlan:
         if target == SyncTarget.ALL:
             return self
         if target in (SyncTarget.CURSOR, SyncTarget.CODEX):
-            filtered = [action for action in self.actions if action.app == target.value]
+            filtered = [
+                action
+                for action in self.actions
+                if action.app in (target.value, "workspace")
+            ]
             return SyncPlan(actions=filtered, errors=self.errors, skipped=self.skipped)
 
         resolved_skills = skills_root.resolve()
@@ -103,6 +107,9 @@ class SyncPlan:
         filtered_actions: list[Action] = []
         for action in self.actions:
             if action.app in (SyncTarget.CURSOR.value, SyncTarget.CODEX.value):
+                continue
+            if action.app == "workspace":
+                filtered_actions.append(action)
                 continue
             if action.path == config_path:
                 filtered_actions.append(action)

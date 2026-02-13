@@ -21,6 +21,19 @@ class IAppConfigRepository(ABC):
     def root(self) -> Path:
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def config_path(self) -> Path:
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_config(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_config(self, payload: dict[str, Any]) -> None:
+        raise NotImplementedError
+
     @abstractmethod
     def load_mcp_payload(self) -> dict[str, Any]:
         raise NotImplementedError

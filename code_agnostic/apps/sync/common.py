@@ -15,6 +15,8 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
 
         headers = raw.get("headers")
         env = raw.get("env")
+        if not isinstance(env, dict):
+            env = raw.get("environment")
         auth_obj = raw.get("auth")
 
         auth: MCPAuthDTO | None = None

@@ -28,9 +28,11 @@
           "type": "array",
           "items": { "type": "string" }
         },
-        "env": { "$ref": "#/$defs/stringMap" }
+        "env": { "$ref": "#/$defs/stringMap" },
+        "headers": { "$ref": "#/$defs/stringMap" },
+        "auth": { "$ref": "#/$defs/stringMap" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "remoteServer": {
       "type": "object",
@@ -43,7 +45,7 @@
         "headers": { "$ref": "#/$defs/stringMap" },
         "auth": { "$ref": "#/$defs/stringMap" }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "server": {
       "oneOf": [

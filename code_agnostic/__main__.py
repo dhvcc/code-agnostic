@@ -1,16 +1,18 @@
 from pathlib import Path
-from typing import Dict
+from typing import Callable, Dict
 
 import click
 from rich.console import Console
 
 from code_agnostic.apps import AppsService
-from code_agnostic.apps.sync import (
+from code_agnostic.apps.sync import IAppConfigService, common_mcp_to_dto
+from code_agnostic.apps.sync.apps import (
+    CodexConfigService,
     CodexMCPMapper,
     CodexRepository,
+    CursorConfigService,
     CursorMCPMapper,
     CursorRepository,
-    common_mcp_to_dto,
 )
 from code_agnostic.errors import SyncAppError
 from code_agnostic.executor import SyncExecutor
@@ -30,6 +32,22 @@ from code_agnostic.repositories.opencode import OpenCodeRepository
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.workspaces import WorkspaceService
+
+
+TARGET_VALUES = [target.value for target in SyncTarget]
+
+
+def _target_argument(default: str = SyncTarget.ALL.value) -> Callable:
+    return click.argument(
+        "target",
+        required=False,
+        type=click.Choice(TARGET_VALUES, case_sensitive=False),
+        default=default,
+    )
+
+
+def _normalize_target(value: str) -> SyncTarget:
+    return SyncTarget(value.lower())
 
 
 def _repos_from_obj(
@@ -69,71 +87,19 @@ def _build_mcp_app_plan(common: CommonRepository, apps: AppsService) -> SyncPlan
     actions: list[Action] = []
     errors: list[Exception] = []
 
+    services: list[IAppConfigService] = []
     if AppId.CURSOR in enabled:
-        cursor_repo = CursorRepository()
-        cursor_mapper = CursorMCPMapper()
-        try:
-            existing_cursor = cursor_repo.load_config()
-            desired_cursor_mcp = cursor_mapper.from_common(desired_common)
-            merged_cursor = dict(existing_cursor)
-            merged_cursor["mcpServers"] = desired_cursor_mcp
-            existing_mcp = (
-                existing_cursor.get("mcpServers")
-                if isinstance(existing_cursor.get("mcpServers"), dict)
-                else {}
-            )
-            if not cursor_repo.config_path.exists():
-                status = ActionStatus.CREATE
-            elif existing_mcp == desired_cursor_mcp:
-                status = ActionStatus.NOOP
-            else:
-                status = ActionStatus.UPDATE
-            actions.append(
-                Action(
-                    kind=ActionKind.WRITE_JSON,
-                    path=cursor_repo.config_path,
-                    status=status,
-                    detail="sync cursor mcpServers from common mcp base",
-                    payload=merged_cursor,
-                    app=AppId.CURSOR.value,
-                )
-            )
-        except SyncAppError as exc:
-            errors.append(exc)
-
+        services.append(
+            CursorConfigService(repository=CursorRepository(), mapper=CursorMCPMapper())
+        )
     if AppId.CODEX in enabled:
-        codex_repo = CodexRepository()
-        codex_mapper = CodexMCPMapper()
+        services.append(
+            CodexConfigService(repository=CodexRepository(), mapper=CodexMCPMapper())
+        )
+
+    for service in services:
         try:
-            existing_codex = codex_repo.load_config()
-            desired_codex_mcp = codex_mapper.from_common(desired_common)
-            merged_codex = dict(existing_codex)
-            merged_codex["mcp_servers"] = desired_codex_mcp
-            rendered_codex = codex_repo.serialize_config(merged_codex)
-            existing_text = (
-                codex_repo.config_path.read_text(encoding="utf-8")
-                if codex_repo.config_path.exists()
-                else ""
-            )
-            status = (
-                ActionStatus.NOOP
-                if existing_text == rendered_codex
-                else (
-                    ActionStatus.CREATE
-                    if not codex_repo.config_path.exists()
-                    else ActionStatus.UPDATE
-                )
-            )
-            actions.append(
-                Action(
-                    kind=ActionKind.WRITE_TEXT,
-                    path=codex_repo.config_path,
-                    status=status,
-                    detail="sync codex mcp_servers from common mcp base",
-                    payload=rendered_codex,
-                    app=AppId.CODEX.value,
-                )
-            )
+            actions.append(service.build_action(desired_common))
         except SyncAppError as exc:
             errors.append(exc)
 
@@ -144,13 +110,33 @@ def _build_combined_plan(
     common: CommonRepository, opencode: OpenCodeRepository, apps: AppsService
 ) -> SyncPlan:
     enabled = set(apps.enabled_apps())
+
+    workspace_plan = SyncPlanner(
+        common=common,
+        opencode=opencode,
+        include_opencode=False,
+        include_workspace=True,
+    ).build()
+
     opencode_plan = SyncPlan(actions=[], errors=[], skipped=[])
     if AppId.OPENCODE in enabled:
-        opencode_plan = SyncPlanner(common=common, opencode=opencode).build()
+        opencode_plan = SyncPlanner(
+            common=common,
+            opencode=opencode,
+            include_opencode=True,
+            include_workspace=False,
+        ).build()
     mcp_apps_plan = _build_mcp_app_plan(common, apps)
-    if not enabled:
+
+    combined = _merge_plans(opencode_plan, mcp_apps_plan, workspace_plan)
+    if (
+        not enabled
+        and not combined.actions
+        and not combined.errors
+        and not combined.skipped
+    ):
         return _empty_plan("No apps enabled for sync.")
-    return _merge_plans(opencode_plan, mcp_apps_plan)
+    return combined
 
 
 def _scope_plan_for_target(
@@ -223,8 +209,9 @@ def cli(ctx: click.Context) -> None:
 
 
 @cli.command(help="Build and print a dry-run plan.")
+@_target_argument()
 @click.pass_obj
-def plan(obj: Dict[str, str]) -> None:
+def plan(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
     apps = AppsService(common)
@@ -234,19 +221,17 @@ def plan(obj: Dict[str, str]) -> None:
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
-    ui.render_plan(plan_result, mode="plan")
+    normalized_target = _normalize_target(target)
+    scoped_plan = _scope_plan_for_target(plan_result, normalized_target, opencode)
 
-    if plan_result.errors:
+    ui.render_plan(scoped_plan, mode=f"plan:{normalized_target.value}")
+
+    if scoped_plan.errors:
         raise click.exceptions.Exit(1)
 
 
 @cli.command(help="Apply planned sync changes.")
-@click.argument(
-    "target",
-    required=False,
-    type=click.Choice([target.value for target in SyncTarget], case_sensitive=False),
-    default=SyncTarget.ALL.value,
-)
+@_target_argument()
 @click.pass_obj
 def apply(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
@@ -258,7 +243,7 @@ def apply(obj: Dict[str, str], target: str) -> None:
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
-    normalized_target = SyncTarget(target.lower())
+    normalized_target = _normalize_target(target)
     scoped_plan = _scope_plan_for_target(plan_result, normalized_target, opencode)
 
     ui.render_plan(scoped_plan, mode=f"apply:{normalized_target.value}")
@@ -283,8 +268,9 @@ def apply(obj: Dict[str, str], target: str) -> None:
 
 
 @cli.command(help="Show sync status for editors and workspaces.")
+@_target_argument()
 @click.pass_obj
-def status(obj: Dict[str, str]) -> None:
+def status(obj: Dict[str, str], target: str) -> None:
     ui = SyncConsoleUI(Console())
     common, opencode = _repos_from_obj(obj)
     apps = AppsService(common)
@@ -303,11 +289,13 @@ def status(obj: Dict[str, str]) -> None:
             for app in AppId
         ]
 
-    workspace_rows = (
-        status_service.build_workspace_status(common)
-        if apps.is_enabled(AppId.OPENCODE)
-        else []
-    )
+    normalized_target = _normalize_target(target)
+    if normalized_target != SyncTarget.ALL:
+        editor_rows = [
+            row for row in editor_rows if row.name == normalized_target.value
+        ]
+
+    workspace_rows = status_service.build_workspace_status(common)
 
     ui.render_status(
         [item.as_dict() for item in editor_rows],

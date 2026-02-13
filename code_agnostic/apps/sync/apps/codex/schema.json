@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "mcp_servers": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "$ref": "#/definitions/RawMcpServerConfig"
+      }
+    }
+  },
+  "definitions": {
+    "RawMcpServerConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "args": { "type": "array", "items": { "type": "string" } },
+        "bearer_token": { "type": "string" },
+        "bearer_token_env_var": { "type": "string" },
+        "command": { "type": "string" },
+        "cwd": { "type": "string" },
+        "disabled_tools": { "type": "array", "items": { "type": "string" } },
+        "enabled": { "type": "boolean" },
+        "enabled_tools": { "type": "array", "items": { "type": "string" } },
+        "env": { "type": "object", "additionalProperties": { "type": "string" } },
+        "env_http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "env_vars": { "type": "array", "items": { "type": "string" } },
+        "http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "required": { "type": "boolean" },
+        "scopes": { "type": "array", "items": { "type": "string" } },
+        "startup_timeout_ms": { "type": "integer", "minimum": 0 },
+        "startup_timeout_sec": { "type": "number" },
+        "tool_timeout_sec": { "type": "number" },
+        "url": { "type": "string" }
+      }
+    }
+  }
+}

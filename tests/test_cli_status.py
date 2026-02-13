@@ -4,7 +4,9 @@ from code_agnostic.__main__ import cli
 from code_agnostic.constants import AGENTS_FILENAME
 
 
-def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app) -> None:
+def test_status_reports_editor_and_workspace_repo_sync(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
     enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
@@ -14,7 +16,9 @@ def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Pa
     (workspace_root / "service-web" / ".git").mkdir(parents=True)
     (workspace_root / "notes").mkdir()
 
-    add_result = cli_runner.invoke(cli, ["workspaces", "add", "workspace-example", str(workspace_root)])
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+    )
     assert add_result.exit_code == 0
 
     initial_status = cli_runner.invoke(cli, ["status"])
@@ -36,3 +40,15 @@ def test_status_reports_editor_and_workspace_repo_sync(minimal_shared_config: Pa
     assert "synced" in synced_status.output
     assert "service-api" in synced_status.output
     assert "service-web" in synced_status.output
+
+
+def test_status_can_scope_to_single_app(
+    minimal_shared_config: Path, cli_runner, enable_app
+) -> None:
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["status", "cursor"])
+
+    assert result.exit_code == 0
+    assert "cursor" in result.output
+    assert "opencode" not in result.output
