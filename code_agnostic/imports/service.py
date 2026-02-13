@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from code_agnostic.apps.app_id import app_metadata
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.utils import common_mcp_to_dto, dto_to_common_mcp
 from code_agnostic.core.repository import CoreRepository
@@ -143,16 +144,19 @@ class ImportService:
 
     @staticmethod
     def _default_sections_for_app(source_app: str) -> list[ImportSection]:
-        if source_app.lower() == "codex":
-            return [ImportSection.MCP, ImportSection.SKILLS]
-        return [ImportSection.MCP, ImportSection.SKILLS, ImportSection.AGENTS]
+        metadata = app_metadata(source_app.lower())
+        sections = [ImportSection.MCP, ImportSection.SKILLS]
+        if metadata.supports_import_agents:
+            sections.append(ImportSection.AGENTS)
+        return sections
 
     @staticmethod
     def _unsupported_sections(
         source_app: str, sections: list[ImportSection]
     ) -> list[ImportSection]:
         unsupported: list[ImportSection] = []
-        if source_app == "codex" and ImportSection.AGENTS in sections:
+        metadata = app_metadata(source_app)
+        if not metadata.supports_import_agents and ImportSection.AGENTS in sections:
             unsupported.append(ImportSection.AGENTS)
         return unsupported
 

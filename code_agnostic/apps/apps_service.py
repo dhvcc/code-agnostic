@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from code_agnostic.apps.app_id import AppId
+from code_agnostic.apps.app_id import AppId, app_ids_by_capability
 from code_agnostic.apps.common.framework import (
     create_registered_app_service,
     list_registered_app_services,
@@ -22,7 +22,12 @@ class AppsService:
         return self.core_repository.root / "config" / "apps.json"
 
     def available_apps(self) -> list[str]:
-        return [app.value for app in list_registered_app_services()]
+        registered = set(list_registered_app_services())
+        manageable = set(app_ids_by_capability(toggleable=True))
+        return [
+            app.value
+            for app in sorted(registered & manageable, key=lambda item: item.value)
+        ]
 
     def load_apps(self) -> dict[str, bool]:
         payload, error = read_json_safe(self.apps_path)

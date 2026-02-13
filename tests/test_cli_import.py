@@ -191,3 +191,27 @@ def test_import_apply_conflict_policy_fail(cli_runner, tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "conflict" in result.output.lower()
+
+
+def test_import_plan_default_view_shows_app_labels(cli_runner, tmp_path: Path) -> None:
+    _write_codex_source(tmp_path / ".codex", {"demo": {"command": "uvx"}})
+
+    result = cli_runner.invoke(cli, ["import", "plan", "codex"])
+
+    assert result.exit_code == 0
+    assert "Codex" in result.output
+    assert "Code Agnostic" in result.output
+    assert "Source Path" not in result.output
+    assert "Target Path" not in result.output
+
+
+def test_import_plan_verbose_view_shows_source_and_target_paths(
+    cli_runner, tmp_path: Path
+) -> None:
+    _write_codex_source(tmp_path / ".codex", {"demo": {"command": "uvx"}})
+
+    result = cli_runner.invoke(cli, ["import", "plan", "codex", "-v"])
+
+    assert result.exit_code == 0
+    assert "Path" in result.output
+    assert "~/" in result.output

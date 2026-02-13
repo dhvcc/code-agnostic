@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
-from code_agnostic.utils import backup_file, is_under, read_json_safe
+from code_agnostic.utils import (
+    backup_file,
+    compact_home_path,
+    compact_home_paths_in_text,
+    is_under,
+    read_json_safe,
+)
 
 
 # --- read_json_safe ---
@@ -96,3 +102,24 @@ def test_backup_file_creates_bak_copy(tmp_path: Path) -> None:
     assert ".bak-" in backup_path.name
     assert backup_path.read_text(encoding="utf-8") == '{"key": "value"}'
     assert original.exists()
+
+
+def test_compact_home_path_for_absolute_home_path(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    assert compact_home_path(tmp_path / ".cursor" / "mcp.json") == "~/.cursor/mcp.json"
+
+
+def test_compact_home_paths_in_text_rewrites_embedded_paths(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    message = (
+        f"Skipped conflict at {tmp_path / '.cursor' / 'mcp.json'} "
+        f"from {tmp_path / '.config' / 'code-agnostic' / 'config' / 'mcp.base.json'}"
+    )
+
+    result = compact_home_paths_in_text(message)
+
+    assert "~/.cursor/mcp.json" in result
+    assert "~/.config/code-agnostic/config/mcp.base.json" in result

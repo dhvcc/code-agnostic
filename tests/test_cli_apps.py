@@ -72,3 +72,15 @@ def test_status_reports_cursor_enabled_and_sync_state(
     assert result.exit_code == 0
     assert "cursor" in result.output
     assert "synced" in result.output
+
+
+def test_core_app_is_hidden_from_app_management_commands(
+    minimal_shared_config, cli_runner
+) -> None:
+    list_result = cli_runner.invoke(cli, ["apps", "list"])
+    assert list_result.exit_code == 0
+    assert "core" not in list_result.output.lower()
+
+    enable_result = cli_runner.invoke(cli, ["apps", "enable", "core"])
+    assert enable_result.exit_code != 0
+    assert "invalid value" in enable_result.output.lower()

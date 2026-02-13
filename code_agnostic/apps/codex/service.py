@@ -3,7 +3,7 @@ from typing import Any
 
 from jsonschema import Draft7Validator
 
-from code_agnostic.apps.app_id import AppId
+from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -25,6 +25,7 @@ from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 
 class CodexConfigService(RegisteredAppConfigService):
     APP_ID = AppId.CODEX
+    APP_LABEL = app_label(APP_ID)
 
     def __init__(
         self,
@@ -48,7 +49,7 @@ class CodexConfigService(RegisteredAppConfigService):
 
     @property
     def app_id(self) -> AppId:
-        return AppId.CODEX
+        return self.APP_ID
 
     @property
     def action_kind(self) -> ActionKind:

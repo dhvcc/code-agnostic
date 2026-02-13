@@ -4,6 +4,7 @@ from collections.abc import Callable
 import click
 from rich.console import Console
 
+from code_agnostic.apps.app_id import app_ids_by_capability
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.apps.common.framework import list_registered_app_services
 from code_agnostic.core.repository import CoreRepository
@@ -16,7 +17,33 @@ from code_agnostic.workspaces import WorkspaceService
 
 
 def _target_values() -> list[str]:
-    return ["all", *[app.value for app in list_registered_app_services()]]
+    registered = set(list_registered_app_services())
+    targetable = set(app_ids_by_capability(targetable=True))
+    return [
+        "all",
+        *[
+            app.value
+            for app in sorted(registered & targetable, key=lambda item: item.value)
+        ],
+    ]
+
+
+def _manageable_app_values() -> list[str]:
+    registered = set(list_registered_app_services())
+    manageable = set(app_ids_by_capability(toggleable=True))
+    return [
+        app.value
+        for app in sorted(registered & manageable, key=lambda item: item.value)
+    ]
+
+
+def _import_source_values() -> list[str]:
+    registered = set(list_registered_app_services())
+    importable = set(app_ids_by_capability(importable=True))
+    return [
+        app.value
+        for app in sorted(registered & importable, key=lambda item: item.value)
+    ]
 
 
 def _target_argument(default: str = "all") -> Callable:
@@ -67,8 +94,9 @@ def cli(ctx: click.Context) -> None:
 
 @cli.command(help="Build and print a dry-run plan.")
 @_target_argument()
+@click.option("-v", "--verbose", is_flag=True, default=False)
 @click.pass_obj
-def plan(obj: dict[str, str], target: str) -> None:
+def plan(obj: dict[str, str], target: str, verbose: bool) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     apps = AppsService(core)
@@ -78,7 +106,7 @@ def plan(obj: dict[str, str], target: str) -> None:
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
-    ui.render_plan(scoped_plan, mode=f"plan:{target.lower()}")
+    ui.render_plan(scoped_plan, mode=f"plan:{target.lower()}", verbose=verbose)
 
     if scoped_plan.errors:
         raise click.exceptions.Exit(1)
@@ -86,8 +114,9 @@ def plan(obj: dict[str, str], target: str) -> None:
 
 @cli.command(help="Apply planned sync changes.")
 @_target_argument()
+@click.option("-v", "--verbose", is_flag=True, default=False)
 @click.pass_obj
-def apply(obj: dict[str, str], target: str) -> None:
+def apply(obj: dict[str, str], target: str, verbose: bool) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     apps = AppsService(core)
@@ -97,7 +126,7 @@ def apply(obj: dict[str, str], target: str) -> None:
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
-    ui.render_plan(scoped_plan, mode=f"apply:{target.lower()}")
+    ui.render_plan(scoped_plan, mode=f"apply:{target.lower()}", verbose=verbose)
 
     if not scoped_plan.actions and not scoped_plan.errors:
         ui.render_apply_result(applied=0, failed=0, failures=[])
@@ -165,7 +194,9 @@ def apps_list(obj: dict[str, str]) -> None:
 
 
 @apps.command("enable", help="Enable app sync target.")
-@click.argument("name", type=click.Choice(_target_values()[1:], case_sensitive=False))
+@click.argument(
+    "name", type=click.Choice(_manageable_app_values(), case_sensitive=False)
+)
 @click.pass_obj
 def apps_enable(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
@@ -176,7 +207,9 @@ def apps_enable(obj: dict[str, str], name: str) -> None:
 
 
 @apps.command("disable", help="Disable app sync target.")
-@click.argument("name", type=click.Choice(_target_values()[1:], case_sensitive=False))
+@click.argument(
+    "name", type=click.Choice(_manageable_app_values(), case_sensitive=False)
+)
 @click.pass_obj
 def apps_disable(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
@@ -259,7 +292,7 @@ def _parse_import_sections(items: tuple[str, ...]) -> list[ImportSection] | None
 @import_group.command("plan", help="Plan import from source app into hub.")
 @click.argument(
     "source_app",
-    type=click.Choice([item.value for item in list_registered_app_services()]),
+    type=click.Choice(_import_source_values()),
 )
 @click.option(
     "--include",
@@ -283,6 +316,7 @@ def _parse_import_sections(items: tuple[str, ...]) -> list[ImportSection] | None
 )
 @click.option("--source-root", type=click.Path(path_type=Path))
 @click.option("--follow-symlinks", is_flag=True, default=False)
+@click.option("-v", "--verbose", is_flag=True, default=False)
 @click.pass_obj
 def import_plan(
     obj: dict[str, str],
@@ -292,6 +326,7 @@ def import_plan(
     on_conflict: str,
     source_root: Path | None,
     follow_symlinks: bool,
+    verbose: bool,
 ) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
@@ -305,7 +340,11 @@ def import_plan(
         source_root=source_root,
         follow_symlinks=follow_symlinks,
     )
-    ui.render_import_plan(plan, mode=f"import:plan:{source_app.lower()}")
+    ui.render_import_plan(
+        plan,
+        mode=f"import:plan:{source_app.lower()}",
+        verbose=verbose,
+    )
 
     if plan.errors:
         raise click.exceptions.Exit(1)
@@ -314,7 +353,7 @@ def import_plan(
 @import_group.command("apply", help="Apply import from source app into hub.")
 @click.argument(
     "source_app",
-    type=click.Choice([item.value for item in list_registered_app_services()]),
+    type=click.Choice(_import_source_values()),
 )
 @click.option(
     "--include",
@@ -338,6 +377,7 @@ def import_plan(
 )
 @click.option("--source-root", type=click.Path(path_type=Path))
 @click.option("--follow-symlinks", is_flag=True, default=False)
+@click.option("-v", "--verbose", is_flag=True, default=False)
 @click.pass_obj
 def import_apply(
     obj: dict[str, str],
@@ -347,6 +387,7 @@ def import_apply(
     on_conflict: str,
     source_root: Path | None,
     follow_symlinks: bool,
+    verbose: bool,
 ) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
@@ -360,7 +401,11 @@ def import_apply(
         source_root=source_root,
         follow_symlinks=follow_symlinks,
     )
-    ui.render_import_plan(plan, mode=f"import:apply:{source_app.lower()}")
+    ui.render_import_plan(
+        plan,
+        mode=f"import:apply:{source_app.lower()}",
+        verbose=verbose,
+    )
 
     if plan.errors:
         raise click.ClickException("Import aborted due to conflicts/errors above.")

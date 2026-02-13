@@ -6,6 +6,7 @@ from rich.panel import Panel
 from rich.table import Column, Table
 from rich.text import Text
 
+from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.imports.models import ImportAction, ImportActionStatus, ImportPlan
 from code_agnostic.models import (
@@ -20,6 +21,7 @@ from code_agnostic.models import (
     WorkspaceSyncStatus,
 )
 from code_agnostic.tui.enums import ACTION_STATUS_STYLE, UIStyle
+from code_agnostic.utils import compact_home_path
 
 
 IMPORT_STATUS_STYLE = {
@@ -60,26 +62,60 @@ class PlanTable:
         return app_actions, workspace_actions
 
     @staticmethod
-    def actions_table(actions: list[Action]) -> Table:
-        table = Table(
+    def actions_table(actions: list[Action], verbose: bool = False) -> Table:
+        columns = [
             Column(header="Type", width=12),
             Column(header="Status", width=10),
-            Column(header="Target", overflow="ellipsis", max_width=58),
-            Column(header="Source", overflow="ellipsis", max_width=42),
-            Column(header="Reason", overflow="ellipsis"),
-            expand=True,
-            header_style="bold",
-        )
+            Column(header="Source", overflow="ellipsis", max_width=28),
+            Column(header="Target", overflow="ellipsis", max_width=28),
+        ]
+        if verbose:
+            columns.extend(
+                [
+                    Column(header="Source Path", overflow="ellipsis", max_width=40),
+                    Column(header="Target Path", overflow="ellipsis", max_width=40),
+                ]
+            )
+        columns.append(Column(header="Reason", overflow="ellipsis"))
+
+        table = Table(*columns, expand=True, header_style="bold")
 
         for action in actions:
-            source = str(action.source) if action.source is not None else ""
             status_value = action.status.value
             status_style = ACTION_STATUS_STYLE.get(action.status, UIStyle.WHITE.value)
             status_text = f"[{status_style}]{status_value}[/{status_style}]"
-            table.add_row(
-                action.kind.value, status_text, str(action.path), source, action.detail
-            )
+            base_values = [
+                action.kind.value,
+                status_text,
+                PlanTable._source_label_for_action(action),
+                PlanTable._target_label_for_action(action),
+            ]
+            if verbose:
+                base_values.extend(
+                    [
+                        compact_home_path(action.source)
+                        if action.source is not None
+                        else "",
+                        compact_home_path(action.path),
+                    ]
+                )
+            base_values.append(action.detail)
+            table.add_row(*base_values)
         return table
+
+    @staticmethod
+    def _source_label_for_action(action: Action) -> str:
+        if action.app == "workspace":
+            return "Workspace"
+        return app_label(AppId.CORE)
+
+    @staticmethod
+    def _target_label_for_action(action: Action) -> str:
+        if action.app is None:
+            return app_label(AppId.CORE)
+        if action.app == "workspace":
+            return "Workspace"
+        return app_label(action.app)
 
 
 class ApplyTable:
@@ -110,7 +146,9 @@ class WorkspaceTable:
             header_style="bold",
         )
         for item in items:
-            table.add_row(item["name"], item["path"], str(len(item["repos"])))
+            table.add_row(
+                item["name"], compact_home_path(item["path"]), str(len(item["repos"]))
+            )
         return table
 
     @staticmethod
@@ -256,34 +294,55 @@ class ImportTable:
         table.add_column(style="bold")
         table.add_column()
         table.add_row("Mode", mode)
-        table.add_row("Source", plan.source_app)
+        table.add_row("Source", app_label(plan.source_app))
         table.add_row("Sections", ", ".join(section.value for section in plan.sections))
         table.add_row("Actions", str(len(plan.actions)))
         table.add_row("Statuses", "  ".join(chips))
         return table
 
     @staticmethod
-    def actions_table(actions: list[ImportAction]) -> Table:
-        table = Table(
+    def actions_table(
+        actions: list[ImportAction], source_app: str, verbose: bool = False
+    ) -> Table:
+        columns = [
             Column(header="Section", width=10),
             Column(header="Status", width=10),
-            Column(header="Source", overflow="ellipsis", max_width=50),
-            Column(header="Target", overflow="ellipsis", max_width=50),
-            Column(header="Detail", overflow="ellipsis"),
-            expand=True,
-            header_style="bold",
-        )
+            Column(header="Source", overflow="ellipsis", max_width=22),
+            Column(header="Target", overflow="ellipsis", max_width=22),
+        ]
+        if verbose:
+            columns.extend(
+                [
+                    Column(header="Source Path", overflow="ellipsis", max_width=44),
+                    Column(header="Target Path", overflow="ellipsis", max_width=44),
+                ]
+            )
+        columns.append(Column(header="Detail", overflow="ellipsis"))
+
+        table = Table(*columns, expand=True, header_style="bold")
 
         for action in actions:
             style = IMPORT_STATUS_STYLE.get(action.status, UIStyle.WHITE.value)
             status_text = f"[{style}]{action.status.value}[/{style}]"
-            table.add_row(
+            values = [
                 action.section.value,
                 status_text,
-                str(action.source) if action.source is not None else "",
-                str(action.target) if action.target is not None else "",
-                action.detail,
-            )
+                app_label(source_app),
+                app_label(AppId.CORE),
+            ]
+            if verbose:
+                values.extend(
+                    [
+                        compact_home_path(action.source)
+                        if action.source is not None
+                        else "",
+                        compact_home_path(action.target)
+                        if action.target is not None
+                        else "",
+                    ]
+                )
+            values.append(action.detail)
+            table.add_row(*values)
         return table
 
     @staticmethod

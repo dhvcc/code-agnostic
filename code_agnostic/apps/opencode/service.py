@@ -3,7 +3,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from code_agnostic.apps.app_id import AppId
+from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
@@ -26,6 +26,7 @@ from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 
 class OpenCodeConfigService(RegisteredAppConfigService):
     APP_ID = AppId.OPENCODE
+    APP_LABEL = app_label(APP_ID)
 
     def __init__(
         self,
@@ -53,7 +54,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
 
     @property
     def app_id(self) -> AppId:
-        return AppId.OPENCODE
+        return self.APP_ID
 
     @property
     def action_kind(self) -> ActionKind:

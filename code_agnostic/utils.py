@@ -44,3 +44,21 @@ def is_under(path: Path, root: Path) -> bool:
         return True
     except Exception:
         return False
+
+
+def compact_home_path(path: str | Path) -> str:
+    text = str(path)
+    home = str(Path.home())
+    if text == home:
+        return "~"
+    home_prefix = f"{home}/"
+    if text.startswith(home_prefix):
+        return f"~/{text[len(home_prefix):]}"
+    return text
+
+
+def compact_home_paths_in_text(text: str) -> str:
+    home = str(Path.home())
+    if text == home:
+        return "~"
+    return text.replace(f"{home}/", "~/")

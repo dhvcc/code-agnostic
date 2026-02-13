@@ -61,3 +61,29 @@ def test_plan_missing_mcp_base_json(tmp_path: Path, cli_runner, enable_app) -> N
     result = cli_runner.invoke(cli, ["plan"])
 
     assert result.exit_code == 0
+
+
+def test_plan_default_view_shows_app_labels_not_paths(
+    minimal_shared_config: Path, cli_runner, enable_app
+) -> None:
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["plan", "cursor"])
+
+    assert result.exit_code == 0
+    assert "Code Agnostic" in result.output
+    assert "Cursor" in result.output
+    assert "Source Path" not in result.output
+    assert "Target Path" not in result.output
+
+
+def test_plan_verbose_view_shows_path_columns_with_home_shorthand(
+    minimal_shared_config: Path, cli_runner, enable_app
+) -> None:
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["plan", "cursor", "-v"])
+
+    assert result.exit_code == 0
+    assert "Path" in result.output
+    assert "~/" in result.output

@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import Any, ClassVar, cast
 
-from code_agnostic.apps.app_id import AppId
+from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 
 
@@ -30,6 +30,13 @@ class AppServiceRegistryMeta(ABCMeta):
 
 class RegisteredAppConfigService(IAppConfigService, metaclass=AppServiceRegistryMeta):
     APP_ID: ClassVar[AppId | None] = None
+    APP_LABEL: ClassVar[str | None] = None
+
+    @property
+    def app_label(self) -> str:
+        if self.APP_LABEL is not None:
+            return self.APP_LABEL
+        return app_label(self.app_id)
 
     @classmethod
     @abstractmethod

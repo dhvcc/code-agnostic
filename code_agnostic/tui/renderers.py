@@ -18,13 +18,14 @@ from code_agnostic.tui.tables import (
     StatusTable,
     WorkspaceTable,
 )
+from code_agnostic.utils import compact_home_path, compact_home_paths_in_text
 
 
 class SyncConsoleUI:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
 
-    def render_plan(self, plan: SyncPlan, mode: str) -> None:
+    def render_plan(self, plan: SyncPlan, mode: str, verbose: bool = False) -> None:
         app_actions, workspace_actions = PlanTable.split_actions(plan)
 
         self.console.print(
@@ -39,7 +40,7 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.wrap(
                     "app config sync",
-                    PlanTable.actions_table(app_actions),
+                    PlanTable.actions_table(app_actions, verbose=verbose),
                     style=UIStyle.CYAN.value,
                 )
             )
@@ -47,7 +48,7 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.wrap(
                     "workspace links",
-                    PlanTable.actions_table(workspace_actions),
+                    PlanTable.actions_table(workspace_actions, verbose=verbose),
                     style=UIStyle.MAGENTA.value,
                 )
             )
@@ -59,13 +60,17 @@ class SyncConsoleUI:
             )
 
         if plan.errors:
-            errors_text = "\n".join([f"- {item}" for item in plan.errors])
+            errors_text = "\n".join(
+                [f"- {compact_home_paths_in_text(str(item))}" for item in plan.errors]
+            )
             self.console.print(
                 UISection.note("errors", errors_text, style=UIStyle.RED.value)
             )
 
         if plan.skipped:
-            skipped_text = "\n".join([f"- {item}" for item in plan.skipped])
+            skipped_text = "\n".join(
+                [f"- {compact_home_paths_in_text(item)}" for item in plan.skipped]
+            )
             self.console.print(
                 UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
             )
@@ -85,7 +90,9 @@ class SyncConsoleUI:
     ) -> None:
         self.console.print(ApplyTable.stats_panel(applied=applied, failed=failed))
         if failures:
-            failure_text = "\n".join([f"- {item}" for item in failures])
+            failure_text = "\n".join(
+                [f"- {compact_home_paths_in_text(item)}" for item in failures]
+            )
             self.console.print(
                 UISection.note("failures", failure_text, style=UIStyle.RED.value)
             )
@@ -98,7 +105,7 @@ class SyncConsoleUI:
         self.console.print(
             UISection.note(
                 "workspace",
-                f"Workspace {verb}: [bold]{name}[/bold]\n{path}",
+                f"Workspace {verb}: [bold]{name}[/bold]\n{compact_home_path(path)}",
                 style=border_style,
             )
         )
@@ -178,7 +185,9 @@ class SyncConsoleUI:
             )
         )
 
-    def render_import_plan(self, plan: ImportPlan, mode: str) -> None:
+    def render_import_plan(
+        self, plan: ImportPlan, mode: str, verbose: bool = False
+    ) -> None:
         mcp_actions, skill_actions, agent_actions = ImportTable.split_actions(plan)
 
         self.console.print(
@@ -193,7 +202,9 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.wrap(
                     "mcp import",
-                    ImportTable.actions_table(mcp_actions),
+                    ImportTable.actions_table(
+                        mcp_actions, source_app=plan.source_app, verbose=verbose
+                    ),
                     style=UIStyle.CYAN.value,
                 )
             )
@@ -201,7 +212,9 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.wrap(
                     "skills import",
-                    ImportTable.actions_table(skill_actions),
+                    ImportTable.actions_table(
+                        skill_actions, source_app=plan.source_app, verbose=verbose
+                    ),
                     style=UIStyle.MAGENTA.value,
                 )
             )
@@ -209,18 +222,24 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.wrap(
                     "agents import",
-                    ImportTable.actions_table(agent_actions),
+                    ImportTable.actions_table(
+                        agent_actions, source_app=plan.source_app, verbose=verbose
+                    ),
                     style=UIStyle.GREEN.value,
                 )
             )
 
         if plan.errors:
-            errors_text = "\n".join([f"- {item}" for item in plan.errors])
+            errors_text = "\n".join(
+                [f"- {compact_home_paths_in_text(item)}" for item in plan.errors]
+            )
             self.console.print(
                 UISection.note("errors", errors_text, style=UIStyle.RED.value)
             )
         if plan.skipped:
-            skipped_text = "\n".join([f"- {item}" for item in plan.skipped])
+            skipped_text = "\n".join(
+                [f"- {compact_home_paths_in_text(item)}" for item in plan.skipped]
+            )
             self.console.print(
                 UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
             )

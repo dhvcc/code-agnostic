@@ -17,6 +17,11 @@ class IAppConfigService(ABC):
 
     @property
     @abstractmethod
+    def app_label(self) -> str:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
     def action_kind(self) -> ActionKind:
         raise NotImplementedError
 
