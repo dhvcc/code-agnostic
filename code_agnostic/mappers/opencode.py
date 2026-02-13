@@ -1,6 +1,7 @@
 from typing import Any
 
-from code_agnostic.apps.sync import OpenCodeMCPMapper, common_mcp_to_dto
+from code_agnostic.apps.sync.apps.opencode.mapper import OpenCodeMCPMapper
+from code_agnostic.apps.sync.common import common_mcp_to_dto
 from code_agnostic.mappers.base import IConfigMapper
 
 

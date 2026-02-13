@@ -1,27 +1,3 @@
-from code_agnostic.apps.sync.apps.codex import (
-    CodexConfigService,
-    CodexMCPMapper,
-    CodexRepository,
-)
-from code_agnostic.apps.sync.apps.cursor import (
-    CursorConfigService,
-    CursorMCPMapper,
-    CursorRepository,
-)
-from code_agnostic.apps.sync.apps.opencode import (
-    OpenCodeConfigService,
-    OpenCodeMCPMapper,
-    OpenCodeRepository,
-)
+from code_agnostic.apps.sync.apps.loader import load_app_service_modules
 
-__all__ = [
-    "OpenCodeMCPMapper",
-    "OpenCodeRepository",
-    "OpenCodeConfigService",
-    "CursorMCPMapper",
-    "CursorRepository",
-    "CursorConfigService",
-    "CodexMCPMapper",
-    "CodexRepository",
-    "CodexConfigService",
-]
+__all__ = ["load_app_service_modules"]

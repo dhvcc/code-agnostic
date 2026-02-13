@@ -1,14 +1,22 @@
 from typing import Any
 
 from code_agnostic.apps.sync.base import IAppConfigRepository, IAppMCPMapper
-from code_agnostic.apps.sync.framework import IAppConfigService
+from code_agnostic.apps.sync.framework import RegisteredAppConfigService
+from code_agnostic.apps.sync.apps.opencode.mapper import OpenCodeMCPMapper
+from code_agnostic.apps.sync.apps.opencode.repository import OpenCodeRepository
 from code_agnostic.models import ActionKind, ActionStatus, AppId
 
 
-class OpenCodeConfigService(IAppConfigService):
+class OpenCodeConfigService(RegisteredAppConfigService):
+    APP_ID = AppId.OPENCODE
+
     def __init__(self, repository: IAppConfigRepository, mapper: IAppMCPMapper) -> None:
         self._repository = repository
         self._mapper = mapper
+
+    @classmethod
+    def create_default(cls) -> "OpenCodeConfigService":
+        return cls(repository=OpenCodeRepository(), mapper=OpenCodeMCPMapper())
 
     @property
     def app_id(self) -> AppId:

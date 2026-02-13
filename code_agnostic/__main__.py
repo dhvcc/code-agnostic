@@ -5,14 +5,10 @@ import click
 from rich.console import Console
 
 from code_agnostic.apps import AppsService
-from code_agnostic.apps.sync import IAppConfigService, common_mcp_to_dto
-from code_agnostic.apps.sync.apps import (
-    CodexConfigService,
-    CodexMCPMapper,
-    CodexRepository,
-    CursorConfigService,
-    CursorMCPMapper,
-    CursorRepository,
+from code_agnostic.apps.sync.common import common_mcp_to_dto
+from code_agnostic.apps.sync.framework import (
+    RegisteredAppConfigService,
+    create_registered_app_service,
 )
 from code_agnostic.errors import SyncAppError
 from code_agnostic.executor import SyncExecutor
@@ -87,15 +83,14 @@ def _build_mcp_app_plan(common: CommonRepository, apps: AppsService) -> SyncPlan
     actions: list[Action] = []
     errors: list[Exception] = []
 
-    services: list[IAppConfigService] = []
-    if AppId.CURSOR in enabled:
-        services.append(
-            CursorConfigService(repository=CursorRepository(), mapper=CursorMCPMapper())
-        )
-    if AppId.CODEX in enabled:
-        services.append(
-            CodexConfigService(repository=CodexRepository(), mapper=CodexMCPMapper())
-        )
+    services: list[RegisteredAppConfigService] = []
+    for app in sorted(enabled, key=lambda item: item.value):
+        if app == AppId.OPENCODE:
+            continue
+        try:
+            services.append(create_registered_app_service(app))
+        except KeyError:
+            continue
 
     for service in services:
         try:

@@ -1,7 +1,7 @@
 import json
-from abc import ABC, abstractmethod
+from abc import ABC, ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from code_agnostic.apps.sync.base import IAppConfigRepository, IAppMCPMapper
 from code_agnostic.apps.sync.models import MCPServerDTO
@@ -76,3 +76,49 @@ class IAppConfigService(ABC):
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
         )
+
+
+class AppServiceRegistryMeta(ABCMeta):
+    _registry: dict[AppId, type["RegisteredAppConfigService"]] = {}
+
+    def __new__(
+        mcls,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+        **kwargs: Any,
+    ):
+        cls = super().__new__(mcls, name, bases, namespace, **kwargs)
+        app_id = getattr(cls, "APP_ID", None)
+        is_abstract = bool(getattr(cls, "__abstractmethods__", False))
+        if app_id is not None and not is_abstract:
+            mcls._registry[app_id] = cls
+        return cls
+
+
+class RegisteredAppConfigService(IAppConfigService, metaclass=AppServiceRegistryMeta):
+    APP_ID: ClassVar[AppId | None] = None
+
+    @classmethod
+    @abstractmethod
+    def create_default(cls) -> "RegisteredAppConfigService":
+        raise NotImplementedError
+
+
+def list_registered_app_services() -> list[AppId]:
+    _load_registered_modules()
+    return sorted(AppServiceRegistryMeta._registry.keys(), key=lambda item: item.value)
+
+
+def create_registered_app_service(app_id: AppId) -> RegisteredAppConfigService:
+    _load_registered_modules()
+    service_class = AppServiceRegistryMeta._registry.get(app_id)
+    if service_class is None:
+        raise KeyError(f"No app service registered for: {app_id.value}")
+    return service_class.create_default()
+
+
+def _load_registered_modules() -> None:
+    from code_agnostic.apps.sync.apps.loader import load_app_service_modules
+
+    load_app_service_modules()

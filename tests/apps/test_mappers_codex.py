@@ -1,4 +1,4 @@
-from code_agnostic.apps.sync.codex import CodexMCPMapper
+from code_agnostic.apps.sync.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.sync.models import MCPServerDTO, MCPServerType
 
 

@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from code_agnostic.apps.sync.codex import CodexRepository
-from code_agnostic.apps.sync.cursor import CursorRepository
-from code_agnostic.apps.sync.opencode import OpenCodeRepository
+from code_agnostic.apps.sync.apps.codex.repository import CodexRepository
+from code_agnostic.apps.sync.apps.cursor.repository import CursorRepository
+from code_agnostic.apps.sync.apps.opencode.repository import OpenCodeRepository
 
 
 def test_opencode_repository_reads_and_writes_mcp(write_json, tmp_path: Path) -> None:

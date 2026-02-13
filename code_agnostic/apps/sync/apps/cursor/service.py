@@ -5,21 +5,28 @@ from jsonschema import Draft202012Validator
 
 from code_agnostic.apps.sync.base import IAppConfigRepository, IAppMCPMapper
 from code_agnostic.apps.sync.framework import (
-    IAppConfigService,
+    RegisteredAppConfigService,
     format_schema_error,
     load_json_schema,
 )
+from code_agnostic.apps.sync.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.sync.apps.cursor.repository import CursorRepository
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import ActionKind, ActionStatus, AppId
 
 
-class CursorConfigService(IAppConfigService):
+class CursorConfigService(RegisteredAppConfigService):
+    APP_ID = AppId.CURSOR
+
     def __init__(self, repository: CursorRepository, mapper: IAppMCPMapper) -> None:
         self._repository = repository
         self._mapper = mapper
         schema_path = Path(__file__).resolve().parent / "schema.json"
         self._validator = Draft202012Validator(load_json_schema(schema_path))
+
+    @classmethod
+    def create_default(cls) -> "CursorConfigService":
+        return cls(repository=CursorRepository(), mapper=CursorMCPMapper())
 
     @property
     def app_id(self) -> AppId:

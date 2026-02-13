@@ -5,21 +5,28 @@ from jsonschema import Draft7Validator
 
 from code_agnostic.apps.sync.base import IAppConfigRepository, IAppMCPMapper
 from code_agnostic.apps.sync.framework import (
-    IAppConfigService,
+    RegisteredAppConfigService,
     format_schema_error,
     load_json_schema,
 )
+from code_agnostic.apps.sync.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.sync.apps.codex.repository import CodexRepository
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import ActionKind, ActionStatus, AppId
 
 
-class CodexConfigService(IAppConfigService):
+class CodexConfigService(RegisteredAppConfigService):
+    APP_ID = AppId.CODEX
+
     def __init__(self, repository: CodexRepository, mapper: IAppMCPMapper) -> None:
         self._repository = repository
         self._mapper = mapper
         schema_path = Path(__file__).resolve().parent / "schema.json"
         self._validator = Draft7Validator(load_json_schema(schema_path))
+
+    @classmethod
+    def create_default(cls) -> "CodexConfigService":
+        return cls(repository=CodexRepository(), mapper=CodexMCPMapper())
 
     @property
     def app_id(self) -> AppId:

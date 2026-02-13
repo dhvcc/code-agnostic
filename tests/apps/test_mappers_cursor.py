@@ -1,4 +1,4 @@
-from code_agnostic.apps.sync.cursor import CursorMCPMapper
+from code_agnostic.apps.sync.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.sync.models import MCPAuthDTO, MCPServerDTO, MCPServerType
 
 
