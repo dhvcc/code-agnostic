@@ -17,6 +17,7 @@ class AppMetadata:
     toggleable: bool
     importable: bool
     supports_import_agents: bool
+    project_dir_name: str | None = None
 
 
 APP_CATALOG: dict[AppId, AppMetadata] = {
@@ -27,6 +28,7 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         toggleable=False,
         importable=False,
         supports_import_agents=True,
+        project_dir_name=None,
     ),
     AppId.OPENCODE: AppMetadata(
         app_id=AppId.OPENCODE,
@@ -35,6 +37,7 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         toggleable=True,
         importable=True,
         supports_import_agents=True,
+        project_dir_name=".opencode",
     ),
     AppId.CURSOR: AppMetadata(
         app_id=AppId.CURSOR,
@@ -43,6 +46,7 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         toggleable=True,
         importable=True,
         supports_import_agents=True,
+        project_dir_name=".cursor",
     ),
     AppId.CODEX: AppMetadata(
         app_id=AppId.CODEX,
@@ -51,6 +55,7 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         toggleable=True,
         importable=True,
         supports_import_agents=False,
+        project_dir_name=".codex",
     ),
 }
 

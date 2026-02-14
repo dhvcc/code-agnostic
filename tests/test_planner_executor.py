@@ -57,7 +57,6 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     workspace_root = tmp_path / "example-workspace"
 
     workspace_root.mkdir()
-    (workspace_root / "CLAUDE.md").write_text("workspace rules", encoding="utf-8")
     (workspace_root / "shop-api" / ".git").mkdir(parents=True)
     (workspace_root / "shop-web" / ".git").mkdir(parents=True)
 
@@ -87,6 +86,11 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
 
     core = CoreRepository(core_root)
     core.add_workspace("workspace-example", workspace_root)
+
+    # Create workspace config with rules in workspace config dir
+    ws_config_dir = core.workspace_config_dir("workspace-example")
+    (ws_config_dir / "AGENTS.md").write_text("workspace rules", encoding="utf-8")
+
     opencode_config_path = opencode_root / "opencode.json"
 
     plan = SyncPlanner(
@@ -130,10 +134,14 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     for repo_name in ["shop-api", "shop-web"]:
         link_path = workspace_root / repo_name / AGENTS_FILENAME
         assert link_path.is_symlink()
-        assert link_path.resolve() == (workspace_root / "CLAUDE.md").resolve()
+        assert link_path.resolve() == (ws_config_dir / "AGENTS.md").resolve()
 
-    state = core.load_state()
-    assert len(state["managed_links"]["workspace"]) == 2
+    # Workspace state is persisted in workspace state file
+    from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
+
+    ws_repo = WorkspaceConfigRepository(root=ws_config_dir)
+    ws_state = ws_repo.load_state()
+    assert len(ws_state["managed_links"]["rules"]) == 2
 
 
 def test_plan_marks_config_create_when_missing(

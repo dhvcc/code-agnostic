@@ -2,21 +2,12 @@ import os
 from pathlib import Path
 
 from code_agnostic.constants import (
-    AGENTS_FILENAME,
     GIT_DIRNAME,
     WORKSPACE_IGNORED_DIRS,
-    WORKSPACE_RULE_FILES,
 )
 
 
 class WorkspaceService:
-    def resolve_rules_file(self, workspace_path: Path) -> Path | None:
-        for candidate in WORKSPACE_RULE_FILES:
-            rule_path = workspace_path / candidate
-            if rule_path.exists() and rule_path.is_file():
-                return rule_path
-        return None
-
     def discover_git_repos(self, workspace_path: Path) -> list[Path]:
         repos: list[Path] = []
         workspace_real = workspace_path.resolve()
@@ -37,12 +28,3 @@ class WorkspaceService:
             ]
 
         return sorted(set(repos))
-
-    def workspace_sync_targets(
-        self, workspace_path: Path, rules_file: Path | None
-    ) -> list[Path]:
-        if rules_file is None:
-            return []
-        return [
-            repo / AGENTS_FILENAME for repo in self.discover_git_repos(workspace_path)
-        ]

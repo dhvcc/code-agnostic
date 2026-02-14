@@ -62,6 +62,7 @@ class Action:
     payload: Any | None = None
     app: str | None = None
     scope: str | None = None
+    workspace: str | None = None
 
 
 @dataclass

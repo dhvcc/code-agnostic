@@ -1,6 +1,36 @@
 from pathlib import Path
+from typing import Any
 
 from code_agnostic.models import Action, ActionKind, ActionStatus
+
+
+def plan_resource_symlinks(
+    sources: list[Path],
+    target_dir: Path,
+    scope: str,
+    app: str,
+) -> tuple[list[Action], list[Path], list[str]]:
+    """Plan symlinks for a set of resources (skills or agents).
+    Returns (actions, desired_link_paths, skipped_messages).
+    """
+    actions: list[Action] = []
+    desired: list[Path] = []
+    skipped: list[str] = []
+    for source in sources:
+        target = target_dir / source.name
+        desired.append(target)
+        action = plan_symlink(target, source, scope=scope, app=app)
+        actions.append(action)
+        if action.status == ActionStatus.CONFLICT:
+            skipped.append(f"Link skipped (conflict): {action.path}")
+    return actions, desired, skipped
+
+
+def load_state_links(managed_links: dict[str, Any], scope: str) -> list[Path]:
+    raw = managed_links.get(scope, [])
+    if not isinstance(raw, list):
+        return []
+    return [Path(item) for item in raw if isinstance(item, str)]
 
 
 def plan_symlink(

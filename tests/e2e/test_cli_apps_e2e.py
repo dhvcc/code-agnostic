@@ -134,7 +134,6 @@ def test_stale_workspace_cleanup_e2e(
 
     workspace_root = tmp_path / "ws"
     workspace_root.mkdir()
-    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
@@ -142,14 +141,19 @@ def test_stale_workspace_cleanup_e2e(
     )
     assert add_result.exit_code == 0
 
+    # Create workspace config with rules
+    core_root = tmp_path / ".config" / "code-agnostic"
+    ws_config_dir = core_root / "workspaces" / "myws"
+    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+
     apply1 = cli_runner.invoke(cli, ["apply"])
     assert apply1.exit_code == 0
 
     link = workspace_root / "repo-a" / AGENTS_FILENAME
     assert link.is_symlink()
 
-    remove_result = cli_runner.invoke(cli, ["workspaces", "remove", "myws"])
-    assert remove_result.exit_code == 0
+    # Remove workspace config rules (simulates removing config)
+    (ws_config_dir / AGENTS_FILENAME).unlink()
 
     apply2 = cli_runner.invoke(cli, ["apply"])
     assert apply2.exit_code == 0

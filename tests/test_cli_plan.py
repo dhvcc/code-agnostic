@@ -19,6 +19,7 @@ def test_plan_shows_invalid_json_error_for_mcp_base(
 def test_plan_target_cursor_includes_workspace_actions(
     minimal_shared_config: Path,
     tmp_path: Path,
+    core_root: Path,
     cli_runner,
     enable_app,
 ) -> None:
@@ -26,7 +27,6 @@ def test_plan_target_cursor_includes_workspace_actions(
 
     workspace_root = tmp_path / "team-workspace"
     workspace_root.mkdir()
-    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
@@ -34,10 +34,13 @@ def test_plan_target_cursor_includes_workspace_actions(
     )
     assert add_result.exit_code == 0
 
+    ws_config_dir = core_root / "workspaces" / "team"
+    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+
     plan_result = cli_runner.invoke(cli, ["plan", "cursor"])
     assert plan_result.exit_code == 0
     assert "cursor" in plan_result.output
-    assert "workspace links" in plan_result.output
+    assert "workspace config sync" in plan_result.output
 
 
 def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> None:

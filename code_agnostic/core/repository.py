@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from pathlib import Path
 from typing import Any
 
@@ -10,17 +11,20 @@ from code_agnostic.errors import (
 from code_agnostic.utils import read_json_safe, write_json
 
 
-class CoreRepository(ISourceRepository):
-    def __init__(self, root: Path | None = None) -> None:
-        self._root = root or (Path.home() / ".config" / "code-agnostic")
+class BaseSourceRepository(ISourceRepository):
+    """Source repository that reads MCP, skills, agents from a root directory."""
+
+    def __init__(self, root: Path) -> None:
+        self._root = root
 
     @property
     def root(self) -> Path:
         return self._root
 
     @property
-    def config_dir(self) -> Path:
-        return self.root / "config"
+    @abstractmethod
+    def mcp_base_path(self) -> Path:
+        raise NotImplementedError
 
     @property
     def skills_dir(self) -> Path:
@@ -34,18 +38,6 @@ class CoreRepository(ISourceRepository):
     def state_json(self) -> Path:
         return self.root / ".sync-state.json"
 
-    @property
-    def mcp_base_path(self) -> Path:
-        return self.config_dir / "mcp.base.json"
-
-    @property
-    def opencode_base_path(self) -> Path:
-        return self.config_dir / "opencode.base.json"
-
-    @property
-    def workspaces_path(self) -> Path:
-        return self.config_dir / "workspaces.json"
-
     def load_mcp_base(self) -> dict[str, Any]:
         if not self.mcp_base_path.exists():
             raise MissingConfigFileError(self.mcp_base_path)
@@ -57,18 +49,6 @@ class CoreRepository(ISourceRepository):
         ):
             raise InvalidConfigSchemaError(
                 self.mcp_base_path, "must contain object key 'mcpServers'"
-            )
-        return payload
-
-    def load_opencode_base(self) -> dict[str, Any]:
-        if not self.opencode_base_path.exists():
-            raise MissingConfigFileError(self.opencode_base_path)
-        payload, error = read_json_safe(self.opencode_base_path)
-        if error is not None:
-            raise InvalidJsonFormatError(self.opencode_base_path, error)
-        if not isinstance(payload, dict):
-            raise InvalidConfigSchemaError(
-                self.opencode_base_path, "must be a JSON object"
             )
         return payload
 
@@ -112,6 +92,49 @@ class CoreRepository(ISourceRepository):
 
     def save_state(self, data: dict[str, Any]) -> None:
         write_json(self.state_json, data)
+
+    def load_workspaces(self) -> list[dict[str, str]]:
+        return []
+
+
+class CoreRepository(BaseSourceRepository):
+    def __init__(self, root: Path | None = None) -> None:
+        super().__init__(root or (Path.home() / ".config" / "code-agnostic"))
+
+    @property
+    def config_dir(self) -> Path:
+        return self.root / "config"
+
+    @property
+    def mcp_base_path(self) -> Path:
+        return self.config_dir / "mcp.base.json"
+
+    @property
+    def opencode_base_path(self) -> Path:
+        return self.config_dir / "opencode.base.json"
+
+    @property
+    def workspaces_path(self) -> Path:
+        return self.config_dir / "workspaces.json"
+
+    @property
+    def workspaces_dir(self) -> Path:
+        return self.root / "workspaces"
+
+    def workspace_config_dir(self, name: str) -> Path:
+        return self.workspaces_dir / name
+
+    def load_opencode_base(self) -> dict[str, Any]:
+        if not self.opencode_base_path.exists():
+            raise MissingConfigFileError(self.opencode_base_path)
+        payload, error = read_json_safe(self.opencode_base_path)
+        if error is not None:
+            raise InvalidJsonFormatError(self.opencode_base_path, error)
+        if not isinstance(payload, dict):
+            raise InvalidConfigSchemaError(
+                self.opencode_base_path, "must be a JSON object"
+            )
+        return payload
 
     def load_workspaces(self) -> list[dict[str, str]]:
         payload, error = read_json_safe(self.workspaces_path)
@@ -163,6 +186,7 @@ class CoreRepository(ISourceRepository):
 
         workspaces.append({"name": normalized_name, "path": str(normalized_path)})
         self.save_workspaces(workspaces)
+        self.workspace_config_dir(normalized_name).mkdir(parents=True, exist_ok=True)
 
     def remove_workspace(self, name: str) -> bool:
         target_name = name.strip()

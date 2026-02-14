@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Protocol
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
+from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.utils import backup_file, write_json
 
@@ -119,8 +120,8 @@ class SyncExecutor:
         return applied, failed, failures
 
     def _persist_state(self, plan: SyncPlan) -> None:
-        core = self.context.core
-        managed_links: dict[str, list[str]] = {}
+        global_links: dict[str, list[str]] = {}
+        workspace_links: dict[str, dict[str, list[str]]] = {}
 
         for action in plan.actions:
             if action.kind != ActionKind.SYMLINK:
@@ -129,14 +130,36 @@ class SyncExecutor:
                 continue
             if not action.path.is_symlink():
                 continue
-            managed_links.setdefault(action.scope, []).append(str(action.path))
+
+            if action.workspace is not None:
+                ws_name = action.workspace
+                workspace_links.setdefault(ws_name, {}).setdefault(
+                    action.scope, []
+                ).append(str(action.path))
+            else:
+                global_links.setdefault(action.scope, []).append(str(action.path))
 
         updated_at = datetime.now().isoformat(timespec="seconds")
-        state = {
+
+        # Persist global state
+        core = self.context.core
+        global_state = {
             "updated_at": updated_at,
             "managed_links": {
-                scope: sorted(set(paths)) for scope, paths in managed_links.items()
+                scope: sorted(set(paths)) for scope, paths in global_links.items()
             },
             "skipped": plan.skipped,
         }
-        core.save_state(state)
+        core.save_state(global_state)
+
+        # Persist workspace state
+        for ws_name, links in workspace_links.items():
+            ws_repo = WorkspaceConfigRepository(root=core.workspace_config_dir(ws_name))
+            ws_state = {
+                "updated_at": updated_at,
+                "managed_links": {
+                    scope: sorted(set(paths)) for scope, paths in links.items()
+                },
+            }
+            ws_repo.root.mkdir(parents=True, exist_ok=True)
+            ws_repo.save_state(ws_state)

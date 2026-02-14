@@ -83,3 +83,6 @@ class ISourceRepository(IConfigRepository):
     @abstractmethod
     def load_workspaces(self) -> list[dict[str, str]]:
         raise NotImplementedError
+
+    def workspace_config_dir(self, name: str) -> Path:
+        return self.root / "workspaces" / name

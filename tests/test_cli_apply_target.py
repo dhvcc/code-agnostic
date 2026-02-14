@@ -20,19 +20,21 @@ def _load_opencode_schema() -> dict:
 
 
 def test_apply_opencode_includes_workspace_repo_links(
-    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
     enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
-    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
         cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
     )
     assert add_result.exit_code == 0
+
+    ws_config_dir = core_root / "workspaces" / "workspace-example"
+    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
 
     apply_result = cli_runner.invoke(cli, ["apply", "opencode"])
     assert apply_result.exit_code == 0
@@ -42,17 +44,16 @@ def test_apply_opencode_includes_workspace_repo_links(
 
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
+    assert workspace_link.resolve() == (ws_config_dir / AGENTS_FILENAME).resolve()
 
 
 def test_apply_default_syncs_everything(
-    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
     enable_app("opencode")
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
-    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
@@ -60,12 +61,15 @@ def test_apply_default_syncs_everything(
     )
     assert add_result.exit_code == 0
 
+    ws_config_dir = core_root / "workspaces" / "workspace-example"
+    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
+    assert workspace_link.resolve() == (ws_config_dir / AGENTS_FILENAME).resolve()
 
 
 def test_apply_generates_opencode_schema_valid_config(
@@ -159,13 +163,12 @@ def test_apply_opencode_uses_local_schema_fallback_on_remote_failure(
 
 
 def test_apply_opencode_stale_workspace_links_cleaned(
-    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
     enable_app("opencode")
 
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
-    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
@@ -173,14 +176,17 @@ def test_apply_opencode_stale_workspace_links_cleaned(
     )
     assert add_result.exit_code == 0
 
+    ws_config_dir = core_root / "workspaces" / "ws"
+    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+
     apply1 = cli_runner.invoke(cli, ["apply", "opencode"])
     assert apply1.exit_code == 0
 
     link = workspace_root / "repo-a" / AGENTS_FILENAME
     assert link.is_symlink()
 
-    remove_result = cli_runner.invoke(cli, ["workspaces", "remove", "ws"])
-    assert remove_result.exit_code == 0
+    # Remove the rules file from workspace config (simulates removing config)
+    (ws_config_dir / AGENTS_FILENAME).unlink()
 
     apply2 = cli_runner.invoke(cli, ["apply", "opencode"])
     assert apply2.exit_code == 0

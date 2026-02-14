@@ -18,7 +18,11 @@ from code_agnostic.apps.common.interfaces.repositories import (
     ISourceRepository,
 )
 from code_agnostic.apps.common.models import MCPServerDTO
-from code_agnostic.apps.common.symlink_planning import plan_stale_group, plan_symlink
+from code_agnostic.apps.common.symlink_planning import (
+    load_state_links,
+    plan_resource_symlinks,
+    plan_stale_group,
+)
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 
@@ -40,9 +44,9 @@ class CodexConfigService(RegisteredAppConfigService):
         self._validator = Draft7Validator(self._schema_repository.load_schema())
 
     @classmethod
-    def create_default(cls) -> "CodexConfigService":
+    def create_default(cls, root: Path | None = None) -> "CodexConfigService":
         return cls(
-            repository=CodexConfigRepository(),
+            repository=CodexConfigRepository(root=root),
             mapper=CodexMCPMapper(),
             schema_repository=CodexSchemaRepository(),
         )
@@ -102,16 +106,14 @@ class CodexConfigService(RegisteredAppConfigService):
         actions: list[Action] = [config_action]
         skipped: list[str] = []
 
-        desired_skill_links: list[Path] = []
-        for source in source_repository.list_skill_sources():
-            target = self._codex_repo.skills_dir / source.name
-            desired_skill_links.append(target)
-            action = plan_symlink(
-                target, source, scope="app:codex:skills", app=AppId.CODEX.value
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Skill link skipped (conflict): {action.path}")
+        skill_actions, desired_skill_links, skill_skipped = plan_resource_symlinks(
+            source_repository.list_skill_sources(),
+            self._codex_repo.skills_dir,
+            scope="app:codex:skills",
+            app=AppId.CODEX.value,
+        )
+        actions.extend(skill_actions)
+        skipped.extend(skill_skipped)
 
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
@@ -120,7 +122,7 @@ class CodexConfigService(RegisteredAppConfigService):
 
         actions.extend(
             plan_stale_group(
-                old_links=self._state_links(managed_links, "app:codex:skills"),
+                old_links=load_state_links(managed_links, "app:codex:skills"),
                 desired_links=desired_skill_links,
                 remove_detail="remove stale managed skill symlink",
                 conflict_detail="stale managed path is not a symlink",
@@ -133,10 +135,3 @@ class CodexConfigService(RegisteredAppConfigService):
         )
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
-
-    @staticmethod
-    def _state_links(managed_links: dict[str, Any], scope: str) -> list[Path]:
-        raw = managed_links.get(scope, [])
-        if not isinstance(raw, list):
-            return []
-        return [Path(item) for item in raw if isinstance(item, str)]

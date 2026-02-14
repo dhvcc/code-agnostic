@@ -15,7 +15,11 @@ from code_agnostic.apps.common.interfaces.repositories import (
     ISchemaRepository,
     ISourceRepository,
 )
-from code_agnostic.apps.common.symlink_planning import plan_stale_group, plan_symlink
+from code_agnostic.apps.common.symlink_planning import (
+    load_state_links,
+    plan_resource_symlinks,
+    plan_stale_group,
+)
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
@@ -33,7 +37,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         repository: OpenCodeConfigRepository,
         mapper: IAppMCPMapper,
         schema_repository: ISchemaRepository,
-        base_config_path: Path,
+        base_config_path: Path | None = None,
     ) -> None:
         self._repository = repository
         self._opencode_repo = repository
@@ -43,7 +47,14 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         self._validator = Draft202012Validator(self._schema_repository.load_schema())
 
     @classmethod
-    def create_default(cls) -> "OpenCodeConfigService":
+    def create_default(cls, root: Path | None = None) -> "OpenCodeConfigService":
+        if root is not None:
+            return cls(
+                repository=OpenCodeConfigRepository(root=root),
+                mapper=OpenCodeMCPMapper(),
+                schema_repository=OpenCodeSchemaRepository(),
+                base_config_path=None,
+            )
         core = CoreRepository()
         return cls(
             repository=OpenCodeConfigRepository(),
@@ -102,9 +113,17 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         if existing or self._opencode_repo.config_path.exists():
             self.validate_config(existing)
 
-        opencode_base = self._load_base_config()
         desired_mcp = self.mapper.from_common(common_servers)
-        merged = self._opencode_repo.merge_config(existing, opencode_base, desired_mcp)
+
+        if self._base_config_path is not None:
+            opencode_base = self._load_base_config()
+            merged = self._opencode_repo.merge_config(
+                existing, opencode_base, desired_mcp
+            )
+        else:
+            merged = dict(existing)
+            self.set_mcp_payload(merged, desired_mcp)
+
         self.validate_config(merged)
 
         return Action(
@@ -125,27 +144,23 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         actions: list[Action] = [config_action]
         skipped: list[str] = []
 
-        desired_skill_links: list[Path] = []
-        for source in source_repository.list_skill_sources():
-            target = self._opencode_repo.skills_dir / source.name
-            desired_skill_links.append(target)
-            action = plan_symlink(
-                target, source, scope="app:opencode:skills", app=AppId.OPENCODE.value
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Skill link skipped (conflict): {action.path}")
+        skill_actions, desired_skill_links, skill_skipped = plan_resource_symlinks(
+            source_repository.list_skill_sources(),
+            self._opencode_repo.skills_dir,
+            scope="app:opencode:skills",
+            app=AppId.OPENCODE.value,
+        )
+        actions.extend(skill_actions)
+        skipped.extend(skill_skipped)
 
-        desired_agent_links: list[Path] = []
-        for source in source_repository.list_agent_sources():
-            target = self._opencode_repo.agents_dir / source.name
-            desired_agent_links.append(target)
-            action = plan_symlink(
-                target, source, scope="app:opencode:agents", app=AppId.OPENCODE.value
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Agent link skipped (conflict): {action.path}")
+        agent_actions, desired_agent_links, agent_skipped = plan_resource_symlinks(
+            source_repository.list_agent_sources(),
+            self._opencode_repo.agents_dir,
+            scope="app:opencode:agents",
+            app=AppId.OPENCODE.value,
+        )
+        actions.extend(agent_actions)
+        skipped.extend(agent_skipped)
 
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
@@ -154,7 +169,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
 
         actions.extend(
             plan_stale_group(
-                old_links=self._state_links(managed_links, "app:opencode:skills"),
+                old_links=load_state_links(managed_links, "app:opencode:skills"),
                 desired_links=desired_skill_links,
                 remove_detail="remove stale managed skill symlink",
                 conflict_detail="stale managed path is not a symlink",
@@ -167,7 +182,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         )
         actions.extend(
             plan_stale_group(
-                old_links=self._state_links(managed_links, "app:opencode:agents"),
+                old_links=load_state_links(managed_links, "app:opencode:agents"),
                 desired_links=desired_agent_links,
                 remove_detail="remove stale managed agent symlink",
                 conflict_detail="stale managed path is not a symlink",
@@ -194,10 +209,3 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         if existing == merged:
             return ActionStatus.NOOP
         return ActionStatus.UPDATE
-
-    @staticmethod
-    def _state_links(managed_links: dict[str, Any], scope: str) -> list[Path]:
-        raw = managed_links.get(scope, [])
-        if not isinstance(raw, list):
-            return []
-        return [Path(item) for item in raw if isinstance(item, str)]

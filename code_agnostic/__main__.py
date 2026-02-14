@@ -173,9 +173,10 @@ def status(obj: dict[str, str], target: str) -> None:
         editor_rows = [row for row in editor_rows if row.name == normalized_target]
 
     status_service = StatusService()
+    enabled_services = apps._resolve_services_for_target("all")
     ui.render_status(
         editor_rows,
-        status_service.build_workspace_status(core),
+        status_service.build_workspace_status(core, app_services=enabled_services),
     )
 
 
@@ -254,6 +255,8 @@ def workspaces_remove(obj: dict[str, str], name: str) -> None:
 @workspaces.command("list", help="List configured workspaces and detected repos.")
 @click.pass_obj
 def workspaces_list(obj: dict[str, str]) -> None:
+    from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
+
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     workspace_service = WorkspaceService()
@@ -267,11 +270,18 @@ def workspaces_list(obj: dict[str, str]) -> None:
                 str(path.relative_to(workspace_path))
                 for path in workspace_service.discover_git_repos(workspace_path)
             ]
+        ws_source = WorkspaceConfigRepository(
+            root=core.workspace_config_dir(item["name"])
+        )
         overview.append(
             {
                 "name": item["name"],
                 "path": item["path"],
                 "repos": repos,
+                "has_mcp": ws_source.has_mcp(),
+                "has_rules": ws_source.has_rules(),
+                "has_skills": ws_source.has_skills(),
+                "has_agents": ws_source.has_agents(),
             }
         )
 

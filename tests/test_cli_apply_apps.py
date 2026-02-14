@@ -49,6 +49,7 @@ def test_apply_all_with_cursor_and_codex_writes_both(
 def test_apply_cursor_target_also_applies_workspace_links(
     minimal_shared_config: Path,
     tmp_path: Path,
+    core_root: Path,
     cli_runner,
     enable_app,
 ) -> None:
@@ -56,7 +57,6 @@ def test_apply_cursor_target_also_applies_workspace_links(
 
     workspace_root = tmp_path / "microservice-workspace"
     workspace_root.mkdir()
-    (workspace_root / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
@@ -64,12 +64,16 @@ def test_apply_cursor_target_also_applies_workspace_links(
     )
     assert add_result.exit_code == 0
 
+    # Create workspace config with rules
+    ws_config_dir = core_root / "workspaces" / "workspace-example"
+    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+
     apply_result = cli_runner.invoke(cli, ["apply", "cursor"])
     assert apply_result.exit_code == 0
 
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (workspace_root / AGENTS_FILENAME).resolve()
+    assert workspace_link.resolve() == (ws_config_dir / AGENTS_FILENAME).resolve()
 
 
 def test_apply_cursor_aborts_on_invalid_cursor_json(

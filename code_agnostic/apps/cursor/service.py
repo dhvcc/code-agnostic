@@ -15,7 +15,11 @@ from code_agnostic.apps.common.interfaces.repositories import (
     ISourceRepository,
 )
 from code_agnostic.apps.common.models import MCPServerDTO
-from code_agnostic.apps.common.symlink_planning import plan_stale_group, plan_symlink
+from code_agnostic.apps.common.symlink_planning import (
+    load_state_links,
+    plan_resource_symlinks,
+    plan_stale_group,
+)
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
@@ -40,9 +44,9 @@ class CursorConfigService(RegisteredAppConfigService):
         self._validator = Draft202012Validator(self._schema_repository.load_schema())
 
     @classmethod
-    def create_default(cls) -> "CursorConfigService":
+    def create_default(cls, root: Path | None = None) -> "CursorConfigService":
         return cls(
-            repository=CursorConfigRepository(),
+            repository=CursorConfigRepository(root=root),
             mapper=CursorMCPMapper(),
             schema_repository=CursorSchemaRepository(),
         )
@@ -108,27 +112,23 @@ class CursorConfigService(RegisteredAppConfigService):
         actions: list[Action] = [config_action]
         skipped: list[str] = []
 
-        desired_skill_links: list[Path] = []
-        for source in source_repository.list_skill_sources():
-            target = self._cursor_repo.skills_dir / source.name
-            desired_skill_links.append(target)
-            action = plan_symlink(
-                target, source, scope="app:cursor:skills", app=AppId.CURSOR.value
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Skill link skipped (conflict): {action.path}")
+        skill_actions, desired_skill_links, skill_skipped = plan_resource_symlinks(
+            source_repository.list_skill_sources(),
+            self._cursor_repo.skills_dir,
+            scope="app:cursor:skills",
+            app=AppId.CURSOR.value,
+        )
+        actions.extend(skill_actions)
+        skipped.extend(skill_skipped)
 
-        desired_agent_links: list[Path] = []
-        for source in source_repository.list_agent_sources():
-            target = self._cursor_repo.agents_dir / source.name
-            desired_agent_links.append(target)
-            action = plan_symlink(
-                target, source, scope="app:cursor:agents", app=AppId.CURSOR.value
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Agent link skipped (conflict): {action.path}")
+        agent_actions, desired_agent_links, agent_skipped = plan_resource_symlinks(
+            source_repository.list_agent_sources(),
+            self._cursor_repo.agents_dir,
+            scope="app:cursor:agents",
+            app=AppId.CURSOR.value,
+        )
+        actions.extend(agent_actions)
+        skipped.extend(agent_skipped)
 
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
@@ -137,7 +137,7 @@ class CursorConfigService(RegisteredAppConfigService):
 
         actions.extend(
             plan_stale_group(
-                old_links=self._state_links(managed_links, "app:cursor:skills"),
+                old_links=load_state_links(managed_links, "app:cursor:skills"),
                 desired_links=desired_skill_links,
                 remove_detail="remove stale managed skill symlink",
                 conflict_detail="stale managed path is not a symlink",
@@ -150,7 +150,7 @@ class CursorConfigService(RegisteredAppConfigService):
         )
         actions.extend(
             plan_stale_group(
-                old_links=self._state_links(managed_links, "app:cursor:agents"),
+                old_links=load_state_links(managed_links, "app:cursor:agents"),
                 desired_links=desired_agent_links,
                 remove_detail="remove stale managed agent symlink",
                 conflict_detail="stale managed path is not a symlink",
@@ -163,10 +163,3 @@ class CursorConfigService(RegisteredAppConfigService):
         )
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
-
-    @staticmethod
-    def _state_links(managed_links: dict[str, Any], scope: str) -> list[Path]:
-        raw = managed_links.get(scope, [])
-        if not isinstance(raw, list):
-            return []
-        return [Path(item) for item in raw if isinstance(item, str)]

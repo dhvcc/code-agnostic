@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from pathlib import Path
 from typing import Any, ClassVar, cast
 
 from code_agnostic.apps.app_id import AppId, app_label
@@ -40,7 +41,7 @@ class RegisteredAppConfigService(IAppConfigService, metaclass=AppServiceRegistry
 
     @classmethod
     @abstractmethod
-    def create_default(cls) -> "RegisteredAppConfigService":
+    def create_default(cls, root: Path | None = None) -> "RegisteredAppConfigService":
         raise NotImplementedError
 
 
@@ -49,12 +50,14 @@ def list_registered_app_services() -> list[AppId]:
     return sorted(AppServiceRegistryMeta._registry.keys(), key=lambda item: item.value)
 
 
-def create_registered_app_service(app_id: AppId) -> RegisteredAppConfigService:
+def create_registered_app_service(
+    app_id: AppId, root: Path | None = None
+) -> RegisteredAppConfigService:
     _load_registered_modules()
     service_class = AppServiceRegistryMeta._registry.get(app_id)
     if service_class is None:
         raise KeyError(f"No app service registered for: {app_id.value}")
-    return service_class.create_default()
+    return service_class.create_default(root=root)
 
 
 def _load_registered_modules() -> None:

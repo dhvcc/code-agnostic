@@ -47,7 +47,7 @@ class SyncConsoleUI:
         if workspace_actions:
             self.console.print(
                 UISection.wrap(
-                    "workspace links",
+                    "workspace config sync",
                     PlanTable.actions_table(workspace_actions, verbose=verbose),
                     style=UIStyle.MAGENTA.value,
                 )

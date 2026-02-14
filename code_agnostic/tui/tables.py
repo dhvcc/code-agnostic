@@ -7,7 +7,6 @@ from rich.table import Column, Table
 from rich.text import Text
 
 from code_agnostic.apps.app_id import AppId, app_label
-from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.imports.models import ImportAction, ImportActionStatus, ImportPlan
 from code_agnostic.models import (
     Action,
@@ -54,8 +53,7 @@ class PlanTable:
         app_actions: list[Action] = []
         workspace_actions: list[Action] = []
         for action in plan.actions:
-            is_workspace_link = action.path.name == AGENTS_FILENAME
-            if is_workspace_link:
+            if action.app == "workspace":
                 workspace_actions.append(action)
             else:
                 app_actions.append(action)
@@ -139,15 +137,29 @@ class WorkspaceTable:
     @staticmethod
     def overview_table(items: list[dict]) -> Table:
         table = Table(
-            Column(header="Workspace", width=24),
+            Column(header="Workspace", width=20),
             Column(header="Path", overflow="ellipsis"),
-            Column(header="Repos", width=8, justify="right"),
+            Column(header="Repos", width=6, justify="right"),
+            Column(header="Config", overflow="ellipsis"),
             expand=True,
             header_style="bold",
         )
         for item in items:
+            config_parts: list[str] = []
+            if item.get("has_rules"):
+                config_parts.append("rules")
+            if item.get("has_mcp"):
+                config_parts.append("mcp")
+            if item.get("has_skills"):
+                config_parts.append("skills")
+            if item.get("has_agents"):
+                config_parts.append("agents")
+            config_label = ", ".join(config_parts) if config_parts else "(none)"
             table.add_row(
-                item["name"], compact_home_path(item["path"]), str(len(item["repos"]))
+                item["name"],
+                compact_home_path(item["path"]),
+                str(len(item["repos"])),
+                config_label,
             )
         return table
 
