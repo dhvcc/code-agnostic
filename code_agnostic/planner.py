@@ -97,6 +97,10 @@ class SyncPlanner:
         actions: list[Action] = []
         skipped: list[str] = []
 
+        def _mark_workspace(action: Action) -> None:
+            action.app = "workspace"
+            action.workspace = workspace_name
+
         # --- AGENTS.md symlinks ---
         desired_rules_links: list[Path] = []
         if ws_source.has_rules():
@@ -108,15 +112,21 @@ class SyncPlanner:
                     scope="rules",
                     app="workspace",
                 )
-                action.workspace = workspace_name
+                _mark_workspace(action)
                 actions.append(action)
                 desired_rules_links.append(target)
                 if action.status == ActionStatus.CONFLICT:
                     skipped.append(f"Workspace rules link skipped (conflict): {target}")
 
-        # --- Per-app config sync ---
+        # --- Workspace-level app config rendering + repo symlinks ---
         desired_links_by_scope: dict[str, list[Path]] = {}
 
+        # Workspace sources are intentionally isolated from global sources.
+        # Global app configs still apply naturally; workspace config only adds workspace-specific config.
+        skill_sources = ws_source.list_skill_sources()
+        agent_sources = ws_source.list_agent_sources()
+
+        common_servers = None
         if ws_source.has_mcp():
             try:
                 mcp_base = ws_source.load_mcp_base()
@@ -124,76 +134,142 @@ class SyncPlanner:
             except SyncAppError as exc:
                 return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
 
-            for svc in self.app_services:
-                meta = app_metadata(svc.app_id)
-                if meta.project_dir_name is None:
-                    continue
-                for repo in repos:
-                    project_root = repo / meta.project_dir_name
-                    try:
-                        project_svc = create_registered_app_service(
-                            svc.app_id, root=project_root
-                        )
-                        mcp_action = project_svc.build_action(common_servers)
-                        mcp_action.app = "workspace"
-                        mcp_action.workspace = workspace_name
-                        actions.append(mcp_action)
-                    except SyncAppError as exc:
-                        skipped.append(
-                            f"MCP sync error for {repo.name}/{svc.app_id.value}: {exc}"
-                        )
+        for svc in self.app_services:
+            meta = app_metadata(svc.app_id)
+            if meta.project_dir_name is None:
+                continue
 
-        # --- Skill symlinks ---
-        skill_sources = ws_source.list_skill_sources()
-        if skill_sources:
-            for svc in self.app_services:
-                meta = app_metadata(svc.app_id)
-                if meta.project_dir_name is None:
-                    continue
-                scope = f"{svc.app_id.value}:skills"
-                for repo in repos:
-                    project_root = repo / meta.project_dir_name
-                    project_svc = create_registered_app_service(
-                        svc.app_id, root=project_root
-                    )
-                    skill_actions, desired, skill_skipped = plan_resource_symlinks(
-                        skill_sources,
-                        project_svc.repository.skills_dir,
-                        scope=scope,
-                        app="workspace",
-                    )
-                    for a in skill_actions:
-                        a.workspace = workspace_name
-                    actions.extend(skill_actions)
-                    desired_links_by_scope.setdefault(scope, []).extend(desired)
-                    skipped.extend(skill_skipped)
+            ws_project_root = ws_source.root / meta.project_dir_name
+            project_svc = create_registered_app_service(
+                svc.app_id, root=ws_project_root
+            )
 
-        # --- Agent symlinks ---
-        agent_sources = ws_source.list_agent_sources()
-        if agent_sources:
-            for svc in self.app_services:
-                meta = app_metadata(svc.app_id)
-                if meta.project_dir_name is None:
-                    continue
-                if not meta.supports_import_agents:
-                    continue
-                scope = f"{svc.app_id.value}:agents"
-                for repo in repos:
-                    project_root = repo / meta.project_dir_name
-                    project_svc = create_registered_app_service(
-                        svc.app_id, root=project_root
+            # Note: skills_dir/agents_dir are implemented by concrete repositories,
+            # but are not part of the IAppConfigRepository interface.
+            project_skills_dir: Path = getattr(project_svc.repository, "skills_dir")
+            project_agents_dir: Path | None = (
+                getattr(project_svc.repository, "agents_dir")
+                if meta.supports_import_agents
+                else None
+            )
+
+            # Render workspace config once into workspace project dir
+            if common_servers is not None:
+                try:
+                    mcp_action = project_svc.build_action(common_servers)
+                    _mark_workspace(mcp_action)
+                    actions.append(mcp_action)
+                except SyncAppError as exc:
+                    skipped.append(
+                        f"MCP sync error for workspace {workspace_name}/{svc.app_id.value}: {exc}"
                     )
-                    agent_actions, desired, agent_skipped = plan_resource_symlinks(
-                        agent_sources,
-                        project_svc.repository.agents_dir,
-                        scope=scope,
-                        app="workspace",
+
+            # Workspace skill entries symlinked into workspace project dir
+            if skill_sources:
+                scope = f"ws:{svc.app_id.value}:skills_entries"
+                skill_actions, desired, skill_skipped = plan_resource_symlinks(
+                    skill_sources,
+                    project_skills_dir,
+                    scope=scope,
+                    app="workspace",
+                )
+                for a in skill_actions:
+                    _mark_workspace(a)
+                actions.extend(skill_actions)
+                desired_links_by_scope.setdefault(scope, []).extend(desired)
+                skipped.extend(skill_skipped)
+
+            # Workspace agent entries symlinked into workspace project dir
+            if agent_sources and meta.supports_import_agents:
+                scope = f"ws:{svc.app_id.value}:agents_entries"
+                agent_actions, desired, agent_skipped = plan_resource_symlinks(
+                    agent_sources,
+                    project_agents_dir or ws_project_root / "agents",
+                    scope=scope,
+                    app="workspace",
+                )
+                for a in agent_actions:
+                    _mark_workspace(a)
+                actions.extend(agent_actions)
+                desired_links_by_scope.setdefault(scope, []).extend(desired)
+                skipped.extend(agent_skipped)
+
+            # --- Repo symlinks for managed workspace config paths ---
+            # Also symlink into the workspace root itself so opening the whole workspace
+            # in an editor picks up the shared config.
+            def _plan_target_link(
+                *,
+                target: Path,
+                source: Path,
+                scope: str,
+                conflict_message: str,
+            ) -> None:
+                link_action = plan_symlink(
+                    target,
+                    source,
+                    scope=scope,
+                    app="workspace",
+                )
+                _mark_workspace(link_action)
+                actions.append(link_action)
+                desired_links_by_scope.setdefault(scope, []).append(target)
+                if link_action.status == ActionStatus.CONFLICT:
+                    skipped.append(conflict_message.format(path=target))
+
+            # Workspace root links
+            if common_servers is not None:
+                _plan_target_link(
+                    target=workspace_path
+                    / meta.project_dir_name
+                    / project_svc.repository.config_path.name,
+                    source=project_svc.repository.config_path,
+                    scope=f"ws:{svc.app_id.value}:workspace_root_mcp",
+                    conflict_message="Workspace root MCP link skipped (conflict): {path}",
+                )
+            if skill_sources:
+                _plan_target_link(
+                    target=workspace_path / meta.project_dir_name / "skills",
+                    source=project_skills_dir,
+                    scope=f"ws:{svc.app_id.value}:workspace_root_skills_dir",
+                    conflict_message="Workspace root skills dir link skipped (conflict): {path}",
+                )
+            if agent_sources and meta.supports_import_agents:
+                _plan_target_link(
+                    target=workspace_path / meta.project_dir_name / "agents",
+                    source=project_agents_dir or ws_project_root / "agents",
+                    scope=f"ws:{svc.app_id.value}:workspace_root_agents_dir",
+                    conflict_message="Workspace root agents dir link skipped (conflict): {path}",
+                )
+
+            for repo in repos:
+                # MCP config file link
+                if common_servers is not None:
+                    _plan_target_link(
+                        target=repo
+                        / meta.project_dir_name
+                        / project_svc.repository.config_path.name,
+                        source=project_svc.repository.config_path,
+                        scope=f"ws:{svc.app_id.value}:repo_mcp",
+                        conflict_message="Workspace MCP link skipped (conflict): {path}",
                     )
-                    for a in agent_actions:
-                        a.workspace = workspace_name
-                    actions.extend(agent_actions)
-                    desired_links_by_scope.setdefault(scope, []).extend(desired)
-                    skipped.extend(agent_skipped)
+
+                # Skills dir link
+                if skill_sources:
+                    _plan_target_link(
+                        target=repo / meta.project_dir_name / "skills",
+                        source=project_skills_dir,
+                        scope=f"ws:{svc.app_id.value}:repo_skills_dir",
+                        conflict_message="Workspace skills dir link skipped (conflict): {path}",
+                    )
+
+                # Agents dir link
+                if agent_sources and meta.supports_import_agents:
+                    _plan_target_link(
+                        target=repo / meta.project_dir_name / "agents",
+                        source=project_agents_dir or ws_project_root / "agents",
+                        scope=f"ws:{svc.app_id.value}:repo_agents_dir",
+                        conflict_message="Workspace agents dir link skipped (conflict): {path}",
+                    )
 
         # --- Stale cleanup ---
         state = ws_source.load_state()
@@ -214,7 +290,7 @@ class SyncPlanner:
             skipped_message="Stale workspace rules cleanup skipped (not symlink): {path}",
         )
         for a in stale_rules:
-            a.workspace = workspace_name
+            _mark_workspace(a)
         actions.extend(stale_rules)
 
         # Per-scope stale cleanup for skills/agents
@@ -231,7 +307,7 @@ class SyncPlanner:
                 skipped_message="Stale workspace cleanup skipped (not symlink): {path}",
             )
             for a in stale_actions:
-                a.workspace = workspace_name
+                _mark_workspace(a)
             actions.extend(stale_actions)
 
         # Clean scopes in state that no longer have any desired links
@@ -251,7 +327,7 @@ class SyncPlanner:
                 skipped_message="Stale workspace cleanup skipped (not symlink): {path}",
             )
             for a in stale_actions:
-                a.workspace = workspace_name
+                _mark_workspace(a)
             actions.extend(stale_actions)
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)

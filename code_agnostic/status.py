@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from code_agnostic.apps.app_id import AppMetadata, app_metadata
+from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.constants import AGENTS_FILENAME
@@ -97,6 +97,12 @@ class StatusService:
     ) -> WorkspaceRepoStatusRow:
         issues: list[str] = []
 
+        config_filenames: dict[AppId, str] = {
+            AppId.CURSOR: "mcp.json",
+            AppId.OPENCODE: "opencode.json",
+            AppId.CODEX: "config.toml",
+        }
+
         # Check AGENTS.md symlink
         if ws_source.has_rules():
             target = repo_path / AGENTS_FILENAME
@@ -104,31 +110,48 @@ class StatusService:
             if not (target.is_symlink() and str(target.resolve()) == desired):
                 issues.append(f"missing or mismatched {AGENTS_FILENAME}")
 
-        # Check skill symlinks per app
-        skill_sources = ws_source.list_skill_sources()
-        if skill_sources:
-            for meta in app_metas or []:
-                skills_dir = repo_path / meta.project_dir_name / "skills"
-                for src in skill_sources:
-                    link = skills_dir / src.name
-                    if not (
-                        link.is_symlink() and str(link.resolve()) == str(src.resolve())
-                    ):
-                        issues.append(f"missing {meta.app_id.value} skill: {src.name}")
+        # Check workspace-managed links into repo project dirs.
+        # Workspace rendering happens in ws_source.root/<project_dir_name>/..., then repos symlink to those.
 
-        # Check agent symlinks per app
-        agent_sources = ws_source.list_agent_sources()
-        if agent_sources:
+        if ws_source.has_mcp():
+            for meta in app_metas or []:
+                filename = config_filenames.get(meta.app_id)
+                if filename is None or meta.project_dir_name is None:
+                    continue
+                target = repo_path / meta.project_dir_name / filename
+                desired = str(
+                    (ws_source.root / meta.project_dir_name / filename).resolve()
+                )
+                if not (target.is_symlink() and str(target.resolve()) == desired):
+                    issues.append(f"missing or mismatched {meta.app_id.value} mcp link")
+
+        if ws_source.has_skills():
+            for meta in app_metas or []:
+                if meta.project_dir_name is None:
+                    continue
+                target = repo_path / meta.project_dir_name / "skills"
+                desired = str(
+                    (ws_source.root / meta.project_dir_name / "skills").resolve()
+                )
+                if not (target.is_symlink() and str(target.resolve()) == desired):
+                    issues.append(
+                        f"missing or mismatched {meta.app_id.value} skills link"
+                    )
+
+        if ws_source.has_agents():
             for meta in app_metas or []:
                 if not meta.supports_import_agents:
                     continue
-                agents_dir = repo_path / meta.project_dir_name / "agents"
-                for src in agent_sources:
-                    link = agents_dir / src.name
-                    if not (
-                        link.is_symlink() and str(link.resolve()) == str(src.resolve())
-                    ):
-                        issues.append(f"missing {meta.app_id.value} agent: {src.name}")
+                if meta.project_dir_name is None:
+                    continue
+                target = repo_path / meta.project_dir_name / "agents"
+                desired = str(
+                    (ws_source.root / meta.project_dir_name / "agents").resolve()
+                )
+                if not (target.is_symlink() and str(target.resolve()) == desired):
+                    issues.append(
+                        f"missing or mismatched {meta.app_id.value} agents link"
+                    )
 
         if not issues:
             return WorkspaceRepoStatusRow(
