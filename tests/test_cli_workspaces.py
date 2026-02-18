@@ -13,7 +13,15 @@ def test_workspaces_add_list_remove_commands(
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "workspace-example",
+            "--path",
+            str(workspace_root),
+        ],
     )
     assert add_result.exit_code == 0
     assert "Workspace added: workspace-example" in add_result.output
@@ -24,7 +32,7 @@ def test_workspaces_add_list_remove_commands(
     assert "repo-a" in list_result.output
 
     remove_result = cli_runner.invoke(
-        cli, ["workspaces", "remove", "workspace-example"]
+        cli, ["workspaces", "remove", "--name", "workspace-example"]
     )
     assert remove_result.exit_code == 0
     assert "Workspace removed: workspace-example" in remove_result.output
@@ -39,14 +47,16 @@ def test_workspaces_add_rejects_missing_path(
 ) -> None:
     missing_path = tmp_path / "does-not-exist"
 
-    result = cli_runner.invoke(cli, ["workspaces", "add", "broken", str(missing_path)])
+    result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "broken", "--path", str(missing_path)]
+    )
 
     assert result.exit_code != 0
     assert "does not exist or is not a directory" in result.output
 
 
 def test_workspaces_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> None:
-    result = cli_runner.invoke(cli, ["workspaces", "remove", "ghost"])
+    result = cli_runner.invoke(cli, ["workspaces", "remove", "--name", "ghost"])
 
     assert result.exit_code != 0
     assert "Workspace not found" in result.output
@@ -58,7 +68,9 @@ def test_workspaces_add_empty_name(
     workspace_root = tmp_path / "ws"
     workspace_root.mkdir()
 
-    result = cli_runner.invoke(cli, ["workspaces", "add", "", str(workspace_root)])
+    result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "", "--path", str(workspace_root)]
+    )
 
     assert result.exit_code != 0
     assert "empty" in result.output.lower()
@@ -72,10 +84,14 @@ def test_workspaces_add_duplicate_name(
     ws2 = tmp_path / "ws2"
     ws2.mkdir()
 
-    add_result = cli_runner.invoke(cli, ["workspaces", "add", "myws", str(ws1)])
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(ws1)]
+    )
     assert add_result.exit_code == 0
 
-    dup_result = cli_runner.invoke(cli, ["workspaces", "add", "myws", str(ws2)])
+    dup_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(ws2)]
+    )
     assert dup_result.exit_code != 0
     assert "already exists" in dup_result.output
 
@@ -86,10 +102,14 @@ def test_workspaces_add_duplicate_path(
     ws1 = tmp_path / "ws1"
     ws1.mkdir()
 
-    add_result = cli_runner.invoke(cli, ["workspaces", "add", "first", str(ws1)])
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "first", "--path", str(ws1)]
+    )
     assert add_result.exit_code == 0
 
-    dup_result = cli_runner.invoke(cli, ["workspaces", "add", "second", str(ws1)])
+    dup_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "second", "--path", str(ws1)]
+    )
     assert dup_result.exit_code != 0
     assert "already exists" in dup_result.output
 
@@ -103,7 +123,7 @@ def test_workspaces_list_with_inaccessible_path(
     (workspace_root / "repo" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "myws", str(workspace_root)]
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
 
@@ -121,7 +141,7 @@ def test_workspaces_git_exclude_writes_enabled_apps_and_default_rules(
     (workspace_root / "repo-b" / ".git" / "info").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "corp", str(workspace_root)]
+        cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
 
@@ -153,12 +173,22 @@ def test_workspaces_git_exclude_can_target_single_workspace(
     (ws_a / "repo-a" / ".git" / "info").mkdir(parents=True)
     (ws_b / "repo-b" / ".git" / "info").mkdir(parents=True)
 
-    assert cli_runner.invoke(cli, ["workspaces", "add", "a", str(ws_a)]).exit_code == 0
-    assert cli_runner.invoke(cli, ["workspaces", "add", "b", str(ws_b)]).exit_code == 0
+    assert (
+        cli_runner.invoke(
+            cli, ["workspaces", "add", "--name", "a", "--path", str(ws_a)]
+        ).exit_code
+        == 0
+    )
+    assert (
+        cli_runner.invoke(
+            cli, ["workspaces", "add", "--name", "b", "--path", str(ws_b)]
+        ).exit_code
+        == 0
+    )
 
     enable_app("cursor")
 
-    result = cli_runner.invoke(cli, ["workspaces", "git-exclude", "--workspace", "a"])
+    result = cli_runner.invoke(cli, ["workspaces", "git-exclude", "-w", "a"])
     assert result.exit_code == 0
 
     exclude_a = ws_a / "repo-a" / ".git" / "info" / "exclude"

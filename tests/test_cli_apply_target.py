@@ -29,22 +29,33 @@ def test_apply_opencode_includes_workspace_repo_links(
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "workspace-example",
+            "--path",
+            str(workspace_root),
+        ],
     )
     assert add_result.exit_code == 0
 
     ws_config_dir = core_root / "workspaces" / "workspace-example"
-    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
-    apply_result = cli_runner.invoke(cli, ["apply", "opencode"])
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply_result.exit_code == 0
 
     opencode_config = tmp_path / ".config" / "opencode" / "opencode.json"
     assert opencode_config.exists()
 
+    # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo
+    compiled_agents = ws_config_dir / ".opencode" / AGENTS_FILENAME
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (ws_config_dir / AGENTS_FILENAME).resolve()
+    assert workspace_link.resolve() == compiled_agents.resolve()
 
 
 def test_apply_default_syncs_everything(
@@ -57,19 +68,30 @@ def test_apply_default_syncs_everything(
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "workspace-example",
+            "--path",
+            str(workspace_root),
+        ],
     )
     assert add_result.exit_code == 0
 
     ws_config_dir = core_root / "workspaces" / "workspace-example"
-    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
+    # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo
+    compiled_agents = ws_config_dir / ".opencode" / AGENTS_FILENAME
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (ws_config_dir / AGENTS_FILENAME).resolve()
+    assert workspace_link.resolve() == compiled_agents.resolve()
 
 
 def test_apply_generates_opencode_schema_valid_config(
@@ -157,7 +179,7 @@ def test_apply_opencode_uses_local_schema_fallback_on_remote_failure(
 
     monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
 
-    result = cli_runner.invoke(cli, ["apply", "opencode"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
 
     assert result.exit_code == 0
 
@@ -172,23 +194,24 @@ def test_apply_opencode_stale_workspace_links_cleaned(
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "ws", str(workspace_root)]
+        cli, ["workspaces", "add", "--name", "ws", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
 
     ws_config_dir = core_root / "workspaces" / "ws"
-    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
-    apply1 = cli_runner.invoke(cli, ["apply", "opencode"])
+    apply1 = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply1.exit_code == 0
 
     link = workspace_root / "repo-a" / AGENTS_FILENAME
     assert link.is_symlink()
 
     # Remove the rules file from workspace config (simulates removing config)
-    (ws_config_dir / AGENTS_FILENAME).unlink()
+    (ws_config_dir / "rules" / "shared.md").unlink()
 
-    apply2 = cli_runner.invoke(cli, ["apply", "opencode"])
+    apply2 = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply2.exit_code == 0
 
     assert not link.is_symlink()

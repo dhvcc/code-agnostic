@@ -81,7 +81,7 @@ def test_apply_codex_generates_schema_valid_config(
         encoding="utf-8",
     )
 
-    result = cli_runner.invoke(cli, ["apply", "codex"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
 
     assert result.exit_code == 0
     codex_payload = tomllib.loads(
@@ -104,6 +104,6 @@ def test_apply_codex_uses_local_schema_fallback_on_remote_failure(
 
     monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
 
-    result = cli_runner.invoke(cli, ["apply", "codex"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
 
     assert result.exit_code == 0

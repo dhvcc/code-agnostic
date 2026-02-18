@@ -24,14 +24,14 @@ def test_plan_then_apply_syncs_each_app_end_to_end(
 
     enable_app(app)
 
-    plan_result = cli_runner.invoke(cli, ["plan", target])
+    plan_result = cli_runner.invoke(cli, ["plan", "-a", target])
 
     assert plan_result.exit_code == 0
     assert "plan overview" in plan_result.output
     assert expected_action_kind in plan_result.output
     assert target in plan_result.output
 
-    apply_result = cli_runner.invoke(cli, ["apply", target])
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", target])
 
     assert apply_result.exit_code == 0
     assert "apply" in apply_result.output
@@ -49,12 +49,12 @@ def test_partial_apply_codex_writes_codex_config_only(
     enable_app("codex")
     enable_app("cursor")
 
-    plan_result = cli_runner.invoke(cli, ["plan", "codex"])
+    plan_result = cli_runner.invoke(cli, ["plan", "-a", "codex"])
     assert plan_result.exit_code == 0
     assert "plan:codex" in plan_result.output
     assert "write_text" in plan_result.output
 
-    apply_result = cli_runner.invoke(cli, ["apply", "codex"])
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
     assert apply_result.exit_code == 0
 
     assert expected_app_config_path("codex").exists()
@@ -137,14 +137,15 @@ def test_stale_workspace_cleanup_e2e(
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "myws", str(workspace_root)]
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
 
-    # Create workspace config with rules
+    # Create workspace config with rules in rules/ directory
     core_root = tmp_path / ".config" / "code-agnostic"
     ws_config_dir = core_root / "workspaces" / "myws"
-    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
     apply1 = cli_runner.invoke(cli, ["apply"])
     assert apply1.exit_code == 0
@@ -153,7 +154,7 @@ def test_stale_workspace_cleanup_e2e(
     assert link.is_symlink()
 
     # Remove workspace config rules (simulates removing config)
-    (ws_config_dir / AGENTS_FILENAME).unlink()
+    (ws_config_dir / "rules" / "shared.md").unlink()
 
     apply2 = cli_runner.invoke(cli, ["apply"])
     assert apply2.exit_code == 0
@@ -171,12 +172,12 @@ def test_cross_app_isolation(
     enable_app("cursor")
     enable_app("codex")
 
-    apply_cursor = cli_runner.invoke(cli, ["apply", "cursor"])
+    apply_cursor = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
     assert apply_cursor.exit_code == 0
     assert expected_app_config_path("cursor").exists()
     assert not expected_app_config_path("codex").exists()
 
-    apply_codex = cli_runner.invoke(cli, ["apply", "codex"])
+    apply_codex = cli_runner.invoke(cli, ["apply", "-a", "codex"])
     assert apply_codex.exit_code == 0
     assert expected_app_config_path("cursor").exists()
     assert expected_app_config_path("codex").exists()

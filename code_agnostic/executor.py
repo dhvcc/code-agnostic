@@ -79,12 +79,27 @@ class RemoveSymlinkHandler:
         return False, None
 
 
+class WriteRuleHandler:
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, str | None]:
+        if action.status == ActionStatus.NOOP:
+            return False, None
+        if not isinstance(action.payload, str):
+            return False, f"Missing rule payload for write action: {action.path}"
+
+        action.path.parent.mkdir(parents=True, exist_ok=True)
+        action.path.write_text(action.payload, encoding="utf-8")
+        return True, None
+
+
 class SyncExecutor:
     def __init__(self, core: ISourceRepository) -> None:
         self.context = ExecutionContext(core=core)
         self.handlers: dict[ActionKind, ActionHandler] = {
             ActionKind.WRITE_JSON: WriteJsonHandler(),
             ActionKind.WRITE_TEXT: WriteTextHandler(),
+            ActionKind.WRITE_RULE: WriteRuleHandler(),
             ActionKind.SYMLINK: SymlinkHandler(),
             ActionKind.REMOVE_SYMLINK: RemoveSymlinkHandler(),
         }

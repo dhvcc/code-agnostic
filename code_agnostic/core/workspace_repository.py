@@ -17,10 +17,19 @@ class WorkspaceConfigRepository(BaseSourceRepository):
     def rules_file(self) -> Path:
         return self.root / "AGENTS.md"
 
+    @property
+    def rules_dir(self) -> Path:
+        return self.root / "rules"
+
     def has_mcp(self) -> bool:
         return self.mcp_base_path.exists()
 
     def has_rules(self) -> bool:
+        if self.rules_dir.exists():
+            return any(
+                f.suffix == ".md" and not f.name.startswith(".")
+                for f in self.rules_dir.iterdir()
+            )
         return self.rules_file.exists()
 
     def has_skills(self) -> bool:

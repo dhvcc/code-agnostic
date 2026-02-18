@@ -16,7 +16,7 @@ def test_apps_list_shows_all_disabled_by_default(
 def test_apps_enable_and_disable_updates_state(
     minimal_shared_config, cli_runner
 ) -> None:
-    enable_result = cli_runner.invoke(cli, ["apps", "enable", "opencode"])
+    enable_result = cli_runner.invoke(cli, ["apps", "enable", "-a", "opencode"])
     assert enable_result.exit_code == 0
 
     list_after_enable = cli_runner.invoke(cli, ["apps", "list"])
@@ -24,7 +24,7 @@ def test_apps_enable_and_disable_updates_state(
     assert "opencode" in list_after_enable.output
     assert "enabled" in list_after_enable.output
 
-    disable_result = cli_runner.invoke(cli, ["apps", "disable", "opencode"])
+    disable_result = cli_runner.invoke(cli, ["apps", "disable", "-a", "opencode"])
     assert disable_result.exit_code == 0
 
     list_after_disable = cli_runner.invoke(cli, ["apps", "list"])
@@ -43,7 +43,7 @@ def test_apply_skips_when_no_apps_enabled(minimal_shared_config, cli_runner) -> 
 def test_apply_syncs_enabled_cursor_app(
     minimal_shared_config, cli_runner, tmp_path
 ) -> None:
-    enable_cursor = cli_runner.invoke(cli, ["apps", "enable", "cursor"])
+    enable_cursor = cli_runner.invoke(cli, ["apps", "enable", "-a", "cursor"])
     assert enable_cursor.exit_code == 0
 
     result = cli_runner.invoke(cli, ["apply"])
@@ -56,7 +56,7 @@ def test_apply_syncs_enabled_cursor_app(
 def test_status_reports_cursor_enabled_and_sync_state(
     minimal_shared_config, cli_runner
 ) -> None:
-    enable_cursor = cli_runner.invoke(cli, ["apps", "enable", "cursor"])
+    enable_cursor = cli_runner.invoke(cli, ["apps", "enable", "-a", "cursor"])
     assert enable_cursor.exit_code == 0
 
     drift_result = cli_runner.invoke(cli, ["status"])
@@ -81,6 +81,6 @@ def test_core_app_is_hidden_from_app_management_commands(
     assert list_result.exit_code == 0
     assert "core" not in list_result.output.lower()
 
-    enable_result = cli_runner.invoke(cli, ["apps", "enable", "core"])
+    enable_result = cli_runner.invoke(cli, ["apps", "enable", "-a", "core"])
     assert enable_result.exit_code != 0
     assert "invalid value" in enable_result.output.lower()

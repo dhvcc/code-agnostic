@@ -87,9 +87,12 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     core = CoreRepository(core_root)
     core.add_workspace("workspace-example", workspace_root)
 
-    # Create workspace config with rules in workspace config dir
+    # Create workspace config with rules in rules/ directory
     ws_config_dir = core.workspace_config_dir("workspace-example")
-    (ws_config_dir / "AGENTS.md").write_text("workspace rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text(
+        "workspace rules", encoding="utf-8"
+    )
 
     opencode_config_path = opencode_root / "opencode.json"
 
@@ -131,10 +134,12 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         "command": ["npx", "@sentry/mcp-server@latest"],
     }
 
+    # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo
+    compiled_agents = ws_config_dir / ".opencode" / AGENTS_FILENAME
     for repo_name in ["shop-api", "shop-web"]:
         link_path = workspace_root / repo_name / AGENTS_FILENAME
         assert link_path.is_symlink()
-        assert link_path.resolve() == (ws_config_dir / "AGENTS.md").resolve()
+        assert link_path.resolve() == compiled_agents.resolve()
 
     # Workspace state is persisted in workspace state file
     from code_agnostic.core.workspace_repository import WorkspaceConfigRepository

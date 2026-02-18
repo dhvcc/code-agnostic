@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from code_agnostic.__main__ import cli
-from code_agnostic.constants import AGENTS_FILENAME
 
 
 def test_plan_shows_invalid_json_error_for_mcp_base(
@@ -30,14 +29,15 @@ def test_plan_target_cursor_includes_workspace_actions(
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "team", str(workspace_root)]
+        cli, ["workspaces", "add", "--name", "team", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
 
     ws_config_dir = core_root / "workspaces" / "team"
-    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
-    plan_result = cli_runner.invoke(cli, ["plan", "cursor"])
+    plan_result = cli_runner.invoke(cli, ["plan", "-a", "cursor"])
     assert plan_result.exit_code == 0
     assert "cursor" in plan_result.output
     assert "workspace config sync" in plan_result.output
@@ -52,7 +52,7 @@ def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> N
 def test_plan_target_opencode_when_not_enabled(
     minimal_shared_config: Path, cli_runner
 ) -> None:
-    result = cli_runner.invoke(cli, ["plan", "opencode"])
+    result = cli_runner.invoke(cli, ["plan", "-a", "opencode"])
 
     assert result.exit_code == 0
 
@@ -71,7 +71,7 @@ def test_plan_default_view_shows_app_labels_not_paths(
 ) -> None:
     enable_app("cursor")
 
-    result = cli_runner.invoke(cli, ["plan", "cursor"])
+    result = cli_runner.invoke(cli, ["plan", "-a", "cursor"])
 
     assert result.exit_code == 0
     assert "Code Agnostic" in result.output
@@ -85,7 +85,7 @@ def test_plan_verbose_view_shows_path_columns_with_home_shorthand(
 ) -> None:
     enable_app("cursor")
 
-    result = cli_runner.invoke(cli, ["plan", "cursor", "-v"])
+    result = cli_runner.invoke(cli, ["plan", "-a", "cursor", "-v"])
 
     assert result.exit_code == 0
     assert "Path" in result.output

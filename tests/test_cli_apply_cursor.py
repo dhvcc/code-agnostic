@@ -102,7 +102,7 @@ def test_apply_cursor_generates_schema_valid_config(
         encoding="utf-8",
     )
 
-    result = cli_runner.invoke(cli, ["apply", "cursor"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
 
     assert result.exit_code == 0
     payload = json.loads(

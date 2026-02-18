@@ -17,11 +17,11 @@ def test_import_codex_then_apply_cursor_propagates_mcp(
         encoding="utf-8",
     )
 
-    import_result = cli_runner.invoke(cli, ["import", "apply", "codex"])
+    import_result = cli_runner.invoke(cli, ["import", "apply", "-a", "codex"])
     assert import_result.exit_code == 0
 
     enable_app("cursor")
-    apply_result = cli_runner.invoke(cli, ["apply", "cursor"])
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
     assert apply_result.exit_code == 0
 
     cursor_payload = json.loads(

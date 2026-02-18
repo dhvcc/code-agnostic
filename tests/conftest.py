@@ -78,7 +78,7 @@ def enable_app(cli_runner):
     from code_agnostic.__main__ import cli
 
     def _enable(app: str) -> None:
-        result = cli_runner.invoke(cli, ["apps", "enable", app])
+        result = cli_runner.invoke(cli, ["apps", "enable", "-a", app])
         assert result.exit_code == 0
 
     return _enable

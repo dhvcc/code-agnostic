@@ -7,14 +7,19 @@ from rich.console import Console
 from code_agnostic.apps.app_id import app_ids_by_capability
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.apps.common.framework import list_registered_app_services
-from code_agnostic.constants import AGENTS_FILENAME, CLAUDE_FILENAME
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.imports.models import ConflictPolicy, ImportSection
 from code_agnostic.imports.service import ImportService
+from code_agnostic.mcp_service import MCPManagementService
 from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.workspaces import WorkspaceService
+
+
+# ---------------------------------------------------------------------------
+# Value helpers
+# ---------------------------------------------------------------------------
 
 
 def _target_values() -> list[str]:
@@ -47,13 +52,59 @@ def _import_source_values() -> list[str]:
     ]
 
 
-def _target_argument(default: str = "all") -> Callable:
-    return click.argument(
-        "target",
-        required=False,
+# ---------------------------------------------------------------------------
+# Shared option / argument decorators
+# ---------------------------------------------------------------------------
+
+
+def app_option(required: bool = False) -> Callable:
+    return click.option(
+        "-a",
+        "--app",
+        required=required,
         type=click.Choice(_target_values(), case_sensitive=False),
-        default=default,
+        default="all" if not required else None,
+        help="Target app (default: all).",
     )
+
+
+def manageable_app_option(required: bool = True) -> Callable:
+    return click.option(
+        "-a",
+        "--app",
+        required=required,
+        type=click.Choice(_manageable_app_values(), case_sensitive=False),
+        help="App to manage.",
+    )
+
+
+def import_app_option(required: bool = True) -> Callable:
+    return click.option(
+        "-a",
+        "--app",
+        required=required,
+        type=click.Choice(_import_source_values(), case_sensitive=False),
+        help="Source app to import from.",
+    )
+
+
+def workspace_option(required: bool = False) -> Callable:
+    return click.option(
+        "-w",
+        "--workspace",
+        required=required,
+        default=None,
+        help="Workspace name.",
+    )
+
+
+def verbose_option() -> Callable:
+    return click.option("-v", "--verbose", is_flag=True, default=False)
+
+
+# ---------------------------------------------------------------------------
+# Status helper
+# ---------------------------------------------------------------------------
 
 
 def _status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRow:
@@ -86,18 +137,52 @@ def _status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusR
     )
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+# ---------------------------------------------------------------------------
+# AliasedGroup for singular/plural aliases
+# ---------------------------------------------------------------------------
+
+
+class AliasedGroup(click.Group):
+    ALIASES: dict[str, str] = {
+        "app": "apps",
+        "workspace": "workspaces",
+    }
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        return super().get_command(ctx, self.ALIASES.get(cmd_name, cmd_name))
+
+    def resolve_command(self, ctx: click.Context, args: list[str]):
+        if args and args[0] in self.ALIASES:
+            args[0] = self.ALIASES[args[0]]
+        return super().resolve_command(ctx, args)
+
+
+# ---------------------------------------------------------------------------
+# Root CLI
+# ---------------------------------------------------------------------------
+
+
+@click.group(
+    cls=AliasedGroup,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """App-based config sync."""
     ctx.obj = {}
 
 
+# ---------------------------------------------------------------------------
+# plan / apply / status
+# ---------------------------------------------------------------------------
+
+
 @cli.command(help="Build and print a dry-run plan.")
-@_target_argument()
-@click.option("-v", "--verbose", is_flag=True, default=False)
+@app_option()
+@verbose_option()
 @click.pass_obj
-def plan(obj: dict[str, str], target: str, verbose: bool) -> None:
+def plan(obj: dict[str, str], app: str, verbose: bool) -> None:
+    target = app or "all"
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     apps = AppsService(core)
@@ -114,10 +199,11 @@ def plan(obj: dict[str, str], target: str, verbose: bool) -> None:
 
 
 @cli.command(help="Apply planned sync changes.")
-@_target_argument()
-@click.option("-v", "--verbose", is_flag=True, default=False)
+@app_option()
+@verbose_option()
 @click.pass_obj
-def apply(obj: dict[str, str], target: str, verbose: bool) -> None:
+def apply(obj: dict[str, str], app: str, verbose: bool) -> None:
+    target = app or "all"
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     apps = AppsService(core)
@@ -146,9 +232,11 @@ def apply(obj: dict[str, str], target: str, verbose: bool) -> None:
 
 
 @cli.command(help="Show sync status for editors and workspaces.")
-@_target_argument()
+@app_option()
+@verbose_option()
 @click.pass_obj
-def status(obj: dict[str, str], target: str) -> None:
+def status(obj: dict[str, str], app: str, verbose: bool) -> None:
+    target = app or "all"
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     apps = AppsService(core)
@@ -181,6 +269,11 @@ def status(obj: dict[str, str], target: str) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# apps group
+# ---------------------------------------------------------------------------
+
+
 @cli.group(help="Enable or disable app sync targets.")
 def apps() -> None:
     pass
@@ -196,29 +289,30 @@ def apps_list(obj: dict[str, str]) -> None:
 
 
 @apps.command("enable", help="Enable app sync target.")
-@click.argument(
-    "name", type=click.Choice(_manageable_app_values(), case_sensitive=False)
-)
+@manageable_app_option()
 @click.pass_obj
-def apps_enable(obj: dict[str, str], name: str) -> None:
+def apps_enable(obj: dict[str, str], app: str) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = AppsService(core)
-    service.enable(name.lower())
+    service.enable(app.lower())
     ui.render_apps(service.list_status_rows())
 
 
 @apps.command("disable", help="Disable app sync target.")
-@click.argument(
-    "name", type=click.Choice(_manageable_app_values(), case_sensitive=False)
-)
+@manageable_app_option()
 @click.pass_obj
-def apps_disable(obj: dict[str, str], name: str) -> None:
+def apps_disable(obj: dict[str, str], app: str) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = AppsService(core)
-    service.disable(name.lower())
+    service.disable(app.lower())
     ui.render_apps(service.list_status_rows())
+
+
+# ---------------------------------------------------------------------------
+# workspaces group
+# ---------------------------------------------------------------------------
 
 
 @cli.group(help="Manage workspace roots for repo rule propagation.")
@@ -227,8 +321,13 @@ def workspaces() -> None:
 
 
 @workspaces.command("add", help="Add a workspace by name and path.")
-@click.argument("name")
-@click.argument("path", type=click.Path(path_type=Path))
+@click.option("--name", required=True, help="Workspace name.")
+@click.option(
+    "--path",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Workspace root path.",
+)
 @click.pass_obj
 def workspaces_add(obj: dict[str, str], name: str, path: Path) -> None:
     ui = SyncConsoleUI(Console())
@@ -241,7 +340,7 @@ def workspaces_add(obj: dict[str, str], name: str, path: Path) -> None:
 
 
 @workspaces.command("remove", help="Remove a workspace from config by name.")
-@click.argument("name")
+@click.option("--name", required=True, help="Workspace name to remove.")
 @click.pass_obj
 def workspaces_remove(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
@@ -312,32 +411,33 @@ def _ensure_exclude_entries(path: Path, entries: list[str]) -> tuple[int, bool]:
     "git-exclude",
     help="Add managed sync paths to each repo's .git/info/exclude.",
 )
-@click.option("--workspace", "workspace_name", default=None)
+@workspace_option()
 @click.pass_obj
-def workspaces_git_exclude(obj: dict[str, str], workspace_name: str | None) -> None:
+def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
+    from code_agnostic.git_exclude_service import GitExcludeService
+
     core = CoreRepository()
     apps = AppsService(core)
     workspace_service = WorkspaceService()
+    exclude_service = GitExcludeService(core)
 
     enabled_apps = apps.enabled_apps()
-    app_entries = [f".{app_name}" for app_name in enabled_apps]
-    base_entries = [AGENTS_FILENAME, CLAUDE_FILENAME]
-    entries = app_entries + base_entries
 
-    workspaces = core.load_workspaces()
-    if workspace_name is not None:
-        workspaces = [item for item in workspaces if item["name"] == workspace_name]
-        if not workspaces:
-            raise click.ClickException(f"Workspace not found: {workspace_name}")
+    ws_list = core.load_workspaces()
+    if workspace is not None:
+        ws_list = [item for item in ws_list if item["name"] == workspace]
+        if not ws_list:
+            raise click.ClickException(f"Workspace not found: {workspace}")
 
     processed = 0
     touched = 0
     added_lines = 0
 
-    for item in workspaces:
+    for item in ws_list:
         workspace_path = Path(item["path"])
         if not workspace_path.exists() or not workspace_path.is_dir():
             continue
+        entries = exclude_service.compute_entries(item["name"], enabled_apps)
         repos = workspace_service.discover_git_repos(workspace_path)
         for repo in repos:
             exclude_path = repo / ".git" / "info" / "exclude"
@@ -352,6 +452,350 @@ def workspaces_git_exclude(obj: dict[str, str], workspace_name: str | None) -> N
     )
 
 
+@workspaces.command(
+    "exclude-add", help="Add a custom git-exclude pattern to a workspace."
+)
+@click.option("--pattern", required=True, help="Pattern to add.")
+@workspace_option(required=True)
+@click.pass_obj
+def workspaces_exclude_add(obj: dict[str, str], pattern: str, workspace: str) -> None:
+    from code_agnostic.git_exclude_service import GitExcludeService
+
+    core = CoreRepository()
+    service = GitExcludeService(core)
+    try:
+        service.add_pattern(workspace, pattern)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    click.echo(f"Added pattern: {pattern}")
+
+
+@workspaces.command(
+    "exclude-remove", help="Remove a custom git-exclude pattern from a workspace."
+)
+@click.option("--pattern", required=True, help="Pattern to remove.")
+@workspace_option(required=True)
+@click.pass_obj
+def workspaces_exclude_remove(
+    obj: dict[str, str], pattern: str, workspace: str
+) -> None:
+    from code_agnostic.git_exclude_service import GitExcludeService
+
+    core = CoreRepository()
+    service = GitExcludeService(core)
+    try:
+        removed = service.remove_pattern(workspace, pattern)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    if not removed:
+        raise click.ClickException(f"Pattern not found: {pattern}")
+    click.echo(f"Removed pattern: {pattern}")
+
+
+@workspaces.command("exclude-list", help="List git-exclude config for a workspace.")
+@workspace_option(required=True)
+@click.pass_obj
+def workspaces_exclude_list(obj: dict[str, str], workspace: str) -> None:
+    from code_agnostic.git_exclude_service import GitExcludeService
+
+    core = CoreRepository()
+    service = GitExcludeService(core)
+    try:
+        config = service.list_patterns(workspace)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    click.echo(f"  include_defaults: {config.get('include_defaults', True)}")
+    extras = config.get("extra_patterns", [])
+    if extras:
+        click.echo("  extra_patterns:")
+        for p in extras:
+            click.echo(f"    - {p}")
+    else:
+        click.echo("  extra_patterns: (none)")
+
+
+# ---------------------------------------------------------------------------
+# rules group
+# ---------------------------------------------------------------------------
+
+
+@cli.group(help="Manage rule definitions in the hub config.")
+def rules() -> None:
+    pass
+
+
+@rules.command("list", help="List configured rules.")
+@workspace_option()
+@click.pass_obj
+def rules_list(obj: dict[str, str], workspace: str | None) -> None:
+    from code_agnostic.rules.repository import RulesRepository
+
+    core = CoreRepository()
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        root = core.workspace_config_dir(workspace)
+    else:
+        root = core.root
+
+    repo = RulesRepository(root)
+    rule_list = repo.list_rules()
+    if not rule_list:
+        click.echo("No rules configured.")
+        return
+    for rule in rule_list:
+        desc = rule.metadata.description or "(no description)"
+        click.echo(f"  {rule.name}: {desc}")
+
+
+@rules.command("remove", help="Remove a rule by name.")
+@click.option("--name", required=True, help="Rule name to remove.")
+@workspace_option()
+@click.pass_obj
+def rules_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
+    from code_agnostic.rules.repository import RulesRepository
+
+    core = CoreRepository()
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        root = core.workspace_config_dir(workspace)
+    else:
+        root = core.root
+
+    repo = RulesRepository(root)
+    if not repo.remove_rule(name):
+        raise click.ClickException(f"Rule not found: {name}")
+    click.echo(f"Removed: {name}")
+
+
+# ---------------------------------------------------------------------------
+# skills group
+# ---------------------------------------------------------------------------
+
+
+@cli.group(help="Manage skill definitions in the hub config.")
+def skills() -> None:
+    pass
+
+
+@skills.command("list", help="List configured skills.")
+@workspace_option()
+@click.pass_obj
+def skills_list(obj: dict[str, str], workspace: str | None) -> None:
+    core = CoreRepository()
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        root = core.workspace_config_dir(workspace)
+    else:
+        root = core.root
+    skill_sources = []
+    skills_dir = root / "skills"
+    if skills_dir.exists():
+        for child in sorted(skills_dir.iterdir()):
+            if child.is_dir() and (child / "SKILL.md").exists():
+                skill_sources.append(child)
+    if not skill_sources:
+        click.echo("No skills configured.")
+        return
+    for source in skill_sources:
+        click.echo(f"  {source.name}")
+
+
+@skills.command("remove", help="Remove a skill by name.")
+@click.option("--name", required=True, help="Skill name to remove.")
+@workspace_option()
+@click.pass_obj
+def skills_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
+    import shutil
+
+    core = CoreRepository()
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        root = core.workspace_config_dir(workspace)
+    else:
+        root = core.root
+    skill_dir = root / "skills" / name
+    if not skill_dir.exists():
+        raise click.ClickException(f"Skill not found: {name}")
+    shutil.rmtree(skill_dir)
+    click.echo(f"Removed: {name}")
+
+
+# ---------------------------------------------------------------------------
+# agents group (CLI management)
+# ---------------------------------------------------------------------------
+
+
+@cli.group(name="agents", help="Manage agent definitions in the hub config.")
+def agents_group() -> None:
+    pass
+
+
+@agents_group.command("list", help="List configured agents.")
+@workspace_option()
+@click.pass_obj
+def agents_list(obj: dict[str, str], workspace: str | None) -> None:
+    core = CoreRepository()
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        root = core.workspace_config_dir(workspace)
+    else:
+        root = core.root
+    agents_dir = root / "agents"
+    agent_files = []
+    if agents_dir.exists():
+        for child in sorted(agents_dir.iterdir()):
+            if not child.name.startswith("."):
+                agent_files.append(child)
+    if not agent_files:
+        click.echo("No agents configured.")
+        return
+    for f in agent_files:
+        click.echo(f"  {f.stem}")
+
+
+@agents_group.command("remove", help="Remove an agent by name.")
+@click.option("--name", required=True, help="Agent name to remove.")
+@workspace_option()
+@click.pass_obj
+def agents_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
+    core = CoreRepository()
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        root = core.workspace_config_dir(workspace)
+    else:
+        root = core.root
+    agent_path = root / "agents" / f"{name}.md"
+    if not agent_path.exists():
+        raise click.ClickException(f"Agent not found: {name}")
+    agent_path.unlink()
+    click.echo(f"Removed: {name}")
+
+
+# ---------------------------------------------------------------------------
+# mcp group
+# ---------------------------------------------------------------------------
+
+
+@cli.group(help="Manage MCP server definitions in the hub config.")
+def mcp() -> None:
+    pass
+
+
+@mcp.command("list", help="List configured MCP servers.")
+@workspace_option()
+@click.pass_obj
+def mcp_list(obj: dict[str, str], workspace: str | None) -> None:
+    core = CoreRepository()
+    service = MCPManagementService(core)
+    try:
+        servers = service.list_servers(workspace=workspace)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    if not servers:
+        click.echo("No MCP servers configured.")
+        return
+    for name, dto in sorted(servers.items()):
+        detail = dto.command or dto.url or ""
+        click.echo(f"  {name}: {detail}")
+
+
+def _parse_env_pair(raw: str) -> tuple[str, str]:
+    if "=" in raw:
+        key, _, value = raw.partition("=")
+        return key, value
+    return raw, f"${{{raw}}}"
+
+
+@mcp.command("add", help="Add an MCP server definition.")
+@click.argument("name")
+@click.option("--command", default=None, help="Command for stdio server.")
+@click.option(
+    "--args", "args_str", default=None, help="Comma-separated args for stdio server."
+)
+@click.option("--url", default=None, help="URL for HTTP/SSE server.")
+@click.option(
+    "--env",
+    "env_pairs",
+    multiple=True,
+    help="Env var as KEY or KEY=VALUE (repeatable).",
+)
+@click.option(
+    "--headers", "header_pairs", multiple=True, help="Header as KEY=VALUE (repeatable)."
+)
+@click.option(
+    "--on-conflict",
+    type=click.Choice([item.value for item in ConflictPolicy]),
+    default=ConflictPolicy.FAIL.value,
+    show_default=True,
+)
+@workspace_option()
+@click.pass_obj
+def mcp_add(
+    obj: dict[str, str],
+    name: str,
+    command: str | None,
+    args_str: str | None,
+    url: str | None,
+    env_pairs: tuple[str, ...],
+    header_pairs: tuple[str, ...],
+    on_conflict: str,
+    workspace: str | None,
+) -> None:
+    args = [a.strip() for a in args_str.split(",")] if args_str else []
+    env = dict(_parse_env_pair(p) for p in env_pairs) if env_pairs else {}
+    headers = dict(_parse_env_pair(p) for p in header_pairs) if header_pairs else {}
+
+    core = CoreRepository()
+    service = MCPManagementService(core)
+    try:
+        msg = service.add_server(
+            name=name,
+            command=command,
+            args=args or None,
+            url=url,
+            env=env or None,
+            headers=headers or None,
+            workspace=workspace,
+            on_conflict=ConflictPolicy(on_conflict),
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    click.echo(msg)
+
+
+@mcp.command("remove", help="Remove an MCP server definition.")
+@click.argument("name")
+@workspace_option()
+@click.pass_obj
+def mcp_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
+    core = CoreRepository()
+    service = MCPManagementService(core)
+    try:
+        removed = service.remove_server(name, workspace=workspace)
+    except ValueError as exc:
+        raise click.ClickException(str(exc))
+    if not removed:
+        raise click.ClickException(f"Server not found: {name}")
+    click.echo(f"Removed: {name}")
+
+
+# ---------------------------------------------------------------------------
+# import group
+# ---------------------------------------------------------------------------
+
+
 @cli.group(name="import", help="Import existing app config into hub.")
 def import_group() -> None:
     pass
@@ -364,10 +808,7 @@ def _parse_import_sections(items: tuple[str, ...]) -> list[ImportSection] | None
 
 
 @import_group.command("plan", help="Plan import from source app into hub.")
-@click.argument(
-    "source_app",
-    type=click.Choice(_import_source_values()),
-)
+@import_app_option()
 @click.option(
     "--include",
     "includes",
@@ -390,45 +831,64 @@ def _parse_import_sections(items: tuple[str, ...]) -> list[ImportSection] | None
 )
 @click.option("--source-root", type=click.Path(path_type=Path))
 @click.option("--follow-symlinks", is_flag=True, default=False)
-@click.option("-v", "--verbose", is_flag=True, default=False)
+@click.option(
+    "-i",
+    "--interactive",
+    is_flag=True,
+    default=False,
+    help="Launch interactive TUI to pick individual items.",
+)
+@verbose_option()
 @click.pass_obj
 def import_plan(
     obj: dict[str, str],
-    source_app: str,
+    app: str,
     includes: tuple[str, ...],
     excludes: tuple[str, ...],
     on_conflict: str,
     source_root: Path | None,
     follow_symlinks: bool,
+    interactive: bool,
     verbose: bool,
 ) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = ImportService(core)
 
-    plan = service.plan(
-        source_app=source_app,
+    result_plan = service.plan(
+        source_app=app,
         include=_parse_import_sections(includes),
         exclude=_parse_import_sections(excludes),
         conflict_policy=ConflictPolicy(on_conflict),
         source_root=source_root,
         follow_symlinks=follow_symlinks,
     )
+
+    if interactive:
+        from code_agnostic.tui.import_selector import (
+            ImportSelectorApp,
+            filter_plan_by_selection,
+        )
+
+        tui_app = ImportSelectorApp(result_plan)
+        selected = tui_app.run()
+        if not selected:
+            click.echo("No items selected.")
+            return
+        result_plan = filter_plan_by_selection(result_plan, selected)
+
     ui.render_import_plan(
-        plan,
-        mode=f"import:plan:{source_app.lower()}",
+        result_plan,
+        mode=f"import:plan:{app.lower()}",
         verbose=verbose,
     )
 
-    if plan.errors:
+    if result_plan.errors:
         raise click.exceptions.Exit(1)
 
 
 @import_group.command("apply", help="Apply import from source app into hub.")
-@click.argument(
-    "source_app",
-    type=click.Choice(_import_source_values()),
-)
+@import_app_option()
 @click.option(
     "--include",
     "includes",
@@ -451,44 +911,71 @@ def import_plan(
 )
 @click.option("--source-root", type=click.Path(path_type=Path))
 @click.option("--follow-symlinks", is_flag=True, default=False)
-@click.option("-v", "--verbose", is_flag=True, default=False)
+@click.option(
+    "-i",
+    "--interactive",
+    is_flag=True,
+    default=False,
+    help="Launch interactive TUI to pick individual items.",
+)
+@verbose_option()
 @click.pass_obj
 def import_apply(
     obj: dict[str, str],
-    source_app: str,
+    app: str,
     includes: tuple[str, ...],
     excludes: tuple[str, ...],
     on_conflict: str,
     source_root: Path | None,
     follow_symlinks: bool,
+    interactive: bool,
     verbose: bool,
 ) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = ImportService(core)
 
-    plan = service.plan(
-        source_app=source_app,
+    result_plan = service.plan(
+        source_app=app,
         include=_parse_import_sections(includes),
         exclude=_parse_import_sections(excludes),
         conflict_policy=ConflictPolicy(on_conflict),
         source_root=source_root,
         follow_symlinks=follow_symlinks,
     )
+
+    if interactive:
+        from code_agnostic.tui.import_selector import (
+            ImportSelectorApp,
+            filter_plan_by_selection,
+        )
+
+        tui_app = ImportSelectorApp(result_plan)
+        selected = tui_app.run()
+        if not selected:
+            click.echo("No items selected.")
+            return
+        result_plan = filter_plan_by_selection(result_plan, selected)
+
     ui.render_import_plan(
-        plan,
-        mode=f"import:apply:{source_app.lower()}",
+        result_plan,
+        mode=f"import:apply:{app.lower()}",
         verbose=verbose,
     )
 
-    if plan.errors:
+    if result_plan.errors:
         raise click.ClickException("Import aborted due to conflicts/errors above.")
 
-    result = service.apply(plan)
+    result = service.apply(result_plan)
     ui.render_import_apply_result(result)
 
     if result.failed:
         raise click.exceptions.Exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 
 def main() -> int:

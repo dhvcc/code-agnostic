@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 from code_agnostic.__main__ import cli
-from code_agnostic.constants import AGENTS_FILENAME
 
 
 def test_apply_cursor_target_writes_only_cursor_config(
@@ -10,7 +9,7 @@ def test_apply_cursor_target_writes_only_cursor_config(
 ) -> None:
     enable_app("cursor")
 
-    result = cli_runner.invoke(cli, ["apply", "cursor"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
 
     assert result.exit_code == 0
     assert (tmp_path / ".cursor" / "mcp.json").exists()
@@ -22,7 +21,7 @@ def test_apply_codex_target_writes_toml_config(
 ) -> None:
     enable_app("codex")
 
-    result = cli_runner.invoke(cli, ["apply", "codex"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
 
     assert result.exit_code == 0
     codex_config = tmp_path / ".codex" / "config.toml"
@@ -36,7 +35,7 @@ def test_apply_all_with_cursor_and_codex_writes_both(
     enable_app("cursor")
     enable_app("codex")
 
-    result = cli_runner.invoke(cli, ["apply", "all"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "all"])
 
     assert result.exit_code == 0
     cursor_payload = json.loads(
@@ -60,20 +59,31 @@ def test_apply_cursor_target_also_applies_workspace_links(
     (workspace_root / "service-a" / ".git").mkdir(parents=True)
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "workspace-example",
+            "--path",
+            str(workspace_root),
+        ],
     )
     assert add_result.exit_code == 0
 
-    # Create workspace config with rules
+    # Create workspace config with rules in rules/ directory
     ws_config_dir = core_root / "workspaces" / "workspace-example"
-    (ws_config_dir / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
-    apply_result = cli_runner.invoke(cli, ["apply", "cursor"])
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
     assert apply_result.exit_code == 0
 
-    workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
-    assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == (ws_config_dir / AGENTS_FILENAME).resolve()
+    # Cursor compiles rules to .mdc files in .cursor/rules/, then symlinks the dir
+    compiled_rules_dir = ws_config_dir / ".cursor" / "rules"
+    repo_rules_link = workspace_root / "service-a" / ".cursor" / "rules"
+    assert repo_rules_link.is_symlink()
+    assert repo_rules_link.resolve() == compiled_rules_dir.resolve()
 
 
 def test_apply_cursor_aborts_on_invalid_cursor_json(
@@ -87,7 +97,7 @@ def test_apply_cursor_aborts_on_invalid_cursor_json(
     cursor_path.parent.mkdir(parents=True, exist_ok=True)
     cursor_path.write_text("{oops", encoding="utf-8")
 
-    result = cli_runner.invoke(cli, ["apply", "cursor"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
 
     assert result.exit_code != 0
     assert "Apply aborted" in result.output
@@ -105,7 +115,7 @@ def test_apply_codex_aborts_on_invalid_toml(
     codex_path.parent.mkdir(parents=True, exist_ok=True)
     codex_path.write_text("[mcp_servers.demo\nurl='x'", encoding="utf-8")
 
-    result = cli_runner.invoke(cli, ["apply", "codex"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
 
     assert result.exit_code != 0
     assert "Apply aborted" in result.output
@@ -131,7 +141,7 @@ def test_apply_cursor_aborts_on_invalid_schema_key(
         encoding="utf-8",
     )
 
-    result = cli_runner.invoke(cli, ["apply", "cursor"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
 
     assert result.exit_code != 0
     assert "Invalid config schema" in result.output
@@ -158,7 +168,7 @@ def test_apply_codex_aborts_on_invalid_schema_key(
         encoding="utf-8",
     )
 
-    result = cli_runner.invoke(cli, ["apply", "codex"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
 
     assert result.exit_code != 0
     assert "Invalid config schema" in result.output

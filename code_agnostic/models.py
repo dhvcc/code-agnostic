@@ -9,6 +9,7 @@ from code_agnostic.utils import is_under
 class ActionKind(str, Enum):
     WRITE_JSON = "write_json"
     WRITE_TEXT = "write_text"
+    WRITE_RULE = "write_rule"
     SYMLINK = "symlink"
     REMOVE_SYMLINK = "remove_symlink"
 

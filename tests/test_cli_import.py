@@ -27,7 +27,7 @@ def test_import_plan_codex_shows_sections(cli_runner, tmp_path: Path) -> None:
         {"demo": {"command": "uvx"}},
     )
 
-    result = cli_runner.invoke(cli, ["import", "plan", "codex"])
+    result = cli_runner.invoke(cli, ["import", "plan", "-a", "codex"])
 
     assert result.exit_code == 0
     assert "import overview" in result.output
@@ -42,7 +42,7 @@ def test_import_apply_codex_imports_mcp_and_skills(cli_runner, tmp_path: Path) -
         {"demo": {"command": "uvx"}},
     )
 
-    result = cli_runner.invoke(cli, ["import", "apply", "codex"])
+    result = cli_runner.invoke(cli, ["import", "apply", "-a", "codex"])
 
     assert result.exit_code == 0
     mcp_base = json.loads(
@@ -67,7 +67,9 @@ def test_import_apply_honors_include_filter(cli_runner, tmp_path: Path) -> None:
         {"demo": {"command": "uvx"}},
     )
 
-    result = cli_runner.invoke(cli, ["import", "apply", "codex", "--include", "mcp"])
+    result = cli_runner.invoke(
+        cli, ["import", "apply", "-a", "codex", "--include", "mcp"]
+    )
 
     assert result.exit_code == 0
     assert (
@@ -86,7 +88,7 @@ def test_import_apply_honors_exclude_filter(cli_runner, tmp_path: Path) -> None:
 
     result = cli_runner.invoke(
         cli,
-        ["import", "apply", "codex", "--exclude", "skills"],
+        ["import", "apply", "-a", "codex", "--exclude", "skills"],
     )
 
     assert result.exit_code == 0
@@ -103,7 +105,7 @@ def test_import_plan_reports_unsupported_section(cli_runner, tmp_path: Path) -> 
 
     result = cli_runner.invoke(
         cli,
-        ["import", "plan", "codex", "--include", "agents"],
+        ["import", "plan", "-a", "codex", "--include", "agents"],
     )
 
     assert result.exit_code == 0
@@ -125,7 +127,9 @@ def test_import_apply_conflict_policy_skip_is_default(
         encoding="utf-8",
     )
 
-    result = cli_runner.invoke(cli, ["import", "apply", "codex", "--include", "mcp"])
+    result = cli_runner.invoke(
+        cli, ["import", "apply", "-a", "codex", "--include", "mcp"]
+    )
 
     assert result.exit_code == 0
     payload = json.loads(core_mcp_path.read_text(encoding="utf-8"))
@@ -150,6 +154,7 @@ def test_import_apply_conflict_policy_overwrite(cli_runner, tmp_path: Path) -> N
         [
             "import",
             "apply",
+            "-a",
             "codex",
             "--include",
             "mcp",
@@ -181,6 +186,7 @@ def test_import_apply_conflict_policy_fail(cli_runner, tmp_path: Path) -> None:
         [
             "import",
             "apply",
+            "-a",
             "codex",
             "--include",
             "mcp",
@@ -196,7 +202,7 @@ def test_import_apply_conflict_policy_fail(cli_runner, tmp_path: Path) -> None:
 def test_import_plan_default_view_shows_app_labels(cli_runner, tmp_path: Path) -> None:
     _write_codex_source(tmp_path / ".codex", {"demo": {"command": "uvx"}})
 
-    result = cli_runner.invoke(cli, ["import", "plan", "codex"])
+    result = cli_runner.invoke(cli, ["import", "plan", "-a", "codex"])
 
     assert result.exit_code == 0
     assert "Codex" in result.output
@@ -210,7 +216,7 @@ def test_import_plan_verbose_view_shows_source_and_target_paths(
 ) -> None:
     _write_codex_source(tmp_path / ".codex", {"demo": {"command": "uvx"}})
 
-    result = cli_runner.invoke(cli, ["import", "plan", "codex", "-v"])
+    result = cli_runner.invoke(cli, ["import", "plan", "-a", "codex", "-v"])
 
     assert result.exit_code == 0
     assert "Path" in result.output

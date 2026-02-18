@@ -140,7 +140,8 @@ def test_workspace_rules_symlinks_planned_for_each_repo(
     core.add_workspace("myws", workspace_root)
 
     ws_config = core.workspace_config_dir("myws")
-    (ws_config / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
     plan = SyncPlanner(
         core=core, app_services=[_opencode_service(core, opencode_root)]
@@ -375,7 +376,8 @@ def test_executor_persists_workspace_state_separately(
     core.add_workspace("myws", workspace_root)
 
     ws_config = core.workspace_config_dir("myws")
-    (ws_config / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
@@ -384,14 +386,16 @@ def test_executor_persists_workspace_state_separately(
     assert failed == 0
 
     # Workspace state persisted to workspace state file
+    # Cursor compiles rules to .mdc in .cursor/rules/ and symlinks the dir
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     ws_state = ws_repo.load_state()
-    assert "rules" in ws_state["managed_links"]
-    assert len(ws_state["managed_links"]["rules"]) == 1
+    managed = ws_state["managed_links"]
+    assert "ws:cursor:repo_rules_dir" in managed
+    assert len(managed["ws:cursor:repo_rules_dir"]) == 1
 
     # Global state should not contain workspace links
     global_state = core.load_state()
-    assert "rules" not in global_state.get("managed_links", {})
+    assert "ws:cursor:repo_rules_dir" not in global_state.get("managed_links", {})
 
 
 # --- Full roundtrip with apply ---
@@ -413,7 +417,8 @@ def test_full_workspace_config_roundtrip(
     core.add_workspace("myws", workspace_root)
 
     ws_config = core.workspace_config_dir("myws")
-    (ws_config / AGENTS_FILENAME).write_text("workspace rules", encoding="utf-8")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("workspace rules", encoding="utf-8")
     write_json(
         ws_config / "mcp.base.json",
         {"mcpServers": {"ws-server": {"url": "https://ws.example.com/mcp"}}},
@@ -439,11 +444,23 @@ def test_full_workspace_config_roundtrip(
     assert failures == []
     assert applied > 0
 
-    # Check rules symlinks
+    # Check rules symlinks (OpenCode compiles to .opencode/AGENTS.md, then symlinks)
+    compiled_agents = ws_config / ".opencode" / AGENTS_FILENAME
     for repo_name in ["repo-a", "repo-b"]:
         link = workspace_root / repo_name / AGENTS_FILENAME
         assert link.is_symlink()
-        assert link.resolve() == (ws_config / AGENTS_FILENAME).resolve()
+        assert link.resolve() == compiled_agents.resolve()
+
+    # Check Cursor compiled rules dir (.cursor/rules/ with .mdc files)
+    compiled_cursor_rules = ws_config / ".cursor" / "rules"
+    ws_root_cursor_rules = workspace_root / ".cursor" / "rules"
+    assert ws_root_cursor_rules.is_symlink()
+    assert ws_root_cursor_rules.resolve() == compiled_cursor_rules.resolve()
+
+    for repo_name in ["repo-a", "repo-b"]:
+        repo_rules = workspace_root / repo_name / ".cursor" / "rules"
+        assert repo_rules.is_symlink()
+        assert repo_rules.resolve() == compiled_cursor_rules.resolve()
 
     # Check MCP config rendered into workspace, then linked into repos
     ws_cursor_mcp = ws_config / ".cursor" / "mcp.json"
@@ -496,6 +513,8 @@ def test_workspace_stale_rules_cleanup_on_config_removal(
     core_root: Path,
     tmp_path: Path,
 ) -> None:
+    import shutil
+
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
@@ -504,17 +523,19 @@ def test_workspace_stale_rules_cleanup_on_config_removal(
     core.add_workspace("myws", workspace_root)
 
     ws_config = core.workspace_config_dir("myws")
-    (ws_config / AGENTS_FILENAME).write_text("rules", encoding="utf-8")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
     SyncExecutor(core=core).execute(plan)
-    link = workspace_root / "repo-a" / AGENTS_FILENAME
+    # Cursor compiles rules to .cursor/rules/ dir and symlinks it into repos
+    link = workspace_root / "repo-a" / ".cursor" / "rules"
     assert link.is_symlink()
 
-    # Remove rules file
-    (ws_config / AGENTS_FILENAME).unlink()
+    # Remove rules directory
+    shutil.rmtree(ws_config / "rules")
 
     plan2 = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 

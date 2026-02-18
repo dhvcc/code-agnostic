@@ -16,7 +16,15 @@ def test_status_reports_editor_and_workspace_repo_sync(
     (workspace_root / "notes").mkdir()
 
     add_result = cli_runner.invoke(
-        cli, ["workspaces", "add", "workspace-example", str(workspace_root)]
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "workspace-example",
+            "--path",
+            str(workspace_root),
+        ],
     )
     assert add_result.exit_code == 0
 
@@ -49,7 +57,7 @@ def test_status_can_scope_to_single_app(
 ) -> None:
     enable_app("cursor")
 
-    result = cli_runner.invoke(cli, ["status", "cursor"])
+    result = cli_runner.invoke(cli, ["status", "-a", "cursor"])
 
     assert result.exit_code == 0
     assert "cursor" in result.output
