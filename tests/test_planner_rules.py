@@ -63,7 +63,9 @@ def test_plan_workspace_no_rules(setup_workspace, enable_app) -> None:
     assert len(rule_actions) == 0
 
 
-def test_plan_rules_compiled_per_app(setup_workspace, enable_app) -> None:
+def test_plan_rules_compiled_only_for_workspace_propagation_apps(
+    setup_workspace, enable_app
+) -> None:
     enable_app("opencode")
     enable_app("cursor")
     ws = setup_workspace
@@ -79,14 +81,14 @@ def test_plan_rules_compiled_per_app(setup_workspace, enable_app) -> None:
     plan = apps.plan_for_target("all")
 
     rule_actions = [a for a in plan.actions if a.kind == ActionKind.WRITE_RULE]
-    # Should have rules compiled for both opencode and cursor
-    assert len(rule_actions) >= 2
+    # Cursor workspace propagation is intentionally disabled.
+    assert len(rule_actions) == 1
 
     # OpenCode should get AGENTS.md
     opencode_rules = [a for a in rule_actions if "opencode" in a.detail]
     assert len(opencode_rules) >= 1
     assert any("AGENTS.md" in a.detail for a in opencode_rules)
 
-    # Cursor should get .mdc file
+    # Cursor should not compile workspace rules.
     cursor_rules = [a for a in rule_actions if "cursor" in a.detail]
-    assert len(cursor_rules) >= 1
+    assert cursor_rules == []

@@ -20,7 +20,25 @@ _ensure_repo_on_path()
 def isolated_home(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("APPDATA", str(tmp_path / ".config"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / ".local" / "share"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def enforce_default_path_isolation(isolated_home, tmp_path: Path) -> None:
+    """Fail fast if defaults ever point outside per-test tmp home."""
+
+    from code_agnostic.apps.codex.config_repository import CodexConfigRepository
+    from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
+    from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
+    from code_agnostic.core.repository import CoreRepository
+
+    assert CoreRepository().root == tmp_path / ".config" / "code-agnostic"
+    assert OpenCodeConfigRepository().root == tmp_path / ".config" / "opencode"
+    assert CursorConfigRepository().root == tmp_path / ".cursor"
+    assert CodexConfigRepository().root == tmp_path / ".codex"
 
 
 @pytest.fixture(autouse=True)
