@@ -7,6 +7,7 @@ from rich.console import Console
 from code_agnostic.apps.app_id import app_ids_by_capability
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.apps.common.framework import list_registered_app_services
+from code_agnostic.constants import AGENTS_FILENAME, CLAUDE_FILENAME
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.imports.models import ConflictPolicy, ImportSection
 from code_agnostic.imports.service import ImportService
@@ -286,6 +287,69 @@ def workspaces_list(obj: dict[str, str]) -> None:
         )
 
     ui.render_workspaces_overview(overview)
+
+
+def _ensure_exclude_entries(path: Path, entries: list[str]) -> tuple[int, bool]:
+    existing_lines: list[str] = []
+    if path.exists():
+        existing_lines = path.read_text(encoding="utf-8").splitlines()
+
+    seen = set(existing_lines)
+    additions = [entry for entry in entries if entry not in seen]
+    if not additions:
+        return 0, False
+
+    merged = list(existing_lines)
+    if merged and merged[-1] != "":
+        merged.append("")
+    merged.extend(additions)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(merged) + "\n", encoding="utf-8")
+    return len(additions), True
+
+
+@workspaces.command(
+    "git-exclude",
+    help="Add managed sync paths to each repo's .git/info/exclude.",
+)
+@click.option("--workspace", "workspace_name", default=None)
+@click.pass_obj
+def workspaces_git_exclude(obj: dict[str, str], workspace_name: str | None) -> None:
+    core = CoreRepository()
+    apps = AppsService(core)
+    workspace_service = WorkspaceService()
+
+    enabled_apps = apps.enabled_apps()
+    app_entries = [f".{app_name}" for app_name in enabled_apps]
+    base_entries = [AGENTS_FILENAME, CLAUDE_FILENAME]
+    entries = app_entries + base_entries
+
+    workspaces = core.load_workspaces()
+    if workspace_name is not None:
+        workspaces = [item for item in workspaces if item["name"] == workspace_name]
+        if not workspaces:
+            raise click.ClickException(f"Workspace not found: {workspace_name}")
+
+    processed = 0
+    touched = 0
+    added_lines = 0
+
+    for item in workspaces:
+        workspace_path = Path(item["path"])
+        if not workspace_path.exists() or not workspace_path.is_dir():
+            continue
+        repos = workspace_service.discover_git_repos(workspace_path)
+        for repo in repos:
+            exclude_path = repo / ".git" / "info" / "exclude"
+            added, changed = _ensure_exclude_entries(exclude_path, entries)
+            processed += 1
+            if changed:
+                touched += 1
+                added_lines += added
+
+    click.echo(
+        f"Updated git excludes: repos={processed}, changed={touched}, lines_added={added_lines}"
+    )
 
 
 @cli.group(name="import", help="Import existing app config into hub.")

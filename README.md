@@ -88,8 +88,31 @@ Cursor and Codex MCP payload sync are gated behind app toggles.
 - `plan`, `apply`, and `status` all accept an optional target argument: `all|opencode|cursor|codex`.
 - `plan`/`apply` and `import plan`/`import apply` default to app labels in Source/Target columns; use `-v`/`--verbose` to include Source Path/Target Path columns.
 - Workspace actions are app-agnostic building blocks and are included even when targeting a specific app.
+- `workspaces git-exclude` adds managed sync paths to each repo's `.git/info/exclude` (enabled app dirs like `.cursor`, plus `AGENTS.md` and `CLAUDE.md`) to reduce accidental commits of synced symlinks.
 - Plan/apply/status behavior is stable in intent, but UX and command shape are still being refined.
 - Schema validation is part of tests for generated OpenCode config; Cursor schema coverage is intentionally scoped to fields we manage.
+
+## Workspace Git Exclude
+
+When syncing workspace-level links into many existing repos, you often want those paths ignored locally.
+
+Run:
+
+```bash
+code-agnostic workspaces git-exclude
+```
+
+By default this updates `.git/info/exclude` for every discovered git repo in configured workspaces with:
+
+- enabled app config dirs (for example `.cursor`, `.opencode`, `.codex`)
+- `AGENTS.md`
+- `CLAUDE.md`
+
+You can target a specific workspace:
+
+```bash
+code-agnostic workspaces git-exclude --workspace <name>
+```
 
 ## Import Existing App Config
 

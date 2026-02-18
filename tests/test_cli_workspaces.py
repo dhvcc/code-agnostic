@@ -110,3 +110,59 @@ def test_workspaces_list_with_inaccessible_path(
     list_result = cli_runner.invoke(cli, ["workspaces", "list"])
     assert list_result.exit_code == 0
     assert "myws" in list_result.output
+
+
+def test_workspaces_git_exclude_writes_enabled_apps_and_default_rules(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    workspace_root = tmp_path / "corp-ws"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git" / "info").mkdir(parents=True)
+    (workspace_root / "repo-b" / ".git" / "info").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "corp", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
+    assert result.exit_code == 0
+    assert "Updated git excludes" in result.output
+
+    expected_entries = [".cursor", "AGENTS.md", "CLAUDE.md"]
+    unexpected_entries = [".opencode", ".codex"]
+
+    for repo_name in ["repo-a", "repo-b"]:
+        exclude = workspace_root / repo_name / ".git" / "info" / "exclude"
+        content = exclude.read_text(encoding="utf-8")
+        for item in expected_entries:
+            assert item in content
+        for item in unexpected_entries:
+            assert item not in content
+
+
+def test_workspaces_git_exclude_can_target_single_workspace(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    ws_a = tmp_path / "ws-a"
+    ws_b = tmp_path / "ws-b"
+    ws_a.mkdir()
+    ws_b.mkdir()
+    (ws_a / "repo-a" / ".git" / "info").mkdir(parents=True)
+    (ws_b / "repo-b" / ".git" / "info").mkdir(parents=True)
+
+    assert cli_runner.invoke(cli, ["workspaces", "add", "a", str(ws_a)]).exit_code == 0
+    assert cli_runner.invoke(cli, ["workspaces", "add", "b", str(ws_b)]).exit_code == 0
+
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["workspaces", "git-exclude", "--workspace", "a"])
+    assert result.exit_code == 0
+
+    exclude_a = ws_a / "repo-a" / ".git" / "info" / "exclude"
+    exclude_b = ws_b / "repo-b" / ".git" / "info" / "exclude"
+
+    assert ".cursor" in exclude_a.read_text(encoding="utf-8")
+    assert not exclude_b.exists()
