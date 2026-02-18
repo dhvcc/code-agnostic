@@ -41,5 +41,11 @@ export const features: Feature[] = [
 		title: 'Interactive TUI',
 		description: 'Textual-based selector for cherry-picking individual items during import.',
 		snippet: 'code-agnostic import plan -a codex -i'
+	},
+	{
+		title: 'Docker isolation',
+		description: 'Run in a container and only mount the paths you want to expose from your host filesystem.',
+		snippet:
+			'docker run --rm -it \\\n  -v "$(pwd):/workspace" \\\n  -w /workspace \\\n  ghcr.io/dhvcc/code-agnostic:latest plan'
 	}
 ];

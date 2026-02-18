@@ -40,6 +40,19 @@
 					<CodeBlock code={step.code} />
 				</div>
 			{/each}
+
+			<div class="border-l-2 border-accent/40 pl-6">
+				<div class="flex items-baseline gap-3 mb-2">
+					<span class="font-mono text-xs text-accent">04</span>
+					<h3 class="text-base font-medium text-text">Run in Docker (optional)</h3>
+				</div>
+				<p class="text-sm text-text-muted mb-4">
+					Use the published image to isolate filesystem access to mounted paths only.
+				</p>
+				<CodeBlock
+					code={'docker run --rm -it \\\n  -v "$(pwd):/workspace" \\\n  -w /workspace \\\n  ghcr.io/dhvcc/code-agnostic:latest plan'}
+				/>
+			</div>
 		</div>
 	</div>
 </section>

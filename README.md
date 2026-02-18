@@ -40,6 +40,17 @@ Or run without installing:
 uvx code-agnostic
 ```
 
+Or run the published Docker image to isolate filesystem access to mounted paths only:
+
+```bash
+docker run --rm -it \
+  -v "$(pwd):/workspace" \
+  -w /workspace \
+  ghcr.io/dhvcc/code-agnostic:latest plan
+```
+
+By default, config stays inside the container at `/root/.config` unless you mount a host path.
+
 ## Quick start
 
 ```bash
