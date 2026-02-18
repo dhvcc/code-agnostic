@@ -147,7 +147,7 @@ class SyncPlanner:
 
         for svc in self.app_services:
             meta = app_metadata(svc.app_id)
-            if meta.project_dir_name is None:
+            if meta.project_dir_name is None or not meta.supports_workspace_propagation:
                 continue
 
             ws_project_root = ws_source.root / meta.project_dir_name

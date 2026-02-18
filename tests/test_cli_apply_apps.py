@@ -45,7 +45,7 @@ def test_apply_all_with_cursor_and_codex_writes_both(
     assert (tmp_path / ".codex" / "config.toml").exists()
 
 
-def test_apply_cursor_target_also_applies_workspace_links(
+def test_apply_cursor_target_does_not_apply_workspace_links(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -79,11 +79,8 @@ def test_apply_cursor_target_also_applies_workspace_links(
     apply_result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
     assert apply_result.exit_code == 0
 
-    # Cursor compiles rules to .mdc files in .cursor/rules/, then symlinks the dir
-    compiled_rules_dir = ws_config_dir / ".cursor" / "rules"
     repo_rules_link = workspace_root / "service-a" / ".cursor" / "rules"
-    assert repo_rules_link.is_symlink()
-    assert repo_rules_link.resolve() == compiled_rules_dir.resolve()
+    assert not repo_rules_link.exists()
 
 
 def test_apply_cursor_aborts_on_invalid_cursor_json(

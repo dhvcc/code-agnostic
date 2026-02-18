@@ -75,11 +75,11 @@ code-agnostic apply
 | Rules sync (cross-compiled) | yes | yes | yes |
 | Skills sync | yes | yes | yes |
 | Agents sync | yes | yes | -- |
-| Workspace propagation | yes | yes | yes |
+| Workspace propagation | yes | -- | yes |
 | Import from | yes | yes | yes |
 | Interactive import (TUI) | yes | yes | yes |
 
-Codex does not support agents natively.
+Codex does not support agents natively. Workspace propagation is intentionally disabled for Cursor to avoid duplicate MCP initialization in multi-root workspaces: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003
 
 ## Features
 
@@ -138,7 +138,9 @@ code-agnostic agents list
 
 ### Workspaces
 
-Register workspace directories. Repos inside them get rules, skills, and agents propagated as symlinks.
+Register workspace directories. Repos inside them get rules, skills, and agents propagated as symlinks for OpenCode and Codex.
+
+`.cursor` workspace propagation is intentionally disabled to avoid duplicate MCP initialization when opening multi-root workspaces in Cursor (related issue: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003).
 
 ```bash
 code-agnostic workspaces add --name myproject --path ~/code/myproject

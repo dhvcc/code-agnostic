@@ -21,7 +21,7 @@ def service_with_workspace(minimal_shared_config: Path, tmp_path: Path):
 
 def test_defaults_only(service_with_workspace) -> None:
     entries = service_with_workspace.compute_entries("myws", ["cursor", "codex"])
-    assert ".cursor" in entries
+    assert ".cursor" not in entries
     assert ".codex" in entries
     assert AGENTS_FILENAME in entries
     assert CLAUDE_FILENAME in entries
@@ -30,7 +30,7 @@ def test_defaults_only(service_with_workspace) -> None:
 def test_custom_patterns_merged(service_with_workspace) -> None:
     service_with_workspace.add_pattern("myws", "*.generated")
     entries = service_with_workspace.compute_entries("myws", ["cursor"])
-    assert ".cursor" in entries
+    assert ".cursor" not in entries
     assert AGENTS_FILENAME in entries
     assert "*.generated" in entries
 

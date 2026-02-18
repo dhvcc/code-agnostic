@@ -15,7 +15,7 @@ def test_plan_shows_invalid_json_error_for_mcp_base(
     assert "Invalid JSON format" in result.output
 
 
-def test_plan_target_cursor_includes_workspace_actions(
+def test_plan_target_cursor_excludes_workspace_actions(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -40,7 +40,7 @@ def test_plan_target_cursor_includes_workspace_actions(
     plan_result = cli_runner.invoke(cli, ["plan", "-a", "cursor"])
     assert plan_result.exit_code == 0
     assert "cursor" in plan_result.output
-    assert "workspace config sync" in plan_result.output
+    assert "workspace config sync" not in plan_result.output
 
 
 def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> None:

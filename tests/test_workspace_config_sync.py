@@ -1,6 +1,5 @@
 """Tests for workspace-level config sync (MCP, skills, agents, rules)."""
 
-import json
 from pathlib import Path
 
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
@@ -158,7 +157,7 @@ def test_workspace_rules_symlinks_planned_for_each_repo(
 # --- Workspace MCP config sync ---
 
 
-def test_workspace_mcp_sync_to_cursor_project_dirs(
+def test_workspace_mcp_sync_skips_cursor_workspace_propagation(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -180,28 +179,9 @@ def test_workspace_mcp_sync_to_cursor_project_dirs(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    mcp_actions = [
-        a
-        for a in plan.actions
-        if a.app == "workspace"
-        and a.kind in (ActionKind.WRITE_JSON, ActionKind.WRITE_TEXT)
-    ]
-    assert len(mcp_actions) == 1
-    assert mcp_actions[0].workspace == "myws"
-
-    # The MCP config should be rendered once into workspace config dir
-    expected_path = ws_config / ".cursor" / "mcp.json"
-    assert mcp_actions[0].path == expected_path
-
-    # And then symlinked into each repo
-    link_actions = [
-        a
-        for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:cursor:repo_mcp"
-    ]
-    assert len(link_actions) == 1
-    assert link_actions[0].path == workspace_root / "repo-a" / ".cursor" / "mcp.json"
-    assert link_actions[0].source == expected_path
+    workspace_actions = [a for a in plan.actions if a.app == "workspace"]
+    assert workspace_actions == []
+    assert not (ws_config / ".cursor").exists()
 
 
 def test_workspace_mcp_sync_to_codex_project_dirs(
@@ -248,7 +228,7 @@ def test_workspace_mcp_sync_to_codex_project_dirs(
 # --- Workspace skill symlinks ---
 
 
-def test_workspace_skills_symlinked_to_repo_project_dirs(
+def test_workspace_skills_skip_cursor_workspace_propagation(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -267,33 +247,19 @@ def test_workspace_skills_symlinked_to_repo_project_dirs(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    # Workspace skill entry symlinked into workspace project dir
-    ws_entry_actions = [
+    cursor_workspace_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:cursor:skills_entries"
+        if a.scope is not None and a.scope.startswith("ws:cursor:")
     ]
-    assert len(ws_entry_actions) == 1
-    assert ws_entry_actions[0].workspace == "myws"
-    assert ws_entry_actions[0].path == ws_config / ".cursor" / "skills" / "my-skill"
-    assert ws_entry_actions[0].source == ws_config / "skills" / "my-skill"
-
-    # Repo links its skills dir to workspace skills dir
-    repo_dir_actions = [
-        a
-        for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:cursor:repo_skills_dir"
-    ]
-    assert len(repo_dir_actions) == 1
-    assert repo_dir_actions[0].workspace == "myws"
-    assert repo_dir_actions[0].path == workspace_root / "repo-a" / ".cursor" / "skills"
-    assert repo_dir_actions[0].source == ws_config / ".cursor" / "skills"
+    assert cursor_workspace_actions == []
+    assert not (workspace_root / "repo-a" / ".cursor").exists()
 
 
 # --- Workspace agent symlinks ---
 
 
-def test_workspace_agents_symlinked_to_repo_project_dirs(
+def test_workspace_agents_skip_cursor_workspace_propagation(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -312,25 +278,13 @@ def test_workspace_agents_symlinked_to_repo_project_dirs(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    ws_entry_actions = [
+    cursor_workspace_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:cursor:agents_entries"
+        if a.scope is not None and a.scope.startswith("ws:cursor:")
     ]
-    assert len(ws_entry_actions) == 1
-    assert ws_entry_actions[0].workspace == "myws"
-    assert ws_entry_actions[0].path == ws_config / ".cursor" / "agents" / "planner.md"
-    assert ws_entry_actions[0].source == ws_config / "agents" / "planner.md"
-
-    repo_dir_actions = [
-        a
-        for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:cursor:repo_agents_dir"
-    ]
-    assert len(repo_dir_actions) == 1
-    assert repo_dir_actions[0].workspace == "myws"
-    assert repo_dir_actions[0].path == workspace_root / "repo-a" / ".cursor" / "agents"
-    assert repo_dir_actions[0].source == ws_config / ".cursor" / "agents"
+    assert cursor_workspace_actions == []
+    assert not (workspace_root / "repo-a" / ".cursor").exists()
 
 
 def test_workspace_agents_not_synced_to_codex(
@@ -379,23 +333,22 @@ def test_executor_persists_workspace_state_separately(
     (ws_config / "rules").mkdir(parents=True, exist_ok=True)
     (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
-    cursor_root = tmp_path / ".cursor"
-    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
     applied, failed, failures = SyncExecutor(core=core).execute(plan)
     assert failed == 0
 
-    # Workspace state persisted to workspace state file
-    # Cursor compiles rules to .mdc in .cursor/rules/ and symlinks the dir
+    # Workspace state persisted to workspace state file.
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     ws_state = ws_repo.load_state()
     managed = ws_state["managed_links"]
-    assert "ws:cursor:repo_rules_dir" in managed
-    assert len(managed["ws:cursor:repo_rules_dir"]) == 1
+    assert "rules" in managed
+    assert len(managed["rules"]) == 1
 
     # Global state should not contain workspace links
     global_state = core.load_state()
-    assert "ws:cursor:repo_rules_dir" not in global_state.get("managed_links", {})
+    assert "rules" not in global_state.get("managed_links", {})
 
 
 # --- Full roundtrip with apply ---
@@ -428,12 +381,10 @@ def test_full_workspace_config_roundtrip(
     (ws_config / "agents").mkdir(parents=True)
     (ws_config / "agents" / "ws-agent.md").write_text("a", encoding="utf-8")
 
-    cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(
         core=core,
         app_services=[
             _opencode_service(core, opencode_root),
-            _cursor_service(cursor_root),
         ],
     ).build()
 
@@ -451,70 +402,21 @@ def test_full_workspace_config_roundtrip(
         assert link.is_symlink()
         assert link.resolve() == compiled_agents.resolve()
 
-    # Check Cursor compiled rules dir (.cursor/rules/ with .mdc files)
-    compiled_cursor_rules = ws_config / ".cursor" / "rules"
-    ws_root_cursor_rules = workspace_root / ".cursor" / "rules"
-    assert ws_root_cursor_rules.is_symlink()
-    assert ws_root_cursor_rules.resolve() == compiled_cursor_rules.resolve()
-
+    # Cursor workspace propagation is intentionally disabled.
+    assert not (ws_config / ".cursor").exists()
+    assert not (workspace_root / ".cursor").exists()
     for repo_name in ["repo-a", "repo-b"]:
-        repo_rules = workspace_root / repo_name / ".cursor" / "rules"
-        assert repo_rules.is_symlink()
-        assert repo_rules.resolve() == compiled_cursor_rules.resolve()
-
-    # Check MCP config rendered into workspace, then linked into repos
-    ws_cursor_mcp = ws_config / ".cursor" / "mcp.json"
-    assert ws_cursor_mcp.exists()
-    payload = json.loads(ws_cursor_mcp.read_text(encoding="utf-8"))
-    assert "ws-server" in payload.get("mcpServers", {})
-
-    # Workspace root also gets the shared links (for multi-root workspace sessions)
-    ws_root_cursor_mcp = workspace_root / ".cursor" / "mcp.json"
-    assert ws_root_cursor_mcp.is_symlink()
-    assert ws_root_cursor_mcp.resolve() == ws_cursor_mcp.resolve()
-
-    for repo_name in ["repo-a", "repo-b"]:
-        cursor_mcp = workspace_root / repo_name / ".cursor" / "mcp.json"
-        assert cursor_mcp.is_symlink()
-        assert cursor_mcp.resolve() == ws_cursor_mcp.resolve()
-
-    # Check skill links in workspace project dir and repo linkage
-    ws_skill_link = ws_config / ".cursor" / "skills" / "ws-skill"
-    assert ws_skill_link.is_symlink()
-
-    ws_root_skill_dir = workspace_root / ".cursor" / "skills"
-    assert ws_root_skill_dir.is_symlink()
-
-    for repo_name in ["repo-a", "repo-b"]:
-        skill_dir = workspace_root / repo_name / ".cursor" / "skills"
-        assert skill_dir.is_symlink()
-        skill_link = skill_dir / "ws-skill"
-        assert skill_link.is_symlink()
-
-    # Check agent links in workspace project dir and repo linkage
-    ws_agent_link = ws_config / ".cursor" / "agents" / "ws-agent.md"
-    assert ws_agent_link.is_symlink()
-
-    ws_root_agent_dir = workspace_root / ".cursor" / "agents"
-    assert ws_root_agent_dir.is_symlink()
-
-    for repo_name in ["repo-a", "repo-b"]:
-        agent_dir = workspace_root / repo_name / ".cursor" / "agents"
-        assert agent_dir.is_symlink()
-        agent_link = agent_dir / "ws-agent.md"
-        assert agent_link.is_symlink()
+        assert not (workspace_root / repo_name / ".cursor").exists()
 
 
 # --- Stale workspace link cleanup ---
 
 
-def test_workspace_stale_rules_cleanup_on_config_removal(
+def test_workspace_rules_not_linked_for_cursor(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
 ) -> None:
-    import shutil
-
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
@@ -530,20 +432,10 @@ def test_workspace_stale_rules_cleanup_on_config_removal(
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
     SyncExecutor(core=core).execute(plan)
-    # Cursor compiles rules to .cursor/rules/ dir and symlinks it into repos
-    link = workspace_root / "repo-a" / ".cursor" / "rules"
-    assert link.is_symlink()
-
-    # Remove rules directory
-    shutil.rmtree(ws_config / "rules")
-
-    plan2 = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
-
-    SyncExecutor(core=core).execute(plan2)
-    assert not link.is_symlink()
+    assert not (workspace_root / "repo-a" / ".cursor" / "rules").exists()
 
 
-def test_workspace_stale_skills_cleanup_when_skills_removed(
+def test_workspace_stale_skills_cleanup_when_skills_removed_for_codex(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -560,32 +452,32 @@ def test_workspace_stale_skills_cleanup_when_skills_removed(
     (ws_config / "skills" / "my-skill").mkdir(parents=True)
     (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
 
-    cursor_root = tmp_path / ".cursor"
-    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
     SyncExecutor(core=core).execute(plan)
-    skill_dir_link = workspace_root / "repo-a" / ".cursor" / "skills"
+    skill_dir_link = workspace_root / "repo-a" / ".codex" / "skills"
     assert skill_dir_link.is_symlink()
 
     # Verify state was persisted with workspace scopes
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     state = ws_repo.load_state()
-    assert "ws:cursor:skills_entries" in state["managed_links"]
-    assert "ws:cursor:repo_skills_dir" in state["managed_links"]
+    assert "ws:codex:skills_entries" in state["managed_links"]
+    assert "ws:codex:repo_skills_dir" in state["managed_links"]
 
     # Remove all skills from workspace config
     import shutil
 
     shutil.rmtree(ws_config / "skills")
 
-    plan2 = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+    plan2 = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
     # Should have remove actions for stale workspace entry and repo dir link
     remove_actions = [
         a
         for a in plan2.actions
         if a.kind == ActionKind.REMOVE_SYMLINK
-        and a.scope in ("ws:cursor:skills_entries", "ws:cursor:repo_skills_dir")
+        and a.scope in ("ws:codex:skills_entries", "ws:codex:repo_skills_dir")
     ]
     assert len(remove_actions) == 2
 

@@ -25,7 +25,8 @@ export const features: Feature[] = [
 	},
 	{
 		title: 'Workspaces',
-		description: 'Register workspace directories. Repos inside get rules, skills, and agents propagated as symlinks.',
+		description:
+			'Register workspace directories. Repos inside get rules, skills, and agents propagated as symlinks for OpenCode and Codex. Cursor workspace propagation is intentionally disabled to avoid duplicate MCP initialization in multi-root workspaces.',
 		snippet: 'code-agnostic workspaces add \\\n  --name myproject \\\n  --path ~/code/myproject'
 	},
 	{

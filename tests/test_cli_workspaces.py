@@ -151,7 +151,7 @@ def test_workspaces_git_exclude_writes_enabled_apps_and_default_rules(
     assert result.exit_code == 0
     assert "Updated git excludes" in result.output
 
-    expected_entries = [".cursor", "AGENTS.md", "CLAUDE.md"]
+    expected_entries = ["AGENTS.md", "CLAUDE.md"]
     unexpected_entries = [".opencode", ".codex"]
 
     for repo_name in ["repo-a", "repo-b"]:
@@ -194,5 +194,5 @@ def test_workspaces_git_exclude_can_target_single_workspace(
     exclude_a = ws_a / "repo-a" / ".git" / "info" / "exclude"
     exclude_b = ws_b / "repo-b" / ".git" / "info" / "exclude"
 
-    assert ".cursor" in exclude_a.read_text(encoding="utf-8")
+    assert ".cursor" not in exclude_a.read_text(encoding="utf-8")
     assert not exclude_b.exists()
