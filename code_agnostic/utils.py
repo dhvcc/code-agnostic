@@ -47,8 +47,8 @@ def is_under(path: Path, root: Path) -> bool:
 
 
 def compact_home_path(path: str | Path) -> str:
-    text = str(path)
-    home = str(Path.home())
+    text = str(path).replace("\\", "/")
+    home = str(Path.home()).replace("\\", "/")
     if text == home:
         return "~"
     home_prefix = f"{home}/"
@@ -58,7 +58,8 @@ def compact_home_path(path: str | Path) -> str:
 
 
 def compact_home_paths_in_text(text: str) -> str:
-    home = str(Path.home())
-    if text == home:
+    home = str(Path.home()).replace("\\", "/")
+    normalized = text.replace("\\", "/")
+    if normalized == home:
         return "~"
-    return text.replace(f"{home}/", "~/")
+    return normalized.replace(f"{home}/", "~/")
