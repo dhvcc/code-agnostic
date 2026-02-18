@@ -498,20 +498,18 @@ def workspaces_exclude_remove(
 def workspaces_exclude_list(obj: dict[str, str], workspace: str) -> None:
     from code_agnostic.git_exclude_service import GitExcludeService
 
+    ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = GitExcludeService(core)
     try:
         config = service.list_patterns(workspace)
     except ValueError as exc:
         raise click.ClickException(str(exc))
-    click.echo(f"  include_defaults: {config.get('include_defaults', True)}")
-    extras = config.get("extra_patterns", [])
-    if extras:
-        click.echo("  extra_patterns:")
-        for p in extras:
-            click.echo(f"    - {p}")
-    else:
-        click.echo("  extra_patterns: (none)")
+    ui.render_exclude_config(
+        workspace=workspace,
+        include_defaults=config.get("include_defaults", True),
+        extra_patterns=config.get("extra_patterns", []),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -530,6 +528,7 @@ def rules() -> None:
 def rules_list(obj: dict[str, str], workspace: str | None) -> None:
     from code_agnostic.rules.repository import RulesRepository
 
+    ui = SyncConsoleUI(Console())
     core = CoreRepository()
     if workspace is not None:
         names = {item["name"] for item in core.load_workspaces()}
@@ -541,12 +540,11 @@ def rules_list(obj: dict[str, str], workspace: str | None) -> None:
 
     repo = RulesRepository(root)
     rule_list = repo.list_rules()
-    if not rule_list:
-        click.echo("No rules configured.")
-        return
-    for rule in rule_list:
-        desc = rule.metadata.description or "(no description)"
-        click.echo(f"  {rule.name}: {desc}")
+    rows = [
+        [rule.name, rule.metadata.description or "(no description)"]
+        for rule in rule_list
+    ]
+    ui.render_list("rules", ["Rule", "Description"], rows, "No rules configured.")
 
 
 @rules.command("remove", help="Remove a rule by name.")
@@ -585,6 +583,7 @@ def skills() -> None:
 @workspace_option()
 @click.pass_obj
 def skills_list(obj: dict[str, str], workspace: str | None) -> None:
+    ui = SyncConsoleUI(Console())
     core = CoreRepository()
     if workspace is not None:
         names = {item["name"] for item in core.load_workspaces()}
@@ -599,11 +598,8 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
         for child in sorted(skills_dir.iterdir()):
             if child.is_dir() and (child / "SKILL.md").exists():
                 skill_sources.append(child)
-    if not skill_sources:
-        click.echo("No skills configured.")
-        return
-    for source in skill_sources:
-        click.echo(f"  {source.name}")
+    rows = [[source.name] for source in skill_sources]
+    ui.render_list("skills", ["Skill"], rows, "No skills configured.")
 
 
 @skills.command("remove", help="Remove a skill by name.")
@@ -642,6 +638,7 @@ def agents_group() -> None:
 @workspace_option()
 @click.pass_obj
 def agents_list(obj: dict[str, str], workspace: str | None) -> None:
+    ui = SyncConsoleUI(Console())
     core = CoreRepository()
     if workspace is not None:
         names = {item["name"] for item in core.load_workspaces()}
@@ -656,11 +653,8 @@ def agents_list(obj: dict[str, str], workspace: str | None) -> None:
         for child in sorted(agents_dir.iterdir()):
             if not child.name.startswith("."):
                 agent_files.append(child)
-    if not agent_files:
-        click.echo("No agents configured.")
-        return
-    for f in agent_files:
-        click.echo(f"  {f.stem}")
+    rows = [[f.stem] for f in agent_files]
+    ui.render_list("agents", ["Agent"], rows, "No agents configured.")
 
 
 @agents_group.command("remove", help="Remove an agent by name.")
@@ -697,18 +691,19 @@ def mcp() -> None:
 @workspace_option()
 @click.pass_obj
 def mcp_list(obj: dict[str, str], workspace: str | None) -> None:
+    ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = MCPManagementService(core)
     try:
         servers = service.list_servers(workspace=workspace)
     except ValueError as exc:
         raise click.ClickException(str(exc))
-    if not servers:
-        click.echo("No MCP servers configured.")
-        return
-    for name, dto in sorted(servers.items()):
-        detail = dto.command or dto.url or ""
-        click.echo(f"  {name}: {detail}")
+    rows = [
+        [name, dto.command or dto.url or ""] for name, dto in sorted(servers.items())
+    ]
+    ui.render_list(
+        "mcp servers", ["Server", "Command / URL"], rows, "No MCP servers configured."
+    )
 
 
 def _parse_env_pair(raw: str) -> tuple[str, str]:

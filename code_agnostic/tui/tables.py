@@ -294,6 +294,16 @@ class AppsTable:
         return table
 
 
+class ConfigListTable:
+    @staticmethod
+    def build(headers: list[str], rows: list[list[str]]) -> Table:
+        columns = [Column(header=h, overflow="ellipsis") for h in headers]
+        table = Table(*columns, expand=True, header_style="bold")
+        for row in rows:
+            table.add_row(*row)
+        return table
+
+
 class ImportTable:
     @staticmethod
     def summary_block(plan: ImportPlan, mode: str):

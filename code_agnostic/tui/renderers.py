@@ -13,6 +13,7 @@ from code_agnostic.tui.sections import UISection
 from code_agnostic.tui.tables import (
     AppsTable,
     ApplyTable,
+    ConfigListTable,
     ImportTable,
     PlanTable,
     StatusTable,
@@ -182,6 +183,44 @@ class SyncConsoleUI:
         self.console.print(
             UISection.wrap(
                 "apps", AppsTable.apps_table(items), style=UIStyle.BLUE.value
+            )
+        )
+
+    def render_list(
+        self,
+        title: str,
+        headers: list[str],
+        rows: list[list[str]],
+        empty_msg: str = "None configured.",
+    ) -> None:
+        if not rows:
+            self.console.print(
+                UISection.note(title, empty_msg, style=UIStyle.YELLOW.value)
+            )
+            return
+        self.console.print(
+            UISection.wrap(
+                title,
+                ConfigListTable.build(headers, rows),
+                style=UIStyle.BLUE.value,
+            )
+        )
+
+    def render_exclude_config(
+        self, workspace: str, include_defaults: bool, extra_patterns: list[str]
+    ) -> None:
+        lines = [f"include_defaults: {include_defaults}"]
+        if extra_patterns:
+            lines.append("extra_patterns:")
+            for p in extra_patterns:
+                lines.append(f"  - {p}")
+        else:
+            lines.append("extra_patterns: (none)")
+        self.console.print(
+            UISection.note(
+                f"git-exclude ({workspace})",
+                "\n".join(lines),
+                style=UIStyle.BLUE.value,
             )
         )
 
