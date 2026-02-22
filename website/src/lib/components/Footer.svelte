@@ -1,8 +1,8 @@
 <script lang="ts">
 	const links = [
-		{ href: 'https://github.com/dhvcc/llm-sync', label: 'GitHub' },
+		{ href: 'https://github.com/dhvcc/code-agnostic', label: 'GitHub' },
 		{ href: 'https://pypi.org/project/code-agnostic/', label: 'PyPI' },
-		{ href: 'https://github.com/dhvcc/llm-sync/blob/main/LICENSE', label: 'GPLv3' }
+		{ href: 'https://github.com/dhvcc/code-agnostic/blob/main/LICENSE', label: 'GPLv3' }
 	];
 </script>
 

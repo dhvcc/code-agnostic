@@ -50,7 +50,7 @@
 				</a>
 			{/each}
 			<a
-				href="https://github.com/dhvcc/llm-sync"
+				href="https://github.com/dhvcc/code-agnostic"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="text-sm text-text-dim hover:text-text-muted transition-colors"
@@ -88,7 +88,7 @@
 					</a>
 				{/each}
 				<a
-					href="https://github.com/dhvcc/llm-sync"
+					href="https://github.com/dhvcc/code-agnostic"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="text-sm text-text-muted hover:text-text transition-colors"

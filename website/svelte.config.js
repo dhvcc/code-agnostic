@@ -11,7 +11,7 @@ const config = {
 			fallback: '404.html'
 		}),
 		paths: {
-			base: dev ? '' : '/llm-sync'
+			base: dev ? '' : '/code-agnostic'
 		}
 	}
 };
