@@ -26,11 +26,20 @@ def test_opencode_mapper_from_common() -> None:
         }
     )
 
-    assert mapped["local"] == {"type": "local", "command": ["npx", "-y", "demo"]}
-    assert mapped["remote"] == {"type": "remote", "url": "https://example.com/mcp"}
+    assert mapped["local"] == {
+        "type": "local",
+        "command": ["npx", "-y", "demo"],
+        "enabled": True,
+    }
+    assert mapped["remote"] == {
+        "type": "remote",
+        "url": "https://example.com/mcp",
+        "enabled": True,
+    }
     assert mapped["oauth"] == {
         "type": "remote",
         "url": "https://example.com/oauth",
+        "enabled": True,
         "oauth": {"clientId": "id", "clientSecret": "secret", "scope": "read"},
     }
 

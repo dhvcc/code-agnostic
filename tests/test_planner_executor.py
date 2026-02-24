@@ -128,10 +128,12 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     assert opencode_config["mcp"]["context7"] == {
         "type": "remote",
         "url": "https://mcp.context7.com/mcp",
+        "enabled": True,
     }
     assert opencode_config["mcp"]["sentry"] == {
         "type": "local",
         "command": ["npx", "@sentry/mcp-server@latest"],
+        "enabled": True,
     }
 
     # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo

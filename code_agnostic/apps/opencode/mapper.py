@@ -91,6 +91,8 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                     if server.auth.scopes:
                         out["oauth"]["scope"] = server.auth.scopes[0]
 
+            out["enabled"] = True
+
             if server.headers:
                 out["headers"] = deepcopy(server.headers)
             if server.env:
