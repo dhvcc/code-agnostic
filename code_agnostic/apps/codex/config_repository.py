@@ -6,32 +6,10 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore
 
+import tomlkit
+
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
-
-
-def _dump_toml_value(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return str(value)
-    if isinstance(value, list):
-        return "[" + ", ".join(_dump_toml_value(item) for item in value) + "]"
-    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
-
-
-def _dump_string_table(
-    lines: list[str], table_name: str, values: dict[str, str]
-) -> None:
-    if not values:
-        return
-    lines.append(f"[{table_name}]")
-    for key in sorted(values):
-        lines.append(f"{key} = {_dump_toml_value(values[key])}")
-    lines.append("")
 
 
 class CodexConfigRepository(IAppConfigRepository):
@@ -67,48 +45,11 @@ class CodexConfigRepository(IAppConfigRepository):
         self.config_path.write_text(serialized, encoding="utf-8")
 
     def serialize_config(self, payload: dict[str, Any]) -> str:
-        lines: list[str] = []
-        mcp_servers = payload.get("mcp_servers")
-        if isinstance(mcp_servers, dict):
-            for name in sorted(mcp_servers):
-                server = mcp_servers[name]
-                if not isinstance(server, dict):
-                    continue
-                lines.append(f"[mcp_servers.{name}]")
-                for key in [
-                    "command",
-                    "args",
-                    "url",
-                    "env_vars",
-                    "bearer_token_env_var",
-                    "scopes",
-                ]:
-                    if key in server:
-                        lines.append(f"{key} = {_dump_toml_value(server[key])}")
-                lines.append("")
-
-                env_table = server.get("env")
-                if isinstance(env_table, dict):
-                    _dump_string_table(
-                        lines,
-                        f"mcp_servers.{name}.env",
-                        {str(k): str(v) for k, v in env_table.items()},
-                    )
-                http_headers = server.get("http_headers")
-                if isinstance(http_headers, dict):
-                    _dump_string_table(
-                        lines,
-                        f"mcp_servers.{name}.http_headers",
-                        {str(k): str(v) for k, v in http_headers.items()},
-                    )
-                env_http_headers = server.get("env_http_headers")
-                if isinstance(env_http_headers, dict):
-                    _dump_string_table(
-                        lines,
-                        f"mcp_servers.{name}.env_http_headers",
-                        {str(k): str(v) for k, v in env_http_headers.items()},
-                    )
-        return "\n".join(lines).strip() + "\n"
+        normalized = dict(payload)
+        mcp = normalized.get("mcp_servers")
+        if isinstance(mcp, dict) and not mcp:
+            normalized.pop("mcp_servers", None)
+        return tomlkit.dumps(normalized)
 
     def load_mcp_payload(self) -> dict[str, Any]:
         payload = self.load_config()

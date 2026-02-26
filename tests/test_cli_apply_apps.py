@@ -3,6 +3,11 @@ from pathlib import Path
 
 from code_agnostic.__main__ import cli
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
+
 
 def test_apply_cursor_target_writes_only_cursor_config(
     minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
@@ -27,6 +32,36 @@ def test_apply_codex_target_writes_toml_config(
     codex_config = tmp_path / ".codex" / "config.toml"
     assert codex_config.exists()
     assert "[mcp_servers]" not in codex_config.read_text(encoding="utf-8")
+
+
+def test_apply_codex_preserves_project_trust_settings(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    enable_app("codex")
+    codex_path = tmp_path / ".codex" / "config.toml"
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    project_a = str(tmp_path / "repo-a")
+    project_b = str(tmp_path / "repo-b")
+    codex_path.write_text(
+        "\n".join(
+            [
+                f'[projects."{project_a}"]',
+                'trust_level = "trusted"',
+                "",
+                f'[projects."{project_b}"]',
+                'trust_level = "trusted"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    payload = tomllib.loads(codex_path.read_text(encoding="utf-8"))
+    assert payload["projects"][project_a]["trust_level"] == "trusted"
+    assert payload["projects"][project_b]["trust_level"] == "trusted"
 
 
 def test_apply_all_with_cursor_and_codex_writes_both(

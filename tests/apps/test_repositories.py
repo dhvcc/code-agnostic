@@ -127,3 +127,32 @@ def test_codex_repository_roundtrip(tmp_path: Path) -> None:
     assert reloaded["local"]["command"] == "uvx"
     assert reloaded["local"]["args"] == ["demo"]
     assert reloaded["remote"]["url"] == "https://x"
+
+
+def test_codex_repository_save_mcp_payload_preserves_other_sections(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".codex"
+    config_path = root / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    project_path = str(tmp_path / "repo-a")
+    config_path.write_text(
+        "\n".join(
+            [
+                f'[projects."{project_path}"]',
+                'trust_level = "trusted"',
+                "",
+                "[mcp_servers.old]",
+                'command = "uvx"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    repo = CodexConfigRepository(root=root)
+    repo.save_mcp_payload({"new": {"url": "https://x"}})
+    payload = repo.load_config()
+
+    assert payload["projects"][project_path]["trust_level"] == "trusted"
+    assert payload["mcp_servers"] == {"new": {"url": "https://x"}}
