@@ -9,6 +9,10 @@ except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore
 
 
+def _escape_toml_basic_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def test_apply_cursor_target_writes_only_cursor_config(
     minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
 ) -> None:
@@ -42,13 +46,15 @@ def test_apply_codex_preserves_project_trust_settings(
     codex_path.parent.mkdir(parents=True, exist_ok=True)
     project_a = str(tmp_path / "repo-a")
     project_b = str(tmp_path / "repo-b")
+    escaped_project_a = _escape_toml_basic_string(project_a)
+    escaped_project_b = _escape_toml_basic_string(project_b)
     codex_path.write_text(
         "\n".join(
             [
-                f'[projects."{project_a}"]',
+                f'[projects."{escaped_project_a}"]',
                 'trust_level = "trusted"',
                 "",
-                f'[projects."{project_b}"]',
+                f'[projects."{escaped_project_b}"]',
                 'trust_level = "trusted"',
                 "",
             ]

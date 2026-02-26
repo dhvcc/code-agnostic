@@ -5,6 +5,10 @@ from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 
 
+def _escape_toml_basic_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def test_opencode_repository_reads_and_writes_mcp(write_json, tmp_path: Path) -> None:
     root = tmp_path / ".config" / "opencode"
     write_json(
@@ -136,10 +140,11 @@ def test_codex_repository_save_mcp_payload_preserves_other_sections(
     config_path = root / "config.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     project_path = str(tmp_path / "repo-a")
+    escaped_project_path = _escape_toml_basic_string(project_path)
     config_path.write_text(
         "\n".join(
             [
-                f'[projects."{project_path}"]',
+                f'[projects."{escaped_project_path}"]',
                 'trust_level = "trusted"',
                 "",
                 "[mcp_servers.old]",
