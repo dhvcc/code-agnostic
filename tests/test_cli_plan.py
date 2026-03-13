@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from code_agnostic.__main__ import cli
+from code_agnostic.apps.apps_service import AppsService
+from code_agnostic.core.repository import CoreRepository
+from code_agnostic.models import ActionKind
 
 
 def test_plan_shows_invalid_json_error_for_mcp_base(
@@ -15,7 +18,7 @@ def test_plan_shows_invalid_json_error_for_mcp_base(
     assert "Invalid JSON format" in result.output
 
 
-def test_plan_target_cursor_excludes_workspace_actions(
+def test_plan_target_cursor_skips_cursor_workspace_dirs_but_keeps_agents_links(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -37,10 +40,19 @@ def test_plan_target_cursor_excludes_workspace_actions(
     (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
     (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
+    core = CoreRepository(core_root)
+    plan = AppsService(core).plan_for_target("cursor")
+    assert any(
+        a.kind == ActionKind.SYMLINK and a.scope == "rules" for a in plan.actions
+    )
+    assert not any(
+        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
+    )
+
     plan_result = cli_runner.invoke(cli, ["plan", "-a", "cursor"])
     assert plan_result.exit_code == 0
     assert "cursor" in plan_result.output
-    assert "workspace config sync" not in plan_result.output
+    assert "workspace config sync" in plan_result.output
 
 
 def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> None:

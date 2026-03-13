@@ -40,6 +40,24 @@ def test_agents_import_copies_supported_app_assets(tmp_path: Path) -> None:
     assert (core.agents_dir / "planner.md").exists()
 
 
+def test_codex_agents_import_copies_supported_app_assets(tmp_path: Path) -> None:
+    source = tmp_path / ".codex"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "config.toml").write_text("", encoding="utf-8")
+    agent_file = source / "agents" / "planner.md"
+    agent_file.parent.mkdir(parents=True)
+    agent_file.write_text("agent", encoding="utf-8")
+
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    plan = service.plan("codex", include=[ImportSection.AGENTS])
+    result = service.apply(plan)
+
+    assert result.failed == 0
+    assert (core.agents_dir / "planner.md").exists()
+
+
 def test_assets_import_is_idempotent(tmp_path: Path) -> None:
     source = tmp_path / ".codex"
     skill_dir = source / "skills" / "demo"

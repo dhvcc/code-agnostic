@@ -84,10 +84,7 @@ def test_plan_rules_compiled_only_for_workspace_propagation_apps(
     # Cursor workspace propagation is intentionally disabled.
     assert len(rule_actions) == 1
 
-    # OpenCode should get AGENTS.md
-    opencode_rules = [a for a in rule_actions if "opencode" in a.detail]
-    assert len(opencode_rules) >= 1
-    assert any("AGENTS.md" in a.detail for a in opencode_rules)
+    assert any("AGENTS.md" in a.detail for a in rule_actions)
 
     # Cursor should not compile workspace rules.
     cursor_rules = [a for a in rule_actions if "cursor" in a.detail]

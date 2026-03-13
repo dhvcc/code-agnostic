@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from typing import Protocol
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
@@ -136,45 +137,79 @@ class SyncExecutor:
 
     def _persist_state(self, plan: SyncPlan) -> None:
         global_links: dict[str, list[str]] = {}
+        global_touched_scopes: set[str] = set()
         workspace_links: dict[str, dict[str, list[str]]] = {}
+        workspace_touched_scopes: dict[str, set[str]] = {}
 
         for action in plan.actions:
-            if action.kind != ActionKind.SYMLINK:
-                continue
             if action.scope is None:
-                continue
-            if not action.path.is_symlink():
                 continue
 
             if action.workspace is not None:
                 ws_name = action.workspace
-                workspace_links.setdefault(ws_name, {}).setdefault(
-                    action.scope, []
-                ).append(str(action.path))
+                workspace_touched_scopes.setdefault(ws_name, set()).add(action.scope)
+                if action.kind == ActionKind.SYMLINK and action.path.is_symlink():
+                    workspace_links.setdefault(ws_name, {}).setdefault(
+                        action.scope, []
+                    ).append(str(action.path))
             else:
-                global_links.setdefault(action.scope, []).append(str(action.path))
+                global_touched_scopes.add(action.scope)
+                if action.kind == ActionKind.SYMLINK and action.path.is_symlink():
+                    global_links.setdefault(action.scope, []).append(str(action.path))
 
         updated_at = datetime.now().isoformat(timespec="seconds")
 
         # Persist global state
         core = self.context.core
+        existing_global_state = core.load_state()
         global_state = {
             "updated_at": updated_at,
-            "managed_links": {
-                scope: sorted(set(paths)) for scope, paths in global_links.items()
-            },
+            "managed_links": self._merge_managed_links(
+                existing=existing_global_state.get("managed_links"),
+                touched_scopes=global_touched_scopes,
+                current_links=global_links,
+            ),
             "skipped": plan.skipped,
         }
         core.save_state(global_state)
 
         # Persist workspace state
-        for ws_name, links in workspace_links.items():
+        for ws_name in workspace_touched_scopes:
             ws_repo = WorkspaceConfigRepository(root=core.workspace_config_dir(ws_name))
+            existing_workspace_state = ws_repo.load_state()
             ws_state = {
                 "updated_at": updated_at,
-                "managed_links": {
-                    scope: sorted(set(paths)) for scope, paths in links.items()
-                },
+                "managed_links": self._merge_managed_links(
+                    existing=existing_workspace_state.get("managed_links"),
+                    touched_scopes=workspace_touched_scopes[ws_name],
+                    current_links=workspace_links.get(ws_name, {}),
+                ),
             }
             ws_repo.root.mkdir(parents=True, exist_ok=True)
             ws_repo.save_state(ws_state)
+
+    @staticmethod
+    def _merge_managed_links(
+        *,
+        existing: Any,
+        touched_scopes: set[str],
+        current_links: dict[str, list[str]],
+    ) -> dict[str, list[str]]:
+        merged: dict[str, list[str]] = {}
+
+        if isinstance(existing, dict):
+            for scope, paths in existing.items():
+                if scope in touched_scopes or not isinstance(scope, str):
+                    continue
+                if not isinstance(paths, list):
+                    continue
+                kept_paths = sorted({path for path in paths if isinstance(path, str)})
+                if kept_paths:
+                    merged[scope] = kept_paths
+
+        for scope, paths in current_links.items():
+            current = sorted({path for path in paths if isinstance(path, str)})
+            if current:
+                merged[scope] = current
+
+        return merged

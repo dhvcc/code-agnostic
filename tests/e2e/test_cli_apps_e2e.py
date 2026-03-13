@@ -150,7 +150,7 @@ def test_stale_workspace_cleanup_e2e(
     apply1 = cli_runner.invoke(cli, ["apply"])
     assert apply1.exit_code == 0
 
-    link = workspace_root / "repo-a" / AGENTS_FILENAME
+    link = workspace_root / AGENTS_FILENAME
     assert link.is_symlink()
 
     # Remove workspace config rules (simulates removing config)
@@ -243,7 +243,7 @@ def test_cursor_skills_agents_symlink_e2e(
     assert agent_link.is_symlink()
 
 
-def test_codex_skills_symlink_e2e(
+def test_codex_skills_agents_symlink_e2e(
     minimal_shared_config: Path,
     tmp_path: Path,
     cli_runner,
@@ -258,14 +258,18 @@ def test_codex_skills_symlink_e2e(
     (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
         "skill content", encoding="utf-8"
     )
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text("agent content", encoding="utf-8")
 
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
     codex_root = tmp_path / ".codex"
     skill_link = codex_root / "skills" / "my-skill"
+    agent_link = codex_root / "agents" / "planner.md"
 
     assert skill_link.is_symlink()
+    assert agent_link.is_symlink()
 
 
 def test_cursor_stale_skill_cleanup_e2e(
@@ -334,6 +338,7 @@ def test_full_roundtrip_skills_agents_all_apps(
     assert (cursor_root / "agents" / "planner.md").is_symlink()
 
     assert (codex_root / "skills" / "shared-skill").is_symlink()
+    assert (codex_root / "agents" / "planner.md").is_symlink()
 
 
 def test_config_update_propagation(

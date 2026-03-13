@@ -28,6 +28,10 @@ class CodexConfigRepository(IAppConfigRepository):
     def skills_dir(self) -> Path:
         return self.root / "skills"
 
+    @property
+    def agents_dir(self) -> Path:
+        return self.root / "agents"
+
     def load_config(self) -> dict[str, Any]:
         if not self.config_path.exists() or self.config_path.stat().st_size == 0:
             return {}

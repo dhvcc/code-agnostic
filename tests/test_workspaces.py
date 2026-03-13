@@ -71,3 +71,33 @@ def test_discover_git_repos_stops_at_nested_git(tmp_path: Path) -> None:
     repo_names = [r.name for r in repos]
     assert "outer" in repo_names
     assert "inner" not in repo_names
+
+
+def test_discover_git_repos_supports_git_file_repos(tmp_path: Path) -> None:
+    workspace_service = WorkspaceService()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    repo = workspace / "repo-one"
+    repo.mkdir()
+    git_dir = tmp_path / "gitdirs" / "repo-one"
+    git_dir.mkdir(parents=True)
+    (repo / ".git").write_text(f"gitdir: {git_dir}\n", encoding="utf-8")
+
+    repos = workspace_service.discover_git_repos(workspace)
+
+    assert repos == [repo.resolve()]
+
+
+def test_discover_git_repos_skips_invalid_git_file_repos(tmp_path: Path) -> None:
+    workspace_service = WorkspaceService()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    repo = workspace / "repo-one"
+    repo.mkdir()
+    (repo / ".git").write_text("not-a-gitdir-file\n", encoding="utf-8")
+
+    repos = workspace_service.discover_git_repos(workspace)
+
+    assert repos == []

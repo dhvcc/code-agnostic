@@ -32,7 +32,7 @@ def create_import_adapter(app: str, source_root: Path | None = None) -> ImportAd
             app_id=AppId.CODEX,
             root=repo.root,
             skills_dir=repo.skills_dir,
-            agents_dir=None,
+            agents_dir=repo.agents_dir,
             mapper=CodexMCPMapper(),
             config_repository=repo,
         )

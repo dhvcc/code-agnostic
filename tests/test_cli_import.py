@@ -4,7 +4,12 @@ from pathlib import Path
 from code_agnostic.__main__ import cli
 
 
-def _write_codex_source(root: Path, mcp_servers: dict, with_skill: bool = True) -> None:
+def _write_codex_source(
+    root: Path,
+    mcp_servers: dict,
+    with_skill: bool = True,
+    with_agent: bool = True,
+) -> None:
     root.mkdir(parents=True, exist_ok=True)
     lines = []
     for name, payload in mcp_servers.items():
@@ -19,6 +24,10 @@ def _write_codex_source(root: Path, mcp_servers: dict, with_skill: bool = True) 
         skill_dir = root / "skills" / "imported-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("from codex", encoding="utf-8")
+    if with_agent:
+        agents_dir = root / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "planner.md").write_text("from codex", encoding="utf-8")
 
 
 def test_import_plan_codex_shows_sections(cli_runner, tmp_path: Path) -> None:
@@ -34,9 +43,12 @@ def test_import_plan_codex_shows_sections(cli_runner, tmp_path: Path) -> None:
     assert "codex" in result.output
     assert "mcp" in result.output
     assert "skills" in result.output
+    assert "agents" in result.output
 
 
-def test_import_apply_codex_imports_mcp_and_skills(cli_runner, tmp_path: Path) -> None:
+def test_import_apply_codex_imports_mcp_skills_and_agents(
+    cli_runner, tmp_path: Path
+) -> None:
     _write_codex_source(
         tmp_path / ".codex",
         {"demo": {"command": "uvx"}},
@@ -59,6 +71,7 @@ def test_import_apply_codex_imports_mcp_and_skills(cli_runner, tmp_path: Path) -
         / "imported-skill"
         / "SKILL.md"
     ).exists()
+    assert (tmp_path / ".config" / "code-agnostic" / "agents" / "planner.md").exists()
 
 
 def test_import_apply_honors_include_filter(cli_runner, tmp_path: Path) -> None:
@@ -100,7 +113,7 @@ def test_import_apply_honors_exclude_filter(cli_runner, tmp_path: Path) -> None:
     ).exists()
 
 
-def test_import_plan_reports_unsupported_section(cli_runner, tmp_path: Path) -> None:
+def test_import_plan_codex_supports_agents(cli_runner, tmp_path: Path) -> None:
     _write_codex_source(tmp_path / ".codex", {"demo": {"command": "uvx"}})
 
     result = cli_runner.invoke(
@@ -109,7 +122,8 @@ def test_import_plan_reports_unsupported_section(cli_runner, tmp_path: Path) -> 
     )
 
     assert result.exit_code == 0
-    assert "unsupported" in result.output.lower()
+    assert "unsupported" not in result.output.lower()
+    assert "agents" in result.output.lower()
 
 
 def test_import_apply_conflict_policy_skip_is_default(

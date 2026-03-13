@@ -15,21 +15,9 @@ from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import SyncAppError
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
-from code_agnostic.rules.compilers import (
-    CodexRuleCompiler,
-    CursorRuleCompiler,
-    IRuleCompiler,
-    OpenCodeRuleCompiler,
-)
+from code_agnostic.rules.compilers import OpenCodeRuleCompiler
 from code_agnostic.rules.repository import RulesRepository
 from code_agnostic.workspaces import WorkspaceService
-
-
-_RULE_COMPILERS: dict[AppId, IRuleCompiler] = {
-    AppId.CURSOR: CursorRuleCompiler(),
-    AppId.OPENCODE: OpenCodeRuleCompiler(),
-    AppId.CODEX: CodexRuleCompiler(),
-}
 
 
 def _write_rule_status(path: Path, content: str) -> ActionStatus:
@@ -41,6 +29,37 @@ def _write_rule_status(path: Path, content: str) -> ActionStatus:
     return ActionStatus.UPDATE
 
 
+def _compile_workspace_agents(rules) -> str:
+    compiler = OpenCodeRuleCompiler()
+    sections = [compiler.compile(rule)[1] for rule in rules]
+    return "\n\n".join(sections) + "\n"
+
+
+def _set_workspace_opencode_instructions(
+    service: IAppConfigService,
+    action: Action,
+    workspace_agents_path: Path | None,
+) -> None:
+    if service.app_id != AppId.OPENCODE or not isinstance(action.payload, dict):
+        return
+
+    payload = dict(action.payload)
+    if workspace_agents_path is None:
+        payload.pop("instructions", None)
+    else:
+        payload["instructions"] = [str(workspace_agents_path)]
+
+    validate_config = getattr(service, "validate_config", None)
+    if callable(validate_config):
+        validate_config(payload)
+
+    existing = service.repository.load_config()
+    derive_status = getattr(service, "derive_status", None)
+    if callable(derive_status):
+        action.status = derive_status(existing, payload)
+    action.payload = payload
+
+
 def _merge_plans(*plans: SyncPlan) -> SyncPlan:
     actions: list[Action] = []
     errors: list[Exception] = []
@@ -50,6 +69,10 @@ def _merge_plans(*plans: SyncPlan) -> SyncPlan:
         errors.extend(plan.errors)
         skipped.extend(plan.skipped)
     return SyncPlan(actions=actions, errors=errors, skipped=skipped)
+
+
+def _workspace_scope_matches_app(scope: str, app_ids: set[str]) -> bool:
+    return any(scope.startswith(f"ws:{app_id}:") for app_id in app_ids)
 
 
 class SyncPlanner:
@@ -128,6 +151,24 @@ class SyncPlanner:
         desired_rules_links: list[Path] = []
         rules_repo = RulesRepository(ws_source.root)
         rules = rules_repo.list_rules()
+        workspace_agents_source: Path | None = None
+        if rules:
+            content = _compile_workspace_agents(rules)
+            status = _write_rule_status(ws_source.rules_file, content)
+            rule_action = Action(
+                kind=ActionKind.WRITE_RULE,
+                path=ws_source.rules_file,
+                status=status,
+                detail=f"compile rules to {AGENTS_FILENAME} for workspace",
+                payload=content,
+                app="workspace",
+                workspace=workspace_name,
+            )
+            _mark_workspace(rule_action)
+            actions.append(rule_action)
+            workspace_agents_source = ws_source.rules_file
+        elif not rules_repo.rules_dir.exists() and ws_source.rules_file.exists():
+            workspace_agents_source = ws_source.rules_file
 
         # --- Workspace-level app config rendering + repo symlinks ---
         desired_links_by_scope: dict[str, list[Path]] = {}
@@ -165,9 +206,19 @@ class SyncPlanner:
             )
 
             # Render workspace config once into workspace project dir
-            if common_servers is not None:
+            should_render_workspace_config = common_servers is not None or (
+                workspace_agents_source is not None and svc.app_id == AppId.OPENCODE
+            )
+            if should_render_workspace_config:
                 try:
-                    mcp_action = project_svc.build_action(common_servers)
+                    mcp_action = project_svc.build_action(common_servers or {})
+                    _set_workspace_opencode_instructions(
+                        project_svc,
+                        mcp_action,
+                        workspace_path / AGENTS_FILENAME
+                        if workspace_agents_source is not None
+                        else None,
+                    )
                     _mark_workspace(mcp_action)
                     actions.append(mcp_action)
                 except SyncAppError as exc:
@@ -205,46 +256,6 @@ class SyncPlanner:
                 desired_links_by_scope.setdefault(scope, []).extend(desired)
                 skipped.extend(agent_skipped)
 
-            # --- Rules compilation ---
-            compiled_rules_dir: Path | None = None
-            compiled_agents_md: Path | None = None
-            if rules:
-                compiler = _RULE_COMPILERS.get(svc.app_id)
-                if compiler is not None:
-                    if isinstance(compiler, CursorRuleCompiler):
-                        compiled_rules_dir = ws_project_root / "rules"
-                        for rule in rules:
-                            fname, content = compiler.compile(rule)
-                            target = compiled_rules_dir / fname
-                            status = _write_rule_status(target, content)
-                            rule_action = Action(
-                                kind=ActionKind.WRITE_RULE,
-                                path=target,
-                                status=status,
-                                detail=f"compile rule {rule.name} for {svc.app_id.value}",
-                                payload=content,
-                                app="workspace",
-                                workspace=workspace_name,
-                            )
-                            _mark_workspace(rule_action)
-                            actions.append(rule_action)
-                    else:
-                        sections = [compiler.compile(rule)[1] for rule in rules]
-                        content = "\n\n".join(sections) + "\n"
-                        compiled_agents_md = ws_project_root / AGENTS_FILENAME
-                        status = _write_rule_status(compiled_agents_md, content)
-                        rule_action = Action(
-                            kind=ActionKind.WRITE_RULE,
-                            path=compiled_agents_md,
-                            status=status,
-                            detail=f"compile rules to {AGENTS_FILENAME} for {svc.app_id.value}",
-                            payload=content,
-                            app="workspace",
-                            workspace=workspace_name,
-                        )
-                        _mark_workspace(rule_action)
-                        actions.append(rule_action)
-
             # --- Repo symlinks for managed workspace config paths ---
             # Also symlink into the workspace root itself so opening the whole workspace
             # in an editor picks up the shared config.
@@ -268,7 +279,7 @@ class SyncPlanner:
                     skipped.append(conflict_message.format(path=target))
 
             # Workspace root links
-            if common_servers is not None:
+            if should_render_workspace_config:
                 _plan_target_link(
                     target=workspace_path
                     / meta.project_dir_name
@@ -291,33 +302,10 @@ class SyncPlanner:
                     scope=f"ws:{svc.app_id.value}:workspace_root_agents_dir",
                     conflict_message="Workspace root agents dir link skipped (conflict): {path}",
                 )
-            if compiled_rules_dir is not None:
-                _plan_target_link(
-                    target=workspace_path / meta.project_dir_name / "rules",
-                    source=compiled_rules_dir,
-                    scope=f"ws:{svc.app_id.value}:workspace_root_rules_dir",
-                    conflict_message="Workspace root rules dir link skipped (conflict): {path}",
-                )
-            if compiled_agents_md is not None:
-                for repo in repos:
-                    target = repo / AGENTS_FILENAME
-                    action = plan_symlink(
-                        target,
-                        compiled_agents_md,
-                        scope="rules",
-                        app="workspace",
-                    )
-                    _mark_workspace(action)
-                    actions.append(action)
-                    desired_rules_links.append(target)
-                    if action.status == ActionStatus.CONFLICT:
-                        skipped.append(
-                            f"Workspace rules link skipped (conflict): {target}"
-                        )
 
             for repo in repos:
                 # MCP config file link
-                if common_servers is not None:
+                if should_render_workspace_config:
                     _plan_target_link(
                         target=repo
                         / meta.project_dir_name
@@ -345,14 +333,19 @@ class SyncPlanner:
                         conflict_message="Workspace agents dir link skipped (conflict): {path}",
                     )
 
-                # Rules dir link (Cursor .mdc files)
-                if compiled_rules_dir is not None:
-                    _plan_target_link(
-                        target=repo / meta.project_dir_name / "rules",
-                        source=compiled_rules_dir,
-                        scope=f"ws:{svc.app_id.value}:repo_rules_dir",
-                        conflict_message="Workspace rules dir link skipped (conflict): {path}",
-                    )
+        if workspace_agents_source is not None:
+            target = workspace_path / AGENTS_FILENAME
+            action = plan_symlink(
+                target,
+                workspace_agents_source,
+                scope="rules",
+                app="workspace",
+            )
+            _mark_workspace(action)
+            actions.append(action)
+            desired_rules_links.append(target)
+            if action.status == ActionStatus.CONFLICT:
+                skipped.append(f"Workspace rules link skipped (conflict): {target}")
 
         # --- Stale cleanup ---
         state = ws_source.load_state()
@@ -360,7 +353,12 @@ class SyncPlanner:
         if not isinstance(managed_links, dict):
             managed_links = {}
 
-        # Rules stale cleanup
+        active_workspace_apps = {
+            svc.app_id.value
+            for svc in self.app_services
+            if app_metadata(svc.app_id).supports_workspace_propagation
+        }
+
         stale_rules = plan_stale_group(
             old_links=load_state_links(managed_links, "rules"),
             desired_links=desired_rules_links,
@@ -394,9 +392,13 @@ class SyncPlanner:
             actions.extend(stale_actions)
 
         # Clean scopes in state that no longer have any desired links
-        all_stale_scopes = (
-            set(managed_links.keys()) - {"rules"} - set(desired_links_by_scope.keys())
-        )
+        all_stale_scopes = {
+            scope
+            for scope in managed_links.keys()
+            if scope != "rules"
+            and scope not in desired_links_by_scope
+            and _workspace_scope_matches_app(scope, active_workspace_apps)
+        }
         for scope in sorted(all_stale_scopes):
             stale_actions = plan_stale_group(
                 old_links=load_state_links(managed_links, scope),

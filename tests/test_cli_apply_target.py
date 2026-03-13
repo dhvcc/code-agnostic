@@ -19,7 +19,7 @@ def _load_opencode_schema() -> dict:
     return json.loads(payload)
 
 
-def test_apply_opencode_includes_workspace_repo_links(
+def test_apply_opencode_links_workspace_root_and_config_includes_it(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
     enable_app("opencode")
@@ -51,11 +51,21 @@ def test_apply_opencode_includes_workspace_repo_links(
     opencode_config = tmp_path / ".config" / "opencode" / "opencode.json"
     assert opencode_config.exists()
 
-    # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo
-    compiled_agents = ws_config_dir / ".opencode" / AGENTS_FILENAME
+    workspace_agents = ws_config_dir / AGENTS_FILENAME
+    workspace_root_link = workspace_root / AGENTS_FILENAME
+    assert workspace_root_link.is_symlink()
+    assert workspace_root_link.resolve() == workspace_agents.resolve()
+
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
-    assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == compiled_agents.resolve()
+    assert not workspace_link.exists()
+
+    workspace_opencode_config = ws_config_dir / ".opencode" / "opencode.json"
+    opencode_payload = json.loads(workspace_opencode_config.read_text(encoding="utf-8"))
+    assert opencode_payload["instructions"] == [str(workspace_root / AGENTS_FILENAME)]
+
+    repo_opencode_config = workspace_root / "service-a" / ".opencode" / "opencode.json"
+    assert repo_opencode_config.is_symlink()
+    assert repo_opencode_config.resolve() == workspace_opencode_config.resolve()
 
 
 def test_apply_default_syncs_everything(
@@ -87,11 +97,13 @@ def test_apply_default_syncs_everything(
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
-    # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo
-    compiled_agents = ws_config_dir / ".opencode" / AGENTS_FILENAME
+    workspace_agents = ws_config_dir / AGENTS_FILENAME
+    workspace_root_link = workspace_root / AGENTS_FILENAME
+    assert workspace_root_link.is_symlink()
+    assert workspace_root_link.resolve() == workspace_agents.resolve()
+
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
-    assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == compiled_agents.resolve()
+    assert not workspace_link.exists()
 
 
 def test_apply_generates_opencode_schema_valid_config(
@@ -205,8 +217,10 @@ def test_apply_opencode_stale_workspace_links_cleaned(
     apply1 = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply1.exit_code == 0
 
-    link = workspace_root / "repo-a" / AGENTS_FILENAME
-    assert link.is_symlink()
+    workspace_link = workspace_root / AGENTS_FILENAME
+    assert workspace_link.is_symlink()
+    repo_link = workspace_root / "repo-a" / AGENTS_FILENAME
+    assert not repo_link.exists()
 
     # Remove the rules file from workspace config (simulates removing config)
     (ws_config_dir / "rules" / "shared.md").unlink()
@@ -214,4 +228,46 @@ def test_apply_opencode_stale_workspace_links_cleaned(
     apply2 = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply2.exit_code == 0
 
-    assert not link.is_symlink()
+    assert not workspace_link.is_symlink()
+
+
+def test_targeted_apply_preserves_other_app_workspace_links(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
+) -> None:
+    enable_app("codex")
+    enable_app("opencode")
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "ws", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    ws_config_dir = core_root / "workspaces" / "ws"
+    (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
+    (ws_config_dir / "mcp.base.json").write_text(
+        json.dumps({"mcpServers": {"test": {"url": "https://example.com/mcp"}}}),
+        encoding="utf-8",
+    )
+
+    apply_codex = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+    assert apply_codex.exit_code == 0
+
+    codex_repo_link = workspace_root / "repo-a" / ".codex" / "config.toml"
+    codex_root_link = workspace_root / ".codex" / "config.toml"
+    assert codex_repo_link.is_symlink()
+    assert codex_root_link.is_symlink()
+
+    apply_opencode = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+    assert apply_opencode.exit_code == 0
+
+    opencode_repo_link = workspace_root / "repo-a" / ".opencode" / "opencode.json"
+    opencode_root_link = workspace_root / ".opencode" / "opencode.json"
+    assert opencode_repo_link.is_symlink()
+    assert opencode_root_link.is_symlink()
+    assert codex_repo_link.is_symlink()
+    assert codex_root_link.is_symlink()

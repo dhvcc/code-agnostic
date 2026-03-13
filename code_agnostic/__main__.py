@@ -393,8 +393,18 @@ def _ensure_exclude_entries(path: Path, entries: list[str]) -> tuple[int, bool]:
     if path.exists():
         existing_lines = path.read_text(encoding="utf-8").splitlines()
 
-    seen = set(existing_lines)
-    additions = [entry for entry in entries if entry not in seen]
+    seen_entries = {
+        line.strip()
+        for line in existing_lines
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    additions: list[str] = []
+    for entry in entries:
+        normalized = entry.strip()
+        if not normalized or normalized in seen_entries:
+            continue
+        additions.append(entry)
+        seen_entries.add(normalized)
     if not additions:
         return 0, False
 
@@ -440,7 +450,10 @@ def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
         entries = exclude_service.compute_entries(item["name"], enabled_apps)
         repos = workspace_service.discover_git_repos(workspace_path)
         for repo in repos:
-            exclude_path = repo / ".git" / "info" / "exclude"
+            git_dir = workspace_service.resolve_git_dir(repo)
+            if git_dir is None:
+                continue
+            exclude_path = git_dir / "info" / "exclude"
             added, changed = _ensure_exclude_entries(exclude_path, entries)
             processed += 1
             if changed:

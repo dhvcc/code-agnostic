@@ -196,3 +196,89 @@ def test_workspaces_git_exclude_can_target_single_workspace(
 
     assert ".cursor" not in exclude_a.read_text(encoding="utf-8")
     assert not exclude_b.exists()
+
+
+def test_workspaces_git_exclude_preserves_existing_file_content(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    workspace_root = tmp_path / "corp-ws"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git" / "info").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    enable_app("codex")
+
+    exclude = workspace_root / "repo-a" / ".git" / "info" / "exclude"
+    exclude.write_text("# existing comment\nbuild/\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
+    assert result.exit_code == 0
+
+    content = exclude.read_text(encoding="utf-8").splitlines()
+    assert content[:2] == ["# existing comment", "build/"]
+    assert ".codex" in content
+    assert "AGENTS.md" in content
+    assert "CLAUDE.md" in content
+
+
+def test_workspaces_git_exclude_does_not_duplicate_existing_entries(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    workspace_root = tmp_path / "corp-ws"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git" / "info").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    enable_app("codex")
+
+    exclude = workspace_root / "repo-a" / ".git" / "info" / "exclude"
+    exclude.write_text(" .codex \nAGENTS.md\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
+    assert result.exit_code == 0
+    assert "lines_added=1" in result.output
+
+    content = exclude.read_text(encoding="utf-8")
+    assert content.count(".codex") == 1
+    assert content.count("AGENTS.md") == 1
+    assert content.count("CLAUDE.md") == 1
+
+
+def test_workspaces_git_exclude_supports_git_file_repos(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    workspace_root = tmp_path / "corp-ws"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    repo.mkdir()
+
+    git_dir = tmp_path / "gitdirs" / "repo-a"
+    (git_dir / "info").mkdir(parents=True)
+    (repo / ".git").write_text(f"gitdir: {git_dir}\n", encoding="utf-8")
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    enable_app("codex")
+
+    exclude = git_dir / "info" / "exclude"
+    exclude.write_text("# existing\nbuild/\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
+    assert result.exit_code == 0
+
+    content = exclude.read_text(encoding="utf-8").splitlines()
+    assert content[:2] == ["# existing", "build/"]
+    assert ".codex" in content
+    assert "AGENTS.md" in content
+    assert "CLAUDE.md" in content

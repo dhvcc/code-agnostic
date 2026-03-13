@@ -3,7 +3,6 @@ from pathlib import Path
 from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
-from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
     RepoSyncStatus,
@@ -62,7 +61,10 @@ class StatusService:
             app_metas: list[AppMetadata] = []
             for svc in app_services or []:
                 meta = app_metadata(svc.app_id)
-                if meta.project_dir_name is not None:
+                if (
+                    meta.project_dir_name is not None
+                    and meta.supports_workspace_propagation
+                ):
                     app_metas.append(meta)
 
             repo_rows = [
@@ -103,27 +105,24 @@ class StatusService:
             AppId.CODEX: "config.toml",
         }
 
-        # Check AGENTS.md symlink
-        if ws_source.has_rules():
-            target = repo_path / AGENTS_FILENAME
-            desired = str(ws_source.rules_file.resolve())
-            if not (target.is_symlink() and str(target.resolve()) == desired):
-                issues.append(f"missing or mismatched {AGENTS_FILENAME}")
-
         # Check workspace-managed links into repo project dirs.
         # Workspace rendering happens in ws_source.root/<project_dir_name>/..., then repos symlink to those.
 
-        if ws_source.has_mcp():
-            for meta in app_metas or []:
-                filename = config_filenames.get(meta.app_id)
-                if filename is None or meta.project_dir_name is None:
-                    continue
-                target = repo_path / meta.project_dir_name / filename
-                desired = str(
-                    (ws_source.root / meta.project_dir_name / filename).resolve()
-                )
-                if not (target.is_symlink() and str(target.resolve()) == desired):
-                    issues.append(f"missing or mismatched {meta.app_id.value} mcp link")
+        for meta in app_metas or []:
+            filename = config_filenames.get(meta.app_id)
+            if filename is None or meta.project_dir_name is None:
+                continue
+
+            needs_config_link = ws_source.has_mcp() or (
+                ws_source.has_rules() and meta.app_id == AppId.OPENCODE
+            )
+            if not needs_config_link:
+                continue
+
+            target = repo_path / meta.project_dir_name / filename
+            desired = str((ws_source.root / meta.project_dir_name / filename).resolve())
+            if not (target.is_symlink() and str(target.resolve()) == desired):
+                issues.append(f"missing or mismatched {meta.app_id.value} mcp link")
 
         if ws_source.has_skills():
             for meta in app_metas or []:

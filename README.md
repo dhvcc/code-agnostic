@@ -74,12 +74,20 @@ code-agnostic apply
 | MCP sync | yes | yes | yes |
 | Rules sync (cross-compiled) | yes | yes | yes |
 | Skills sync | yes | yes | yes |
-| Agents sync | yes | yes | -- |
+| Agents sync | yes | yes | yes |
+| Workspace root `AGENTS.md` link | yes | yes | yes |
+| Native repo config include for workspace `AGENTS.md` | yes | -- | -- |
+| Repo/subdir gets shared workspace `AGENTS.md` today | yes | -- | -- |
+| Root-level `AGENTS.md` discovery only | -- | yes | yes |
 | Workspace propagation | yes | -- | yes |
 | Import from | yes | yes | yes |
 | Interactive import (TUI) | yes | yes | yes |
 
-Codex does not support agents natively. Workspace propagation is intentionally disabled for Cursor to avoid duplicate MCP initialization in multi-root workspaces: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003
+Cursor workspace propagation is intentionally disabled to avoid duplicate MCP initialization in multi-root workspaces: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003
+
+OpenCode workspace configs include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions.
+
+Cursor documents `AGENTS.md` as a root-level project file. Codex documents `AGENTS.md` discovery, but not a native config include for an extra workspace file. In practice that means subdirectories and repos opened below the workspace root will not reliably get the shared workspace `AGENTS.md` today for Cursor or Codex.
 
 ## Features
 
@@ -138,7 +146,7 @@ code-agnostic agents list
 
 ### Workspaces
 
-Register workspace directories. Repos inside them get rules, skills, and agents propagated as symlinks for OpenCode and Codex.
+Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` and symlinked to the workspace root. Repos keep their own repo-specific `AGENTS.md`. OpenCode workspace configs also reference the shared workspace file through `instructions`, so a repo can load both its own `AGENTS.md` and the workspace-level one. Repo-local app config, skills, and agents are propagated for OpenCode and Codex.
 
 `.cursor` workspace propagation is intentionally disabled to avoid duplicate MCP initialization when opening multi-root workspaces in Cursor (related issue: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003).
 
@@ -196,5 +204,5 @@ All commands use named flags (`-a`, `-w`, `-v`). Singular aliases work too: `app
 
 ```bash
 uv sync --dev
-uv run test
+uv run pytest
 ```

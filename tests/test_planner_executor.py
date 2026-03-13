@@ -16,6 +16,7 @@ from code_agnostic.apps.opencode.config_repository import OpenCodeConfigReposito
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
+from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import ActionKind, ActionStatus
 from code_agnostic.planner import SyncPlanner
 from code_agnostic.core.repository import CoreRepository
@@ -105,10 +106,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         action.kind == ActionKind.WRITE_JSON and action.path == opencode_config_path
         for action in plan.actions
     )
-    workspace_targets = {
-        str(workspace_root / "shop-api" / AGENTS_FILENAME),
-        str(workspace_root / "shop-web" / AGENTS_FILENAME),
-    }
+    workspace_targets = {str(workspace_root / AGENTS_FILENAME)}
     planned_workspace_targets = {
         str(action.path)
         for action in plan.actions
@@ -136,19 +134,21 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         "enabled": True,
     }
 
-    # OpenCode compiles rules to .opencode/AGENTS.md, then symlinks to each repo
-    compiled_agents = ws_config_dir / ".opencode" / AGENTS_FILENAME
+    workspace_agents = ws_config_dir / AGENTS_FILENAME
+    workspace_root_link = workspace_root / AGENTS_FILENAME
+    assert workspace_root_link.is_symlink()
+    assert workspace_root_link.resolve() == workspace_agents.resolve()
+
     for repo_name in ["shop-api", "shop-web"]:
         link_path = workspace_root / repo_name / AGENTS_FILENAME
-        assert link_path.is_symlink()
-        assert link_path.resolve() == compiled_agents.resolve()
+        assert not link_path.exists()
 
     # Workspace state is persisted in workspace state file
     from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 
     ws_repo = WorkspaceConfigRepository(root=ws_config_dir)
     ws_state = ws_repo.load_state()
-    assert len(ws_state["managed_links"]["rules"]) == 2
+    assert len(ws_state["managed_links"]["rules"]) == 1
 
 
 def test_plan_marks_config_create_when_missing(
@@ -240,6 +240,54 @@ def test_plan_collects_invalid_opencode_json_as_error(
     assert len(plan.errors) == 1
     assert isinstance(plan.errors[0], InvalidJsonFormatError)
     assert str(config_path) in str(plan.errors[0])
+
+
+def test_targeted_execute_preserves_workspace_state_for_other_apps(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"ws-server": {"url": "https://ws.example.com/mcp"}}},
+    )
+
+    codex_root = tmp_path / ".codex"
+    opencode_root = tmp_path / ".config" / "opencode"
+    executor = SyncExecutor(core=core)
+
+    codex_plan = SyncPlanner(
+        core=core, app_services=[_codex_service(codex_root)]
+    ).build()
+    applied, failed, failures = executor.execute(codex_plan)
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+
+    opencode_plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+    applied, failed, failures = executor.execute(opencode_plan)
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+
+    managed_links = WorkspaceConfigRepository(root=ws_config).load_state()[
+        "managed_links"
+    ]
+    assert "ws:codex:workspace_root_mcp" in managed_links
+    assert "ws:codex:repo_mcp" in managed_links
+    assert "ws:opencode:workspace_root_mcp" in managed_links
+    assert "ws:opencode:repo_mcp" in managed_links
 
 
 def test_plan_treats_empty_opencode_config_as_update(
@@ -334,7 +382,7 @@ def test_codex_build_plan_includes_skill_symlinks(
     assert skill_actions[0].status == ActionStatus.CREATE
 
 
-def test_codex_build_plan_has_no_agent_actions(
+def test_codex_build_plan_includes_agent_symlinks(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -347,6 +395,10 @@ def test_codex_build_plan_has_no_agent_actions(
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
     agent_actions = [
-        a for a in plan.actions if a.scope and "agents" in a.scope and a.app == "codex"
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.SYMLINK and a.scope == "app:codex:agents"
     ]
-    assert agent_actions == []
+    assert len(agent_actions) == 1
+    assert agent_actions[0].path == codex_root / "agents" / "planner.md"
+    assert agent_actions[0].status == ActionStatus.CREATE

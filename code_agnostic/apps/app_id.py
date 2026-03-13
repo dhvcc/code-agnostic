@@ -58,7 +58,7 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         targetable=True,
         toggleable=True,
         importable=True,
-        supports_import_agents=False,
+        supports_import_agents=True,
         supports_workspace_propagation=True,
         project_dir_name=".codex",
     ),

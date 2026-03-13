@@ -124,7 +124,7 @@ def test_workspace_config_repository_state_roundtrip(tmp_path: Path) -> None:
 # --- Workspace rules symlinks ---
 
 
-def test_workspace_rules_symlinks_planned_for_each_repo(
+def test_workspace_rules_symlink_planned_for_workspace_root_only(
     minimal_shared_config: Path,
     core_root: Path,
     opencode_root: Path,
@@ -146,12 +146,49 @@ def test_workspace_rules_symlinks_planned_for_each_repo(
         core=core, app_services=[_opencode_service(core, opencode_root)]
     ).build()
 
+    workspace_rule_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_RULE and a.path == ws_config / AGENTS_FILENAME
+    ]
+    assert len(workspace_rule_actions) == 1
+
     rules_actions = [
         a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope == "rules"
     ]
-    assert len(rules_actions) == 2
+    assert len(rules_actions) == 1
     assert all(a.workspace == "myws" for a in rules_actions)
     assert all(a.app == "workspace" for a in rules_actions)
+    assert rules_actions[0].path == workspace_root / AGENTS_FILENAME
+
+
+def test_workspace_rules_symlinks_planned_for_cursor(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
+
+    cursor_root = tmp_path / ".cursor"
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+
+    rules_actions = [
+        a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope == "rules"
+    ]
+    assert len(rules_actions) == 1
+    assert rules_actions[0].path == workspace_root / AGENTS_FILENAME
+    assert not any(
+        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
+    )
 
 
 # --- Workspace MCP config sync ---
@@ -182,6 +219,39 @@ def test_workspace_mcp_sync_skips_cursor_workspace_propagation(
     workspace_actions = [a for a in plan.actions if a.app == "workspace"]
     assert workspace_actions == []
     assert not (ws_config / ".cursor").exists()
+
+
+def test_workspace_opencode_config_includes_workspace_agents_file(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
+
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    config_actions = [
+        a
+        for a in plan.actions
+        if a.app == "workspace" and a.kind == ActionKind.WRITE_JSON
+    ]
+    assert len(config_actions) == 1
+    assert config_actions[0].path == ws_config / ".opencode" / "opencode.json"
+    assert config_actions[0].payload["instructions"] == [
+        str(workspace_root / AGENTS_FILENAME)
+    ]
 
 
 def test_workspace_mcp_sync_to_codex_project_dirs(
@@ -215,6 +285,17 @@ def test_workspace_mcp_sync_to_codex_project_dirs(
     expected_path = ws_config / ".codex" / "config.toml"
     assert mcp_actions[0].path == expected_path
 
+    workspace_root_link_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.SYMLINK and a.scope == "ws:codex:workspace_root_mcp"
+    ]
+    assert len(workspace_root_link_actions) == 1
+    assert (
+        workspace_root_link_actions[0].path == workspace_root / ".codex" / "config.toml"
+    )
+    assert workspace_root_link_actions[0].source == expected_path
+
     link_actions = [
         a
         for a in plan.actions
@@ -223,6 +304,49 @@ def test_workspace_mcp_sync_to_codex_project_dirs(
     assert len(link_actions) == 1
     assert link_actions[0].path == workspace_root / "repo-a" / ".codex" / "config.toml"
     assert link_actions[0].source == expected_path
+
+
+def test_workspace_targeted_plan_does_not_cleanup_other_app_scopes(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"test-server": {"url": "https://test.example.com/mcp"}}},
+    )
+
+    stale_codex_link = workspace_root / "repo-a" / ".codex" / "config.toml"
+    stale_codex_link.parent.mkdir(parents=True, exist_ok=True)
+    codex_source = ws_config / ".codex" / "config.toml"
+    codex_source.parent.mkdir(parents=True, exist_ok=True)
+    codex_source.write_text("codex", encoding="utf-8")
+    stale_codex_link.symlink_to(codex_source)
+
+    WorkspaceConfigRepository(root=ws_config).save_state(
+        {"managed_links": {"ws:codex:repo_mcp": [str(stale_codex_link)]}}
+    )
+
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    stale_cleanup_paths = {
+        action.path
+        for action in plan.actions
+        if action.kind == ActionKind.REMOVE_SYMLINK
+    }
+    assert stale_codex_link not in stale_cleanup_paths
 
 
 # --- Workspace skill symlinks ---
@@ -287,7 +411,7 @@ def test_workspace_agents_skip_cursor_workspace_propagation(
     assert not (workspace_root / "repo-a" / ".cursor").exists()
 
 
-def test_workspace_agents_not_synced_to_codex(
+def test_workspace_agents_synced_to_codex(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -309,9 +433,15 @@ def test_workspace_agents_not_synced_to_codex(
     agent_actions = [
         a
         for a in plan.actions
-        if a.scope and "agents" in a.scope and a.app == "workspace"
+        if a.scope and "agents" in a.scope and a.scope.startswith("ws:codex:")
     ]
-    assert agent_actions == []
+    assert agent_actions
+    assert any(
+        a.path == ws_config / ".codex" / "agents" / "planner.md" for a in agent_actions
+    )
+    assert any(
+        a.path == workspace_root / "repo-a" / ".codex" / "agents" for a in agent_actions
+    )
 
 
 # --- Executor workspace state persistence ---
@@ -395,12 +525,14 @@ def test_full_workspace_config_roundtrip(
     assert failures == []
     assert applied > 0
 
-    # Check rules symlinks (OpenCode compiles to .opencode/AGENTS.md, then symlinks)
-    compiled_agents = ws_config / ".opencode" / AGENTS_FILENAME
+    workspace_agents = ws_config / AGENTS_FILENAME
+    workspace_link = workspace_root / AGENTS_FILENAME
+    assert workspace_link.is_symlink()
+    assert workspace_link.resolve() == workspace_agents.resolve()
+
     for repo_name in ["repo-a", "repo-b"]:
         link = workspace_root / repo_name / AGENTS_FILENAME
-        assert link.is_symlink()
-        assert link.resolve() == compiled_agents.resolve()
+        assert not link.exists()
 
     # Cursor workspace propagation is intentionally disabled.
     assert not (ws_config / ".cursor").exists()

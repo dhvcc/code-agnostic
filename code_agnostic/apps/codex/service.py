@@ -115,6 +115,15 @@ class CodexConfigService(RegisteredAppConfigService):
         actions.extend(skill_actions)
         skipped.extend(skill_skipped)
 
+        agent_actions, desired_agent_links, agent_skipped = plan_resource_symlinks(
+            source_repository.list_agent_sources(),
+            self._codex_repo.agents_dir,
+            scope="app:codex:agents",
+            app=AppId.CODEX.value,
+        )
+        actions.extend(agent_actions)
+        skipped.extend(agent_skipped)
+
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
         if not isinstance(managed_links, dict):
@@ -129,6 +138,19 @@ class CodexConfigService(RegisteredAppConfigService):
                 noop_detail="stale symlink already absent",
                 app=AppId.CODEX.value,
                 scope="app:codex:skills",
+                skipped=skipped,
+                skipped_message="Stale link cleanup skipped (not symlink): {path}",
+            )
+        )
+        actions.extend(
+            plan_stale_group(
+                old_links=load_state_links(managed_links, "app:codex:agents"),
+                desired_links=desired_agent_links,
+                remove_detail="remove stale managed agent symlink",
+                conflict_detail="stale managed path is not a symlink",
+                noop_detail="stale symlink already absent",
+                app=AppId.CODEX.value,
+                scope="app:codex:agents",
                 skipped=skipped,
                 skipped_message="Stale link cleanup skipped (not symlink): {path}",
             )
