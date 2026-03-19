@@ -2,6 +2,11 @@ from pathlib import Path
 
 import pytest
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
+
 
 @pytest.mark.parametrize(
     "app,target,expected_action_kind",
@@ -206,12 +211,44 @@ def test_skills_agents_symlink_e2e(
 
     opencode_root = tmp_path / ".config" / "opencode"
     skill_link = opencode_root / "skills" / "my-skill"
-    agent_link = opencode_root / "agents" / "planner.md"
+    agent_path = opencode_root / "agents" / "planner.md"
 
     if skill_link.exists() or skill_link.is_symlink():
         assert skill_link.is_symlink()
-    if agent_link.exists() or agent_link.is_symlink():
-        assert agent_link.is_symlink()
+    assert agent_path.is_file()
+    assert "agent content" in agent_path.read_text(encoding="utf-8")
+
+
+def test_opencode_agent_compiles_reasoning_effort_e2e(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    from code_agnostic.__main__ import cli
+
+    enable_app("opencode")
+
+    core_root = tmp_path / ".config" / "code-agnostic"
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text(
+        "---\n"
+        "model: openai/gpt-5\n"
+        "model_reasoning_effort: high\n"
+        "---\n"
+        "\n"
+        "Plan carefully.\n",
+        encoding="utf-8",
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+    assert apply_result.exit_code == 0
+
+    agent_path = tmp_path / ".config" / "opencode" / "agents" / "planner.md"
+    content = agent_path.read_text(encoding="utf-8")
+    assert "model: openai/gpt-5" in content
+    assert "reasoningEffort: high" in content
+    assert "model_reasoning_effort" not in content
 
 
 def test_cursor_skills_agents_symlink_e2e(
@@ -266,10 +303,14 @@ def test_codex_skills_agents_symlink_e2e(
 
     codex_root = tmp_path / ".codex"
     skill_link = codex_root / "skills" / "my-skill"
-    agent_link = codex_root / "agents" / "planner.md"
+    agent_path = codex_root / "agents" / "planner.toml"
 
     assert skill_link.is_symlink()
-    assert agent_link.is_symlink()
+    assert agent_path.is_file()
+    payload = tomllib.loads(agent_path.read_text(encoding="utf-8"))
+    assert payload["name"] == "planner"
+    assert payload["description"] == "planner"
+    assert payload["developer_instructions"] == "agent content"
 
 
 def test_cursor_stale_skill_cleanup_e2e(
@@ -332,13 +373,13 @@ def test_full_roundtrip_skills_agents_all_apps(
     codex_root = tmp_path / ".codex"
 
     assert (opencode_root / "skills" / "shared-skill").is_symlink()
-    assert (opencode_root / "agents" / "planner.md").is_symlink()
+    assert (opencode_root / "agents" / "planner.md").is_file()
 
     assert (cursor_root / "skills" / "shared-skill").is_symlink()
     assert (cursor_root / "agents" / "planner.md").is_symlink()
 
     assert (codex_root / "skills" / "shared-skill").is_symlink()
-    assert (codex_root / "agents" / "planner.md").is_symlink()
+    assert (codex_root / "agents" / "planner.toml").is_file()
 
 
 def test_config_update_propagation(

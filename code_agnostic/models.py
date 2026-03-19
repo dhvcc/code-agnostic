@@ -12,6 +12,7 @@ class ActionKind(str, Enum):
     WRITE_RULE = "write_rule"
     SYMLINK = "symlink"
     REMOVE_SYMLINK = "remove_symlink"
+    REMOVE_FILE = "remove_file"
 
 
 class ActionStatus(str, Enum):

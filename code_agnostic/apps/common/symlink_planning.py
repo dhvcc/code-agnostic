@@ -33,6 +33,13 @@ def load_state_links(managed_links: dict[str, Any], scope: str) -> list[Path]:
     return [Path(item) for item in raw if isinstance(item, str)]
 
 
+def load_state_paths(managed_paths: dict[str, Any], scope: str) -> list[Path]:
+    raw = managed_paths.get(scope, [])
+    if not isinstance(raw, list):
+        return []
+    return [Path(item) for item in raw if isinstance(item, str)]
+
+
 def plan_symlink(
     target: Path, source: Path, scope: str, app: str | None = None
 ) -> Action:
@@ -122,6 +129,59 @@ def plan_stale_group(
             actions.append(
                 Action(
                     ActionKind.REMOVE_SYMLINK,
+                    old,
+                    ActionStatus.NOOP,
+                    noop_detail,
+                    app=app,
+                    scope=scope,
+                )
+            )
+    return actions
+
+
+def plan_stale_files_group(
+    old_paths: list[Path],
+    desired_paths: list[Path],
+    remove_detail: str,
+    conflict_detail: str,
+    noop_detail: str,
+    app: str,
+    scope: str,
+    skipped: list[str],
+    skipped_message: str,
+) -> list[Action]:
+    desired = {str(path) for path in desired_paths}
+    actions: list[Action] = []
+    for old in old_paths:
+        if str(old) in desired:
+            continue
+        if old.is_file() or old.is_symlink():
+            actions.append(
+                Action(
+                    ActionKind.REMOVE_FILE,
+                    old,
+                    ActionStatus.REMOVE,
+                    remove_detail,
+                    app=app,
+                    scope=scope,
+                )
+            )
+        elif old.exists():
+            actions.append(
+                Action(
+                    ActionKind.REMOVE_FILE,
+                    old,
+                    ActionStatus.CONFLICT,
+                    conflict_detail,
+                    app=app,
+                    scope=scope,
+                )
+            )
+            skipped.append(skipped_message.format(path=old))
+        else:
+            actions.append(
+                Action(
+                    ActionKind.REMOVE_FILE,
                     old,
                     ActionStatus.NOOP,
                     noop_detail,

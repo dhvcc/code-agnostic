@@ -3,6 +3,8 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from code_agnostic.agents.compilers import OpenCodeAgentCompiler
+from code_agnostic.agents.parser import parse_agent
 from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.framework import (
@@ -17,8 +19,10 @@ from code_agnostic.apps.common.interfaces.repositories import (
 )
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
-    plan_resource_symlinks,
+    load_state_paths,
     plan_stale_group,
+    plan_stale_files_group,
+    plan_resource_symlinks,
 )
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
@@ -153,19 +157,23 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         actions.extend(skill_actions)
         skipped.extend(skill_skipped)
 
-        agent_actions, desired_agent_links, agent_skipped = plan_resource_symlinks(
-            source_repository.list_agent_sources(),
-            self._opencode_repo.agents_dir,
-            scope="app:opencode:agents",
-            app=AppId.OPENCODE.value,
-        )
-        actions.extend(agent_actions)
-        skipped.extend(agent_skipped)
-
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
         if not isinstance(managed_links, dict):
             managed_links = {}
+        managed_paths = state.get("managed_paths", {})
+        if not isinstance(managed_paths, dict):
+            managed_paths = {}
+
+        agent_actions, desired_agent_paths, agent_skipped = self.plan_agent_actions(
+            source_repository.list_agent_sources(),
+            self._opencode_repo.agents_dir,
+            scope="app:opencode:agents",
+            app=AppId.OPENCODE.value,
+            managed_paths=load_state_paths(managed_paths, "app:opencode:agents"),
+        )
+        actions.extend(agent_actions)
+        skipped.extend(agent_skipped)
 
         actions.extend(
             plan_stale_group(
@@ -183,7 +191,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         actions.extend(
             plan_stale_group(
                 old_links=load_state_links(managed_links, "app:opencode:agents"),
-                desired_links=desired_agent_links,
+                desired_links=[],
                 remove_detail="remove stale managed agent symlink",
                 conflict_detail="stale managed path is not a symlink",
                 noop_detail="stale symlink already absent",
@@ -193,8 +201,105 @@ class OpenCodeConfigService(RegisteredAppConfigService):
                 skipped_message="Stale link cleanup skipped (not symlink): {path}",
             )
         )
+        actions.extend(
+            plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, "app:opencode:agents"),
+                desired_paths=desired_agent_paths,
+                remove_detail="remove stale managed agent file",
+                conflict_detail="stale managed path is not a file",
+                noop_detail="stale managed file already absent",
+                app=AppId.OPENCODE.value,
+                scope="app:opencode:agents",
+                skipped=skipped,
+                skipped_message="Stale file cleanup skipped (not file): {path}",
+            )
+        )
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
+
+    def plan_agent_actions(
+        self,
+        sources: list[Path],
+        target_dir: Path,
+        scope: str,
+        app: str,
+        managed_paths: list[Path],
+    ) -> tuple[list[Action], list[Path], list[str]]:
+        compiler = OpenCodeAgentCompiler()
+        managed_path_set = {path.resolve(strict=False) for path in managed_paths}
+        actions: list[Action] = []
+        desired_paths: list[Path] = []
+        skipped: list[str] = []
+
+        for source in sources:
+            agent = parse_agent(source)
+            target = target_dir / source.name
+            desired_paths.append(target)
+            payload = compiler.compile(agent)
+            action = self._plan_compiled_agent_action(
+                target=target,
+                payload=payload,
+                managed_paths=managed_path_set,
+                scope=scope,
+                app=app,
+            )
+            actions.append(action)
+            if action.status == ActionStatus.CONFLICT:
+                skipped.append(f"OpenCode agent sync skipped (conflict): {target}")
+
+        return actions, desired_paths, skipped
+
+    @staticmethod
+    def _plan_compiled_agent_action(
+        *,
+        target: Path,
+        payload: str,
+        managed_paths: set[Path],
+        scope: str,
+        app: str,
+    ) -> Action:
+        target_key = target.resolve(strict=False)
+        if not target.exists() and not target.is_symlink():
+            return Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create compiled opencode agent",
+                payload=payload,
+                app=app,
+                scope=scope,
+            )
+        if target.is_file():
+            existing = target.read_text(encoding="utf-8")
+            if existing == payload:
+                return Action(
+                    kind=ActionKind.WRITE_TEXT,
+                    path=target,
+                    status=ActionStatus.NOOP,
+                    detail="compiled opencode agent already up to date",
+                    payload=payload,
+                    app=app,
+                    scope=scope,
+                )
+            if target_key in managed_paths:
+                return Action(
+                    kind=ActionKind.WRITE_TEXT,
+                    path=target,
+                    status=ActionStatus.UPDATE,
+                    detail="update compiled opencode agent",
+                    payload=payload,
+                    app=app,
+                    scope=scope,
+                )
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CONFLICT,
+            detail="non-managed path exists",
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
 
     def set_mcp_payload(
         self, merged: dict[str, Any], desired_mcp: dict[str, Any]

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from code_agnostic.agents.codex import serialize_codex_agent
 from code_agnostic.agents.models import Agent
+from code_agnostic.agents.opencode import serialize_opencode_agent
 from code_agnostic.agents.parser import serialize_agent
 
 
@@ -15,10 +17,10 @@ class IAgentCompiler(ABC):
 
 
 class OpenCodeAgentCompiler(IAgentCompiler):
-    """Near-identity: OpenCode agent format IS the canonical format."""
+    """Cross-compile for OpenCode agents."""
 
     def compile(self, agent: Agent) -> str:
-        return serialize_agent(agent)
+        return serialize_opencode_agent(agent)
 
 
 class CursorAgentCompiler(IAgentCompiler):
@@ -29,7 +31,7 @@ class CursorAgentCompiler(IAgentCompiler):
 
 
 class CodexAgentCompiler(IAgentCompiler):
-    """Cross-compile for Codex. Codex doesn't support agents natively."""
+    """Cross-compile for Codex subagents."""
 
     def compile(self, agent: Agent) -> str:
-        return serialize_agent(agent)
+        return serialize_codex_agent(agent)

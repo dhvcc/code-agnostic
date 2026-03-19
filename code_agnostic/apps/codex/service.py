@@ -1,8 +1,12 @@
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft7Validator
 
+from code_agnostic.agents.codex import normalize_codex_agent_filename
+from code_agnostic.agents.compilers import CodexAgentCompiler
+from code_agnostic.agents.parser import parse_agent
 from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
@@ -20,11 +24,17 @@ from code_agnostic.apps.common.interfaces.repositories import (
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
+    load_state_paths,
     plan_resource_symlinks,
+    plan_stale_files_group,
     plan_stale_group,
 )
-from code_agnostic.errors import InvalidConfigSchemaError
+from code_agnostic.errors import (
+    InvalidConfigSchemaError,
+    InvalidJsonFormatError,
+)
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.utils import read_json_safe
 
 
 class CodexConfigService(RegisteredAppConfigService):
@@ -36,19 +46,32 @@ class CodexConfigService(RegisteredAppConfigService):
         repository: CodexConfigRepository,
         mapper: IAppMCPMapper,
         schema_repository: ISchemaRepository,
+        base_config_path: Path | None = None,
     ) -> None:
         self._repository = repository
         self._codex_repo = repository
         self._mapper = mapper
         self._schema_repository = schema_repository
+        self._base_config_path = base_config_path
         self._validator = Draft7Validator(self._schema_repository.load_schema())
 
     @classmethod
     def create_default(cls, root: Path | None = None) -> "CodexConfigService":
+        if root is not None:
+            return cls(
+                repository=CodexConfigRepository(root=root),
+                mapper=CodexMCPMapper(),
+                schema_repository=CodexSchemaRepository(),
+                base_config_path=None,
+            )
+        from code_agnostic.core.repository import CoreRepository
+
+        core = CoreRepository()
         return cls(
             repository=CodexConfigRepository(root=root),
             mapper=CodexMCPMapper(),
             schema_repository=CodexSchemaRepository(),
+            base_config_path=core.codex_base_path,
         )
 
     @property
@@ -97,6 +120,30 @@ class CodexConfigService(RegisteredAppConfigService):
             return ActionStatus.NOOP
         return ActionStatus.UPDATE
 
+    def build_action(self, common_servers: dict[str, MCPServerDTO]) -> Action:
+        existing = self._codex_repo.load_config()
+        if existing or self._codex_repo.config_path.exists():
+            self.validate_config(existing)
+
+        desired_mcp = self.mapper.from_common(common_servers)
+        merged = dict(existing)
+        base = self._load_base_config()
+        for key, value in base.items():
+            if key == "mcp_servers":
+                continue
+            merged[key] = deepcopy(value)
+        self.set_mcp_payload(merged, desired_mcp)
+        self.validate_config(merged)
+
+        return Action(
+            kind=self.action_kind,
+            path=self.repository.config_path,
+            status=self.derive_status(existing, merged),
+            detail=f"sync {self.app_id.value} config from common mcp base",
+            payload=self.build_action_payload(merged),
+            app=self.app_id.value,
+        )
+
     def build_plan(
         self,
         common_servers: dict[str, MCPServerDTO],
@@ -115,19 +162,23 @@ class CodexConfigService(RegisteredAppConfigService):
         actions.extend(skill_actions)
         skipped.extend(skill_skipped)
 
-        agent_actions, desired_agent_links, agent_skipped = plan_resource_symlinks(
-            source_repository.list_agent_sources(),
-            self._codex_repo.agents_dir,
-            scope="app:codex:agents",
-            app=AppId.CODEX.value,
-        )
-        actions.extend(agent_actions)
-        skipped.extend(agent_skipped)
-
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
         if not isinstance(managed_links, dict):
             managed_links = {}
+        managed_paths = state.get("managed_paths", {})
+        if not isinstance(managed_paths, dict):
+            managed_paths = {}
+
+        agent_actions, desired_agent_paths, agent_skipped = self.plan_agent_actions(
+            source_repository.list_agent_sources(),
+            self._codex_repo.agents_dir,
+            scope="app:codex:agents",
+            app=AppId.CODEX.value,
+            managed_paths=load_state_paths(managed_paths, "app:codex:agents"),
+        )
+        actions.extend(agent_actions)
+        skipped.extend(agent_skipped)
 
         actions.extend(
             plan_stale_group(
@@ -145,7 +196,7 @@ class CodexConfigService(RegisteredAppConfigService):
         actions.extend(
             plan_stale_group(
                 old_links=load_state_links(managed_links, "app:codex:agents"),
-                desired_links=desired_agent_links,
+                desired_links=[],
                 remove_detail="remove stale managed agent symlink",
                 conflict_detail="stale managed path is not a symlink",
                 noop_detail="stale symlink already absent",
@@ -155,5 +206,124 @@ class CodexConfigService(RegisteredAppConfigService):
                 skipped_message="Stale link cleanup skipped (not symlink): {path}",
             )
         )
+        actions.extend(
+            plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, "app:codex:agents"),
+                desired_paths=desired_agent_paths,
+                remove_detail="remove stale managed agent file",
+                conflict_detail="stale managed path is not a file",
+                noop_detail="stale managed file already absent",
+                app=AppId.CODEX.value,
+                scope="app:codex:agents",
+                skipped=skipped,
+                skipped_message="Stale file cleanup skipped (not file): {path}",
+            )
+        )
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
+
+    def plan_agent_actions(
+        self,
+        sources: list[Path],
+        target_dir: Path,
+        scope: str,
+        app: str,
+        managed_paths: list[Path],
+    ) -> tuple[list[Action], list[Path], list[str]]:
+        compiler = CodexAgentCompiler()
+        managed_path_set = {path.resolve(strict=False) for path in managed_paths}
+        actions: list[Action] = []
+        desired_paths: list[Path] = []
+        skipped: list[str] = []
+
+        for source in sources:
+            try:
+                agent = parse_agent(source)
+                payload = compiler.compile(agent)
+            except InvalidConfigSchemaError:
+                raise
+            except Exception as exc:
+                raise InvalidConfigSchemaError(source, str(exc)) from exc
+
+            target_name = (
+                normalize_codex_agent_filename(agent.metadata.name, agent.name)
+                + ".toml"
+            )
+            target = target_dir / target_name
+            desired_paths.append(target)
+            action = self._plan_compiled_agent_action(
+                target=target,
+                payload=payload,
+                managed_paths=managed_path_set,
+                scope=scope,
+                app=app,
+            )
+            actions.append(action)
+            if action.status == ActionStatus.CONFLICT:
+                skipped.append(f"Codex agent sync skipped (conflict): {target}")
+
+        return actions, desired_paths, skipped
+
+    def _load_base_config(self) -> dict[str, Any]:
+        if self._base_config_path is None or not self._base_config_path.exists():
+            return {}
+        payload, error = read_json_safe(self._base_config_path)
+        if error is not None:
+            raise InvalidJsonFormatError(self._base_config_path, error)
+        if not isinstance(payload, dict):
+            raise InvalidConfigSchemaError(
+                self._base_config_path, "must be a JSON object"
+            )
+        return payload
+
+    @staticmethod
+    def _plan_compiled_agent_action(
+        *,
+        target: Path,
+        payload: str,
+        managed_paths: set[Path],
+        scope: str,
+        app: str,
+    ) -> Action:
+        target_key = target.resolve(strict=False)
+        if not target.exists() and not target.is_symlink():
+            return Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create compiled codex agent",
+                payload=payload,
+                app=app,
+                scope=scope,
+            )
+        if target.is_file():
+            existing = target.read_text(encoding="utf-8")
+            if existing == payload:
+                return Action(
+                    kind=ActionKind.WRITE_TEXT,
+                    path=target,
+                    status=ActionStatus.NOOP,
+                    detail="compiled codex agent already up to date",
+                    payload=payload,
+                    app=app,
+                    scope=scope,
+                )
+            if target_key in managed_paths:
+                return Action(
+                    kind=ActionKind.WRITE_TEXT,
+                    path=target,
+                    status=ActionStatus.UPDATE,
+                    detail="update compiled codex agent",
+                    payload=payload,
+                    app=app,
+                    scope=scope,
+                )
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CONFLICT,
+            detail="non-managed path exists",
+            payload=payload,
+            app=app,
+            scope=scope,
+        )

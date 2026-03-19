@@ -26,6 +26,8 @@ class ImportActionStatus(str, Enum):
 
 class ImportActionKind(str, Enum):
     WRITE_MCP_BASE = "write_mcp_base"
+    WRITE_JSON = "write_json"
+    WRITE_TEXT = "write_text"
     COPY_PATH = "copy_path"
     NOTE = "note"
 

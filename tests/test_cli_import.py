@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from code_agnostic.__main__ import cli
+from code_agnostic.agents.parser import parse_agent
 
 
 def _write_codex_source(
@@ -9,9 +10,12 @@ def _write_codex_source(
     mcp_servers: dict,
     with_skill: bool = True,
     with_agent: bool = True,
+    with_agents_config: bool = False,
 ) -> None:
     root.mkdir(parents=True, exist_ok=True)
     lines = []
+    if with_agents_config:
+        lines.extend(["[agents]", "max_threads = 6", "max_depth = 1", ""])
     for name, payload in mcp_servers.items():
         lines.append(f"[mcp_servers.{name}]")
         if "command" in payload:
@@ -27,7 +31,19 @@ def _write_codex_source(
     if with_agent:
         agents_dir = root / "agents"
         agents_dir.mkdir(parents=True)
-        (agents_dir / "planner.md").write_text("from codex", encoding="utf-8")
+        (agents_dir / "planner.toml").write_text(
+            "\n".join(
+                [
+                    'name = "planner"',
+                    'description = "Planning specialist"',
+                    'developer_instructions = """',
+                    "from codex",
+                    '"""',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
 
 
 def test_import_plan_codex_shows_sections(cli_runner, tmp_path: Path) -> None:
@@ -72,6 +88,34 @@ def test_import_apply_codex_imports_mcp_skills_and_agents(
         / "SKILL.md"
     ).exists()
     assert (tmp_path / ".config" / "code-agnostic" / "agents" / "planner.md").exists()
+    parsed = parse_agent(
+        tmp_path / ".config" / "code-agnostic" / "agents" / "planner.md"
+    )
+    assert parsed.metadata.description == "Planning specialist"
+    assert "from codex" in parsed.content
+
+
+def test_import_apply_codex_imports_agents_base_config(
+    cli_runner, tmp_path: Path
+) -> None:
+    _write_codex_source(
+        tmp_path / ".codex",
+        {"demo": {"command": "uvx"}},
+        with_agents_config=True,
+    )
+
+    result = cli_runner.invoke(
+        cli, ["import", "apply", "-a", "codex", "--include", "agents"]
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(
+        (
+            tmp_path / ".config" / "code-agnostic" / "config" / "codex.base.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert payload["agents"]["max_threads"] == 6
+    assert payload["agents"]["max_depth"] == 1
 
 
 def test_import_apply_honors_include_filter(cli_runner, tmp_path: Path) -> None:

@@ -21,6 +21,8 @@ def test_load_state_defaults_when_missing(core_repo: CoreRepository) -> None:
         "managed_skill_links": [],
         "managed_agent_links": [],
         "managed_workspace_links": [],
+        "managed_links": {},
+        "managed_paths": {},
     }
 
 
@@ -116,6 +118,8 @@ def test_load_state_with_corrupted_json(
         "managed_skill_links": [],
         "managed_agent_links": [],
         "managed_workspace_links": [],
+        "managed_links": {},
+        "managed_paths": {},
     }
 
 

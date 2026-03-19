@@ -3,6 +3,9 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "agents": {
+      "$ref": "#/definitions/AgentsToml"
+    },
     "mcp_servers": {
       "type": "object",
       "default": {},
@@ -12,6 +15,32 @@
     }
   },
   "definitions": {
+    "AbsolutePathBuf": {
+      "type": "string"
+    },
+    "AgentRoleToml": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "config_file": { "$ref": "#/definitions/AbsolutePathBuf" },
+        "description": { "type": "string" },
+        "nickname_candidates": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "AgentsToml": {
+      "type": "object",
+      "properties": {
+        "job_max_runtime_seconds": { "type": "integer", "minimum": 1 },
+        "max_depth": { "type": "integer", "minimum": 1 },
+        "max_threads": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/AgentRoleToml"
+      }
+    },
     "RawMcpServerConfig": {
       "type": "object",
       "additionalProperties": false,

@@ -24,6 +24,10 @@ class WorkspaceConfigRepository(BaseSourceRepository):
     def has_mcp(self) -> bool:
         return self.mcp_base_path.exists()
 
+    @property
+    def codex_base_path(self) -> Path:
+        return self.root / "codex.base.json"
+
     def has_rules(self) -> bool:
         if self.rules_dir.exists():
             return any(
@@ -40,5 +44,9 @@ class WorkspaceConfigRepository(BaseSourceRepository):
 
     def has_any_config(self) -> bool:
         return (
-            self.has_mcp() or self.has_rules() or self.has_skills() or self.has_agents()
+            self.has_mcp()
+            or self.has_rules()
+            or self.has_skills()
+            or self.has_agents()
+            or self.codex_base_path.exists()
         )

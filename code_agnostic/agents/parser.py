@@ -4,10 +4,17 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-from code_agnostic.agents.models import Agent, AgentMetadata, AgentToolPermissions
+from code_agnostic.agents.models import (
+    Agent,
+    AgentCodexConfig,
+    AgentMetadata,
+    AgentSkillConfig,
+    AgentToolPermissions,
+)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -32,6 +39,14 @@ def parse_agent(path: Path) -> Agent:
     if not isinstance(mcp_raw, list):
         mcp_raw = []
 
+    nickname_candidates_raw = raw.get("nickname_candidates", [])
+    if not isinstance(nickname_candidates_raw, list):
+        nickname_candidates_raw = []
+
+    codex_raw = raw.get("codex", {})
+    if not isinstance(codex_raw, dict):
+        codex_raw = {}
+
     tools = AgentToolPermissions(
         read=bool(tools_raw.get("read", True)),
         write=bool(tools_raw.get("write", True)),
@@ -42,7 +57,18 @@ def parse_agent(path: Path) -> Agent:
         name=str(raw.get("name", name)),
         description=str(raw.get("description", "")),
         model=str(raw.get("model", "")),
+        model_reasoning_effort=str(
+            raw.get("model_reasoning_effort", raw.get("reasoningEffort", ""))
+        ),
+        sandbox_mode=str(raw.get("sandbox_mode", "")),
+        nickname_candidates=[
+            str(item) for item in nickname_candidates_raw if isinstance(item, str)
+        ],
         tools=tools,
+        codex=AgentCodexConfig(
+            mcp_servers=_coerce_mcp_servers(codex_raw.get("mcp_servers")),
+            skills_config=_coerce_skill_configs(codex_raw.get("skills")),
+        ),
     )
     return Agent(name=name, source_path=path, metadata=metadata, content=content)
 
@@ -55,6 +81,12 @@ def serialize_agent(agent: Agent) -> str:
         fm["description"] = agent.metadata.description
     if agent.metadata.model:
         fm["model"] = agent.metadata.model
+    if agent.metadata.model_reasoning_effort:
+        fm["model_reasoning_effort"] = agent.metadata.model_reasoning_effort
+    if agent.metadata.sandbox_mode:
+        fm["sandbox_mode"] = agent.metadata.sandbox_mode
+    if agent.metadata.nickname_candidates:
+        fm["nickname_candidates"] = list(agent.metadata.nickname_candidates)
 
     tools: dict = {}
     if agent.metadata.tools.read is not True:
@@ -66,6 +98,10 @@ def serialize_agent(agent: Agent) -> str:
     if tools:
         fm["tools"] = tools
 
+    codex = _serialize_codex(agent.metadata.codex)
+    if codex:
+        fm["codex"] = codex
+
     parts: list[str] = []
     if fm:
         parts.append("---")
@@ -75,3 +111,52 @@ def serialize_agent(agent: Agent) -> str:
 
     parts.append(agent.content)
     return "\n".join(parts)
+
+
+def _coerce_mcp_servers(raw: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for key, value in raw.items():
+        if isinstance(key, str) and isinstance(value, dict):
+            result[key] = value
+    return result
+
+
+def _coerce_skill_configs(raw: Any) -> list[AgentSkillConfig]:
+    if not isinstance(raw, dict):
+        return []
+    config = raw.get("config")
+    if not isinstance(config, list):
+        return []
+
+    result: list[AgentSkillConfig] = []
+    for item in config:
+        if not isinstance(item, dict):
+            continue
+        path = item.get("path")
+        enabled = item.get("enabled")
+        if not isinstance(path, str):
+            continue
+        if enabled is not None and not isinstance(enabled, bool):
+            enabled = None
+        result.append(AgentSkillConfig(path=path, enabled=enabled))
+    return result
+
+
+def _serialize_codex(codex: AgentCodexConfig) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if codex.mcp_servers:
+        payload["mcp_servers"] = codex.mcp_servers
+    if codex.skills_config:
+        payload["skills"] = {
+            "config": [_serialize_skill_config(item) for item in codex.skills_config]
+        }
+    return payload
+
+
+def _serialize_skill_config(item: AgentSkillConfig) -> dict[str, Any]:
+    payload: dict[str, Any] = {"path": item.path}
+    if item.enabled is not None:
+        payload["enabled"] = item.enabled
+    return payload

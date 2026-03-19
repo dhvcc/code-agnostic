@@ -64,3 +64,13 @@ class CodexConfigRepository(IAppConfigRepository):
         config = self.load_config()
         config["mcp_servers"] = payload
         self.save_config(config)
+
+    def load_agents_payload(self) -> dict[str, Any]:
+        payload = self.load_config()
+        agents = payload.get("agents")
+        return agents if isinstance(agents, dict) else {}
+
+    def save_agents_payload(self, payload: dict[str, Any]) -> None:
+        config = self.load_config()
+        config["agents"] = payload
+        self.save_config(config)

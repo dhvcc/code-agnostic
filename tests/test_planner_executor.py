@@ -358,6 +358,38 @@ def test_cursor_build_plan_includes_agent_symlinks(
     assert agent_actions[0].status == ActionStatus.CREATE
 
 
+def test_opencode_build_plan_includes_compiled_agent_files(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.md").write_text(
+        "---\n"
+        "model: openai/gpt-5\n"
+        "model_reasoning_effort: high\n"
+        "---\n"
+        "\n"
+        "Agent body.\n",
+        encoding="utf-8",
+    )
+
+    core = CoreRepository(core_root)
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    agent_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:opencode:agents"
+    ]
+    assert len(agent_actions) == 1
+    assert agent_actions[0].path == opencode_root / "agents" / "planner.md"
+    assert "reasoningEffort: high" in agent_actions[0].payload
+
+
 def test_codex_build_plan_includes_skill_symlinks(
     minimal_shared_config: Path,
     core_root: Path,
@@ -397,8 +429,8 @@ def test_codex_build_plan_includes_agent_symlinks(
     agent_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "app:codex:agents"
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:codex:agents"
     ]
     assert len(agent_actions) == 1
-    assert agent_actions[0].path == codex_root / "agents" / "planner.md"
+    assert agent_actions[0].path == codex_root / "agents" / "planner.toml"
     assert agent_actions[0].status == ActionStatus.CREATE

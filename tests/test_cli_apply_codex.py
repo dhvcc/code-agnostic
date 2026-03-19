@@ -91,6 +91,66 @@ def test_apply_codex_generates_schema_valid_config(
     assert list(validator.iter_errors(codex_payload)) == []
 
 
+def test_apply_codex_renders_agents_and_global_agents_config(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("codex")
+    (core_root / "config" / "codex.base.json").parent.mkdir(parents=True, exist_ok=True)
+    (core_root / "config" / "codex.base.json").write_text(
+        json.dumps({"agents": {"max_threads": 6, "max_depth": 1}}),
+        encoding="utf-8",
+    )
+    (core_root / "agents").mkdir(parents=True, exist_ok=True)
+    (core_root / "agents" / "planner.md").write_text(
+        "---\n"
+        "description: Planning specialist\n"
+        "model: gpt-5.4\n"
+        "model_reasoning_effort: high\n"
+        "sandbox_mode: read-only\n"
+        "nickname_candidates:\n"
+        "  - Atlas\n"
+        "codex:\n"
+        "  mcp_servers:\n"
+        "    openaiDeveloperDocs:\n"
+        "      url: https://developers.openai.com/mcp\n"
+        "  skills:\n"
+        "    config:\n"
+        "      - path: /tmp/docs/SKILL.md\n"
+        "        enabled: false\n"
+        "---\n"
+        "\n"
+        "Plan carefully.\n",
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    config_payload = tomllib.loads(
+        (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
+    )
+    assert config_payload["agents"]["max_threads"] == 6
+    assert config_payload["agents"]["max_depth"] == 1
+
+    agent_payload = tomllib.loads(
+        (tmp_path / ".codex" / "agents" / "planner.toml").read_text(encoding="utf-8")
+    )
+    assert agent_payload["name"] == "planner"
+    assert agent_payload["description"] == "Planning specialist"
+    assert agent_payload["developer_instructions"] == "Plan carefully.\n"
+    assert agent_payload["model"] == "gpt-5.4"
+    assert agent_payload["mcp_servers"]["openaiDeveloperDocs"]["url"] == (
+        "https://developers.openai.com/mcp"
+    )
+    assert agent_payload["skills"]["config"] == [
+        {"path": "/tmp/docs/SKILL.md", "enabled": False}
+    ]
+
+
 def test_apply_codex_uses_local_schema_fallback_on_remote_failure(
     minimal_shared_config: Path,
     cli_runner,

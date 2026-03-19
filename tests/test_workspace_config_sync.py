@@ -430,17 +430,65 @@ def test_workspace_agents_synced_to_codex(
     codex_root = tmp_path / ".codex"
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
-    agent_actions = [
+    render_actions = [
         a
         for a in plan.actions
-        if a.scope and "agents" in a.scope and a.scope.startswith("ws:codex:")
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:codex:agents_entries"
     ]
-    assert agent_actions
+    assert len(render_actions) == 1
+    assert render_actions[0].path == ws_config / ".codex" / "agents" / "planner.toml"
+
+    link_actions = [a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope]
     assert any(
-        a.path == ws_config / ".codex" / "agents" / "planner.md" for a in agent_actions
+        a.scope == "ws:codex:repo_agents_dir"
+        and a.path == workspace_root / "repo-a" / ".codex" / "agents"
+        for a in link_actions
     )
+
+
+def test_workspace_agents_synced_to_opencode(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text(
+        "---\n"
+        "model: openai/gpt-5\n"
+        "model_reasoning_effort: high\n"
+        "---\n"
+        "\n"
+        "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    render_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:opencode:agents_entries"
+    ]
+    assert len(render_actions) == 1
+    assert render_actions[0].path == ws_config / ".opencode" / "agents" / "planner.md"
+    assert "reasoningEffort: high" in render_actions[0].payload
+
+    link_actions = [a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope]
     assert any(
-        a.path == workspace_root / "repo-a" / ".codex" / "agents" for a in agent_actions
+        a.scope == "ws:opencode:repo_agents_dir"
+        and a.path == workspace_root / "repo-a" / ".opencode" / "agents"
+        for a in link_actions
     )
 
 

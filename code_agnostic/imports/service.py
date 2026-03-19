@@ -1,5 +1,8 @@
 from pathlib import Path
 
+from code_agnostic.agents.codex import normalize_codex_agent_filename, parse_codex_agent
+from code_agnostic.agents.parser import serialize_agent
+from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.app_id import app_metadata
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.utils import common_mcp_to_dto, dto_to_common_mcp
@@ -79,13 +82,20 @@ class ImportService:
             skipped.extend(skill_skipped)
 
         if ImportSection.AGENTS in active_sections and adapter.agents_dir is not None:
-            agent_actions, agent_errors, agent_skipped = self._plan_assets(
-                section=ImportSection.AGENTS,
-                source_dir=adapter.agents_dir,
-                target_dir=self._core.agents_dir,
-                conflict_policy=conflict_policy,
-                follow_symlinks=follow_symlinks,
-            )
+            if adapter.app_id == AppId.CODEX:
+                agent_actions, agent_errors, agent_skipped = self._plan_codex_agents(
+                    adapter=adapter,
+                    conflict_policy=conflict_policy,
+                    follow_symlinks=follow_symlinks,
+                )
+            else:
+                agent_actions, agent_errors, agent_skipped = self._plan_assets(
+                    section=ImportSection.AGENTS,
+                    source_dir=adapter.agents_dir,
+                    target_dir=self._core.agents_dir,
+                    conflict_policy=conflict_policy,
+                    follow_symlinks=follow_symlinks,
+                )
             actions.extend(agent_actions)
             errors.extend(agent_errors)
             skipped.extend(agent_skipped)
@@ -122,6 +132,21 @@ class ImportService:
                     if not isinstance(action.payload, dict):
                         raise ValueError("invalid MCP payload")
                     write_json(self._core.mcp_base_path, action.payload)
+                    applied += 1
+                    continue
+
+                if action.kind == ImportActionKind.WRITE_JSON:
+                    if not isinstance(action.payload, dict) or action.target is None:
+                        raise ValueError("invalid JSON payload")
+                    write_json(action.target, action.payload)
+                    applied += 1
+                    continue
+
+                if action.kind == ImportActionKind.WRITE_TEXT:
+                    if not isinstance(action.payload, str) or action.target is None:
+                        raise ValueError("invalid text payload")
+                    action.target.parent.mkdir(parents=True, exist_ok=True)
+                    action.target.write_text(action.payload, encoding="utf-8")
                     applied += 1
                     continue
 
@@ -383,3 +408,204 @@ class ImportService:
                 skipped.append(f"Skipped conflict on {section.value} '{entry.name}'")
 
         return actions, errors, skipped
+
+    def _plan_codex_agents(
+        self,
+        adapter,
+        conflict_policy: ConflictPolicy,
+        follow_symlinks: bool,
+    ):
+        actions: list[ImportAction] = []
+        errors: list[str] = []
+        skipped: list[str] = []
+
+        source_dir = adapter.agents_dir
+        if source_dir is None or not source_dir.exists() or not source_dir.is_dir():
+            skipped.append(f"Source agents directory missing: {source_dir}")
+            return actions, errors, skipped
+
+        for entry in sorted(source_dir.iterdir(), key=lambda item: item.name):
+            if entry.name.startswith("."):
+                continue
+
+            if not follow_symlinks and is_entry_symlink(entry):
+                skipped.append(f"Skipped symlink agents entry: {entry}")
+                continue
+
+            try:
+                agent = parse_codex_agent(entry)
+            except Exception as exc:
+                errors.append(f"Invalid codex agent {entry}: {exc}")
+                continue
+
+            target_name = (
+                normalize_codex_agent_filename(agent.metadata.name, agent.name) + ".md"
+            )
+            action, action_skipped, action_error = self._plan_text_import(
+                section=ImportSection.AGENTS,
+                detail_name=target_name,
+                target=self._core.agents_dir / target_name,
+                payload=serialize_agent(agent),
+                conflict_policy=conflict_policy,
+            )
+            actions.append(action)
+            if action_skipped is not None:
+                skipped.append(action_skipped)
+            if action_error is not None:
+                errors.append(action_error)
+
+        try:
+            agents_payload = adapter.config_repository.load_agents_payload()  # type: ignore[attr-defined]
+        except Exception as exc:
+            errors.append(str(exc))
+        else:
+            if agents_payload:
+                action, action_skipped, action_error = self._plan_json_import(
+                    section=ImportSection.AGENTS,
+                    detail_name="codex base config",
+                    target=self._core.codex_base_path,
+                    payload={"agents": agents_payload},
+                    conflict_policy=conflict_policy,
+                )
+                actions.append(action)
+                if action_skipped is not None:
+                    skipped.append(action_skipped)
+                if action_error is not None:
+                    errors.append(action_error)
+
+        return actions, errors, skipped
+
+    @staticmethod
+    def _plan_text_import(
+        *,
+        section: ImportSection,
+        detail_name: str,
+        target: Path,
+        payload: str,
+        conflict_policy: ConflictPolicy,
+    ) -> tuple[ImportAction, str | None, str | None]:
+        if not target.exists() and not target.is_symlink():
+            return (
+                ImportAction(
+                    section=section,
+                    kind=ImportActionKind.WRITE_TEXT,
+                    status=ImportActionStatus.CREATE,
+                    detail=f"Import {section.value} '{detail_name}'",
+                    target=target,
+                    payload=payload,
+                ),
+                None,
+                None,
+            )
+
+        if target.is_file() and target.read_text(encoding="utf-8") == payload:
+            return (
+                ImportAction(
+                    section=section,
+                    kind=ImportActionKind.WRITE_TEXT,
+                    status=ImportActionStatus.NOOP,
+                    detail=f"{section.value.title()} '{detail_name}' unchanged",
+                    target=target,
+                    payload=payload,
+                ),
+                None,
+                None,
+            )
+
+        if conflict_policy == ConflictPolicy.OVERWRITE:
+            return (
+                ImportAction(
+                    section=section,
+                    kind=ImportActionKind.WRITE_TEXT,
+                    status=ImportActionStatus.UPDATE,
+                    detail=f"Overwrite {section.value} '{detail_name}'",
+                    target=target,
+                    payload=payload,
+                ),
+                None,
+                None,
+            )
+
+        detail = f"Conflict on {section.value} '{detail_name}'"
+        return (
+            ImportAction(
+                section=section,
+                kind=ImportActionKind.WRITE_TEXT,
+                status=ImportActionStatus.CONFLICT,
+                detail=detail,
+                target=target,
+                payload=payload,
+            ),
+            None
+            if conflict_policy == ConflictPolicy.FAIL
+            else f"Skipped {detail.lower()}",
+            detail if conflict_policy == ConflictPolicy.FAIL else None,
+        )
+
+    @staticmethod
+    def _plan_json_import(
+        *,
+        section: ImportSection,
+        detail_name: str,
+        target: Path,
+        payload: dict,
+        conflict_policy: ConflictPolicy,
+    ) -> tuple[ImportAction, str | None, str | None]:
+        existing_payload, existing_error = read_json_safe(target)
+        if existing_error is None and existing_payload == payload:
+            return (
+                ImportAction(
+                    section=section,
+                    kind=ImportActionKind.WRITE_JSON,
+                    status=ImportActionStatus.NOOP,
+                    detail=f"{detail_name.title()} unchanged",
+                    target=target,
+                    payload=payload,
+                ),
+                None,
+                None,
+            )
+
+        if not target.exists():
+            return (
+                ImportAction(
+                    section=section,
+                    kind=ImportActionKind.WRITE_JSON,
+                    status=ImportActionStatus.CREATE,
+                    detail=f"Import {detail_name}",
+                    target=target,
+                    payload=payload,
+                ),
+                None,
+                None,
+            )
+
+        if conflict_policy == ConflictPolicy.OVERWRITE:
+            return (
+                ImportAction(
+                    section=section,
+                    kind=ImportActionKind.WRITE_JSON,
+                    status=ImportActionStatus.UPDATE,
+                    detail=f"Overwrite {detail_name}",
+                    target=target,
+                    payload=payload,
+                ),
+                None,
+                None,
+            )
+
+        detail = f"Conflict on {detail_name}"
+        return (
+            ImportAction(
+                section=section,
+                kind=ImportActionKind.WRITE_JSON,
+                status=ImportActionStatus.CONFLICT,
+                detail=detail,
+                target=target,
+                payload=payload,
+            ),
+            None
+            if conflict_policy == ConflictPolicy.FAIL
+            else f"Skipped {detail.lower()}",
+            detail if conflict_policy == ConflictPolicy.FAIL else None,
+        )

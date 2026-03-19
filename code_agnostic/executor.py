@@ -80,6 +80,20 @@ class RemoveSymlinkHandler:
         return False, None
 
 
+class RemoveFileHandler:
+    def handle(
+        self, action: Action, context: ExecutionContext
+    ) -> tuple[bool, str | None]:
+        if action.status == ActionStatus.NOOP:
+            return False, None
+        if action.status == ActionStatus.CONFLICT:
+            return False, f"Stale cleanup conflict (not file): {action.path}"
+        if action.path.is_file() or action.path.is_symlink():
+            action.path.unlink()
+            return True, None
+        return False, None
+
+
 class WriteRuleHandler:
     def handle(
         self, action: Action, context: ExecutionContext
@@ -103,6 +117,7 @@ class SyncExecutor:
             ActionKind.WRITE_RULE: WriteRuleHandler(),
             ActionKind.SYMLINK: SymlinkHandler(),
             ActionKind.REMOVE_SYMLINK: RemoveSymlinkHandler(),
+            ActionKind.REMOVE_FILE: RemoveFileHandler(),
         }
 
     def execute(
@@ -137,8 +152,10 @@ class SyncExecutor:
 
     def _persist_state(self, plan: SyncPlan) -> None:
         global_links: dict[str, list[str]] = {}
+        global_paths: dict[str, list[str]] = {}
         global_touched_scopes: set[str] = set()
         workspace_links: dict[str, dict[str, list[str]]] = {}
+        workspace_paths: dict[str, dict[str, list[str]]] = {}
         workspace_touched_scopes: dict[str, set[str]] = {}
 
         for action in plan.actions:
@@ -152,10 +169,22 @@ class SyncExecutor:
                     workspace_links.setdefault(ws_name, {}).setdefault(
                         action.scope, []
                     ).append(str(action.path))
+                if (
+                    action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                    and action.path.exists()
+                ):
+                    workspace_paths.setdefault(ws_name, {}).setdefault(
+                        action.scope, []
+                    ).append(str(action.path))
             else:
                 global_touched_scopes.add(action.scope)
                 if action.kind == ActionKind.SYMLINK and action.path.is_symlink():
                     global_links.setdefault(action.scope, []).append(str(action.path))
+                if (
+                    action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                    and action.path.exists()
+                ):
+                    global_paths.setdefault(action.scope, []).append(str(action.path))
 
         updated_at = datetime.now().isoformat(timespec="seconds")
 
@@ -168,6 +197,11 @@ class SyncExecutor:
                 existing=existing_global_state.get("managed_links"),
                 touched_scopes=global_touched_scopes,
                 current_links=global_links,
+            ),
+            "managed_paths": self._merge_managed_links(
+                existing=existing_global_state.get("managed_paths"),
+                touched_scopes=global_touched_scopes,
+                current_links=global_paths,
             ),
             "skipped": plan.skipped,
         }
@@ -183,6 +217,11 @@ class SyncExecutor:
                     existing=existing_workspace_state.get("managed_links"),
                     touched_scopes=workspace_touched_scopes[ws_name],
                     current_links=workspace_links.get(ws_name, {}),
+                ),
+                "managed_paths": self._merge_managed_links(
+                    existing=existing_workspace_state.get("managed_paths"),
+                    touched_scopes=workspace_touched_scopes[ws_name],
+                    current_links=workspace_paths.get(ws_name, {}),
                 ),
             }
             ws_repo.root.mkdir(parents=True, exist_ok=True)

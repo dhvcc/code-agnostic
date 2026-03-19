@@ -78,16 +78,24 @@ class BaseSourceRepository(ISourceRepository):
                 "managed_skill_links": [],
                 "managed_agent_links": [],
                 "managed_workspace_links": [],
+                "managed_links": {},
+                "managed_paths": {},
             }
         payload.setdefault("managed_skill_links", [])
         payload.setdefault("managed_agent_links", [])
         payload.setdefault("managed_workspace_links", [])
+        payload.setdefault("managed_links", {})
+        payload.setdefault("managed_paths", {})
         if not isinstance(payload["managed_skill_links"], list):
             payload["managed_skill_links"] = []
         if not isinstance(payload["managed_agent_links"], list):
             payload["managed_agent_links"] = []
         if not isinstance(payload["managed_workspace_links"], list):
             payload["managed_workspace_links"] = []
+        if not isinstance(payload["managed_links"], dict):
+            payload["managed_links"] = {}
+        if not isinstance(payload["managed_paths"], dict):
+            payload["managed_paths"] = {}
         return payload
 
     def save_state(self, data: dict[str, Any]) -> None:
@@ -114,6 +122,10 @@ class CoreRepository(BaseSourceRepository):
         return self.config_dir / "opencode.base.json"
 
     @property
+    def codex_base_path(self) -> Path:
+        return self.config_dir / "codex.base.json"
+
+    @property
     def workspaces_path(self) -> Path:
         return self.config_dir / "workspaces.json"
 
@@ -133,6 +145,18 @@ class CoreRepository(BaseSourceRepository):
         if not isinstance(payload, dict):
             raise InvalidConfigSchemaError(
                 self.opencode_base_path, "must be a JSON object"
+            )
+        return payload
+
+    def load_codex_base(self) -> dict[str, Any]:
+        if not self.codex_base_path.exists():
+            raise MissingConfigFileError(self.codex_base_path)
+        payload, error = read_json_safe(self.codex_base_path)
+        if error is not None:
+            raise InvalidJsonFormatError(self.codex_base_path, error)
+        if not isinstance(payload, dict):
+            raise InvalidConfigSchemaError(
+                self.codex_base_path, "must be a JSON object"
             )
         return payload
 

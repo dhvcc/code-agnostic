@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import json
+
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.imports.models import ConflictPolicy, ImportSection
 from code_agnostic.imports.service import ImportService
@@ -43,10 +45,32 @@ def test_agents_import_copies_supported_app_assets(tmp_path: Path) -> None:
 def test_codex_agents_import_copies_supported_app_assets(tmp_path: Path) -> None:
     source = tmp_path / ".codex"
     source.mkdir(parents=True, exist_ok=True)
-    (source / "config.toml").write_text("", encoding="utf-8")
-    agent_file = source / "agents" / "planner.md"
+    (source / "config.toml").write_text(
+        "\n".join(
+            [
+                "[agents]",
+                "max_threads = 6",
+                "max_depth = 1",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    agent_file = source / "agents" / "planner.toml"
     agent_file.parent.mkdir(parents=True)
-    agent_file.write_text("agent", encoding="utf-8")
+    agent_file.write_text(
+        "\n".join(
+            [
+                'name = "planner"',
+                'description = "Planning specialist"',
+                'developer_instructions = """',
+                "Plan carefully.",
+                '"""',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     core = CoreRepository(tmp_path / ".config" / "code-agnostic")
     service = ImportService(core)
@@ -56,6 +80,11 @@ def test_codex_agents_import_copies_supported_app_assets(tmp_path: Path) -> None
 
     assert result.failed == 0
     assert (core.agents_dir / "planner.md").exists()
+    assert "developer_instructions" not in (core.agents_dir / "planner.md").read_text(
+        encoding="utf-8"
+    )
+    codex_base = json.loads((core.config_dir / "codex.base.json").read_text())
+    assert codex_base["agents"]["max_threads"] == 6
 
 
 def test_assets_import_is_idempotent(tmp_path: Path) -> None:
@@ -72,6 +101,43 @@ def test_assets_import_is_idempotent(tmp_path: Path) -> None:
     second_plan = service.plan("codex", include=[ImportSection.SKILLS])
 
     assert all(action.status.value == "noop" for action in second_plan.actions)
+
+
+def test_codex_agents_import_overwrite_replaces_target_content(tmp_path: Path) -> None:
+    source = tmp_path / ".codex"
+    source.mkdir(parents=True)
+    (source / "config.toml").write_text("", encoding="utf-8")
+    agent_file = source / "agents" / "planner.toml"
+    agent_file.parent.mkdir(parents=True)
+    agent_file.write_text(
+        "\n".join(
+            [
+                'name = "planner"',
+                'description = "Planning specialist"',
+                'developer_instructions = """',
+                "new content",
+                '"""',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    target = core.agents_dir / "planner.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("old", encoding="utf-8")
+
+    service = ImportService(core)
+    plan = service.plan(
+        "codex",
+        include=[ImportSection.AGENTS],
+        conflict_policy=ConflictPolicy.OVERWRITE,
+    )
+    result = service.apply(plan)
+
+    assert result.failed == 0
+    assert "new content" in target.read_text(encoding="utf-8")
 
 
 def test_assets_import_skips_symlink_entries_by_default(tmp_path: Path) -> None:
