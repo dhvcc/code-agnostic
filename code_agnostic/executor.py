@@ -208,7 +208,12 @@ class SyncExecutor:
 
             if persist_state:
                 try:
-                    self._persist_state(plan=plan, revision_records=revision_records)
+                    self._persist_state(
+                        plan=plan,
+                        revision_records=revision_records,
+                        staging_id=staging_id,
+                        staging_dirs=staging_dirs,
+                    )
                 except Exception as exc:
                     self._rollback(snapshots, previous_revisions)
                     return 0, 1, [f"persist_state failed: {exc}"]
@@ -540,7 +545,11 @@ class SyncExecutor:
                 self._restore_manifest_target(target)
 
     def _persist_state(
-        self, plan: SyncPlan, revision_records: list[RevisionRecord]
+        self,
+        plan: SyncPlan,
+        revision_records: list[RevisionRecord],
+        staging_id: str,
+        staging_dirs: set[Path],
     ) -> None:
         global_links: dict[str, list[str]] = {}
         global_paths: dict[str, list[str]] = {}
@@ -596,7 +605,13 @@ class SyncExecutor:
             ),
             "skipped": plan.skipped,
         }
-        core.save_state(global_state)
+        self._place_json_via_staging(
+            target=core.root / ".sync-state.json",
+            payload=global_state,
+            staging_root=core.root / ".sync-staging" / staging_id / "metadata",
+            staging_dirs=staging_dirs,
+            stage_name="global-state.json",
+        )
 
         # Persist workspace state
         for ws_name in workspace_touched_scopes:
@@ -615,13 +630,26 @@ class SyncExecutor:
                     current_links=workspace_paths.get(ws_name, {}),
                 ),
             }
-            ws_repo.root.mkdir(parents=True, exist_ok=True)
-            ws_repo.save_state(ws_state)
+            self._place_json_via_staging(
+                target=ws_repo.state_json,
+                payload=ws_state,
+                staging_root=ws_repo.root / ".sync-staging" / staging_id / "metadata",
+                staging_dirs=staging_dirs,
+                stage_name="workspace-state.json",
+            )
 
-        self._persist_revision_manifests(plan=plan, revision_records=revision_records)
+        self._persist_revision_manifests(
+            plan=plan,
+            revision_records=revision_records,
+            staging_dirs=staging_dirs,
+        )
 
     def _persist_revision_manifests(
-        self, *, plan: SyncPlan, revision_records: list[RevisionRecord]
+        self,
+        *,
+        plan: SyncPlan,
+        revision_records: list[RevisionRecord],
+        staging_dirs: set[Path],
     ) -> None:
         actions_by_workspace: dict[str | None, list[Action]] = {}
         for action in plan.actions:
@@ -648,14 +676,45 @@ class SyncExecutor:
                     for index, action in enumerate(actions)
                 ],
             }
-            write_json(record.manifest_path, manifest)
-            write_json(
-                record.active_path,
-                {
+            self._place_json_via_staging(
+                target=record.manifest_path,
+                payload=manifest,
+                staging_root=record.root
+                / ".sync-staging"
+                / record.revision_id
+                / "metadata",
+                staging_dirs=staging_dirs,
+                stage_name=record.manifest_path.name,
+            )
+            self._place_json_via_staging(
+                target=record.active_path,
+                payload={
                     "revision_id": record.revision_id,
                     "manifest_path": str(record.manifest_path),
                 },
+                staging_root=record.root
+                / ".sync-staging"
+                / record.revision_id
+                / "metadata",
+                staging_dirs=staging_dirs,
+                stage_name=record.active_path.name,
             )
+
+    def _place_json_via_staging(
+        self,
+        *,
+        target: Path,
+        payload: Any,
+        staging_root: Path,
+        staging_dirs: set[Path],
+        stage_name: str,
+    ) -> None:
+        staging_root.mkdir(parents=True, exist_ok=True)
+        staging_dirs.add(staging_root.parent)
+        staged_path = staging_root / stage_name
+        write_json(staged_path, payload)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staged_path, target)
 
     def _serialize_manifest_target(
         self, record: RevisionRecord, action: Action, index: int

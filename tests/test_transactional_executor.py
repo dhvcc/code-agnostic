@@ -349,8 +349,8 @@ def test_execute_places_written_files_via_staging_replace(
     assert applied == 1
     assert failed == 0
     assert failures == []
-    assert replace_calls == [(replace_calls[0][0], target)]
-    assert ".sync-staging" in str(replace_calls[0][0])
+    assert any(dst == target for _, dst in replace_calls)
+    assert all(".sync-staging" in str(src) for src, _ in replace_calls)
     assert not (core_root / ".sync-staging").exists()
 
 
@@ -393,3 +393,113 @@ def test_execute_cleans_staging_dir_when_replace_fails(
     assert "write_text failed" in failures[0]
     assert target.read_text(encoding="utf-8") == "before\n"
     assert not (core_root / ".sync-staging").exists()
+
+
+def test_execute_places_global_state_and_revision_metadata_via_staging_replace(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "generated.txt"
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create file",
+                payload="hello\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    replace_calls: list[tuple[Path, Path]] = []
+    original_replace = __import__("os").replace
+
+    def recording_replace(src: str | Path, dst: str | Path) -> None:
+        src_path = Path(src)
+        dst_path = Path(dst)
+        replace_calls.append((src_path, dst_path))
+        original_replace(src_path, dst_path)
+
+    monkeypatch.setattr("os.replace", recording_replace)
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+
+    active_path = core_root / ".sync-revisions" / "active.json"
+    active_payload = json.loads(active_path.read_text(encoding="utf-8"))
+    manifest_path = Path(active_payload["manifest_path"])
+    destination_paths = {dst for _, dst in replace_calls}
+    assert target in destination_paths
+    assert core_root / ".sync-state.json" in destination_paths
+    assert active_path in destination_paths
+    assert manifest_path in destination_paths
+    assert all(".sync-staging" in str(src) for src, _ in replace_calls)
+
+
+def test_execute_places_workspace_state_and_revision_metadata_via_staging_replace(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    core = CoreRepository(core_root)
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    core.add_workspace("myws", workspace_root)
+    target = workspace_root / "AGENTS.md"
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create workspace file",
+                payload="workspace\n",
+                scope="rules",
+                app="workspace",
+                workspace="myws",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    replace_calls: list[tuple[Path, Path]] = []
+    original_replace = __import__("os").replace
+
+    def recording_replace(src: str | Path, dst: str | Path) -> None:
+        src_path = Path(src)
+        dst_path = Path(dst)
+        replace_calls.append((src_path, dst_path))
+        original_replace(src_path, dst_path)
+
+    monkeypatch.setattr("os.replace", recording_replace)
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+
+    workspace_config_root = core_root / "workspaces" / "myws"
+    active_path = workspace_config_root / ".sync-revisions" / "active.json"
+    active_payload = json.loads(active_path.read_text(encoding="utf-8"))
+    manifest_path = Path(active_payload["manifest_path"])
+    destination_paths = {dst for _, dst in replace_calls}
+    assert target in destination_paths
+    assert workspace_config_root / ".sync-state.json" in destination_paths
+    assert active_path in destination_paths
+    assert manifest_path in destination_paths
+    assert all(".sync-staging" in str(src) for src, _ in replace_calls)

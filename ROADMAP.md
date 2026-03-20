@@ -35,7 +35,8 @@ Current progress inside Phase 4:
 - [x] Added a restore path that can replay the active revision for the global root or a workspace
 - [x] Revision manifests now include source-file inputs and checksums for compiler context
 - [x] Generated file writes now stage payloads under `.sync-staging/` before final placement
-- [ ] Apply still lacks one atomic revision swap across all staged outputs/state/manifests
+- [x] Global/workspace state and revision metadata now stage before final placement too
+- [ ] Apply still lacks one atomic revision swap across all staged outputs/state/manifests/roots
 - [ ] Revision manifests still need to become the primary restore contract, not just a replay log
 
 Current progress inside Phase 5:
@@ -47,20 +48,20 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- generated file writes now stage payloads under `.sync-staging/` and place them with final-path replace
-- added regression coverage for staged writes, replace failures, and staging cleanup
+- global/workspace state plus revision manifests now use the same staged placement flow as generated outputs
+- added regression coverage that state/manifest writes also pass through `.sync-staging/`
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
-- push state/manifests through the same staged revision flow instead of writing them directly
 - define the smallest safe atomic-swap boundary we can enforce across mixed target roots
+- decide whether multi-root apply should become per-root atomic or require a single higher-level revision coordinator
 - keep import/migration work deferred until the legacy-agent file-vs-directory decision is explicit
 
 Remaining work that is still open:
 
 - finish Phase 1 by removing the remaining legacy symlink-era behavior for legacy source formats
-- finish Phase 4 by extending staged apply from generated files to the full revision boundary
+- finish Phase 4 by turning staged placement into a real atomic revision boundary instead of path-by-path replace
 - finish Phase 4 by making manifest-backed restore the canonical recovery mechanism for every successful revision
 - finish the import/migration wiring once the agent bundle migration rule is decided
 
@@ -77,7 +78,7 @@ The project already acts like a cross-app compatibility layer, but the contract 
 
 - Canonical resources are loose markdown/YAML files with silent field dropping.
 - Some legacy source flows still carry symlink-era assumptions even though default sync now generates files.
-- Apply now stages generated file writes, but it does not yet provide one atomic swap for the whole revision.
+- Apply now stages generated files, state, and manifests, but it does not yet provide one atomic swap for the whole revision.
 - App-specific behavior leaks into source files and undocumented quirks.
 - There is no single compiler spec, capability matrix, or lossiness report.
 
