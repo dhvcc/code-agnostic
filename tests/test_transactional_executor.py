@@ -509,3 +509,71 @@ def test_execute_places_workspace_state_and_revision_metadata_via_staging_replac
     assert active_path in destination_paths
     assert manifest_path in destination_paths
     assert all(".sync-staging" in str(src) for src, _ in replace_calls)
+
+
+def test_execute_repairs_pending_revision_before_new_apply(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    executor = SyncExecutor(core=CoreRepository(core_root))
+    primary = tmp_path / "primary.txt"
+    sibling = tmp_path / "sibling.txt"
+
+    first_plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=primary,
+                status=ActionStatus.CREATE,
+                detail="create primary",
+                payload="v1\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=sibling,
+                status=ActionStatus.CREATE,
+                detail="create sibling",
+                payload="sibling\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+    applied, failed, failures = executor.execute(first_plan)
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+
+    sibling.unlink()
+    pending_path = core_root / ".sync-revisions" / "pending.json"
+    pending_path.write_text('{"revision_id": "pending"}\n', encoding="utf-8")
+
+    broken_plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=primary,
+                status=ActionStatus.UPDATE,
+                detail="break apply",
+                payload=None,
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = executor.execute(broken_plan)
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [f"Missing text payload for write action: {primary}"]
+    assert primary.read_text(encoding="utf-8") == "v1\n"
+    assert sibling.read_text(encoding="utf-8") == "sibling\n"
+    assert not pending_path.exists()

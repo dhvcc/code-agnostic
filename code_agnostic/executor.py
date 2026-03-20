@@ -34,6 +34,7 @@ class RevisionRecord:
     revision_id: str
     manifest_path: Path
     active_path: Path
+    pending_path: Path
     artifacts_root: Path
 
 
@@ -166,6 +167,7 @@ class SyncExecutor:
         failed = 0
         failures: list[str] = []
         revision_records = self._prepare_revision_records(plan, persist_state)
+        self._repair_pending_revisions(revision_records)
         previous_revisions = self._load_previous_revisions(revision_records)
         snapshots = self._capture_snapshots(
             plan=plan,
@@ -180,6 +182,8 @@ class SyncExecutor:
         staging_dirs: set[Path] = set()
 
         try:
+            if persist_state:
+                self._mark_pending_revisions(revision_records)
             staged_actions, failure = self._stage_actions(
                 plan=plan,
                 revision_records=revision_records,
@@ -188,6 +192,7 @@ class SyncExecutor:
             )
             if failure is not None:
                 self._rollback(snapshots, previous_revisions)
+                self._clear_pending_revisions(revision_records)
                 return 0, 1, [failure]
 
             for staged_action in staged_actions:
@@ -196,11 +201,13 @@ class SyncExecutor:
                     changed, failure = self._apply_staged_action(staged_action)
                     if failure is not None:
                         self._rollback(snapshots, previous_revisions)
+                        self._clear_pending_revisions(revision_records)
                         return 0, 1, [failure]
                     if changed:
                         applied += 1
                 except Exception as exc:
                     self._rollback(snapshots, previous_revisions)
+                    self._clear_pending_revisions(revision_records)
                     return (
                         0,
                         1,
@@ -217,7 +224,9 @@ class SyncExecutor:
                     )
                 except Exception as exc:
                     self._rollback(snapshots, previous_revisions)
+                    self._clear_pending_revisions(revision_records)
                     return 0, 1, [f"persist_state failed: {exc}"]
+            self._clear_pending_revisions(revision_records)
             return applied, failed, failures
         finally:
             self._cleanup_staging_dirs(staging_dirs)
@@ -267,6 +276,7 @@ class SyncExecutor:
             revision_id=revision_id,
             manifest_path=revisions_root / f"{revision_id}.json",
             active_path=revisions_root / "active.json",
+            pending_path=revisions_root / "pending.json",
             artifacts_root=revisions_root / revision_id,
         )
 
@@ -318,13 +328,11 @@ class SyncExecutor:
         else:
             root = self.context.core.workspace_config_dir(workspace)
 
-        records = self._load_previous_revisions(
-            [
-                self._build_revision_record(
-                    root=root, workspace=workspace, revision_id="restore"
-                )
-            ]
+        revision_record = self._build_revision_record(
+            root=root, workspace=workspace, revision_id="restore"
         )
+        self._repair_pending_revisions([revision_record])
+        records = self._load_previous_revisions([revision_record])
         if not records:
             label = f"workspace {workspace}" if workspace is not None else "global root"
             raise FileNotFoundError(f"No active revision found for {label}.")
@@ -351,6 +359,37 @@ class SyncExecutor:
             raise
 
         return RestoreResult(revision_id=record.revision_id, restored=restored)
+
+    def _repair_pending_revisions(self, revision_records: list[RevisionRecord]) -> None:
+        for record in revision_records:
+            if not record.pending_path.exists():
+                continue
+            records = self._load_previous_revisions([record])
+            if records:
+                stored = records[0]
+                if stored.state is not None:
+                    self._restore_manifest_file(stored.state)
+                for target in stored.targets:
+                    self._restore_manifest_file(target)
+            self._clear_pending_revisions([record])
+            sync_staging_root = record.root / ".sync-staging"
+            if sync_staging_root.exists():
+                self._remove_tree(sync_staging_root)
+
+    def _mark_pending_revisions(self, revision_records: list[RevisionRecord]) -> None:
+        for record in revision_records:
+            write_json(
+                record.pending_path,
+                {
+                    "revision_id": record.revision_id,
+                    "started_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+
+    def _clear_pending_revisions(self, revision_records: list[RevisionRecord]) -> None:
+        for record in revision_records:
+            if record.pending_path.exists() or record.pending_path.is_symlink():
+                record.pending_path.unlink()
 
     def _stage_actions(
         self,
@@ -465,16 +504,7 @@ class SyncExecutor:
             staging_dirs, key=lambda path: len(path.parts), reverse=True
         ):
             if staging_root.exists():
-                for child in sorted(
-                    staging_root.rglob("*"),
-                    key=lambda path: len(path.parts),
-                    reverse=True,
-                ):
-                    if child.is_file() or child.is_symlink():
-                        child.unlink()
-                    elif child.is_dir():
-                        child.rmdir()
-                staging_root.rmdir()
+                self._remove_tree(staging_root)
 
             sync_staging_root = staging_root.parent
             if sync_staging_root.name == ".sync-staging" and sync_staging_root.exists():
@@ -482,6 +512,18 @@ class SyncExecutor:
                     sync_staging_root.rmdir()
                 except OSError:
                     pass
+
+    def _remove_tree(self, root: Path) -> None:
+        for child in sorted(
+            root.rglob("*"),
+            key=lambda path: len(path.parts),
+            reverse=True,
+        ):
+            if child.is_file() or child.is_symlink():
+                child.unlink()
+            elif child.is_dir():
+                child.rmdir()
+        root.rmdir()
 
     def _capture_snapshots(
         self,
@@ -510,6 +552,7 @@ class SyncExecutor:
             for record in revision_records:
                 paths[record.active_path] = self._snapshot_path(record.active_path)
                 paths[record.manifest_path] = self._snapshot_path(record.manifest_path)
+                paths[record.pending_path] = self._snapshot_path(record.pending_path)
         return paths
 
     def _snapshot_path(self, path: Path) -> PathSnapshot:

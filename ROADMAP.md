@@ -37,6 +37,7 @@ Current progress inside Phase 4:
 - [x] Generated file writes now stage payloads under `.sync-staging/` before final placement
 - [x] Global/workspace state and revision metadata now stage before final placement too
 - [x] Active revision restore now replays persisted state snapshots, not just emitted target files
+- [x] Pending revision markers now trigger manifest-backed repair before the next apply/restore continues
 - [ ] Apply still lacks one atomic revision swap across all staged outputs/state/manifests/roots
 - [ ] Revision manifests still need crash-safe promotion semantics so they are the only recovery contract we depend on
 
@@ -49,15 +50,15 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- revision manifests now snapshot `.sync-state.json` so restore can replay state as part of the active revision
-- added regression coverage that restore repairs corrupted global/workspace state files too
+- pending revision markers now cause the next apply/restore to repair the last active revision first
+- added regression coverage for pending-revision repair in both executor and CLI restore flows
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
 - define the smallest safe atomic-swap boundary we can enforce across mixed target roots
 - decide whether multi-root apply should become per-root atomic or require a single higher-level revision coordinator
-- use that boundary to define when an active revision is considered crash-safe and promotable
+- use that boundary to replace best-effort pending repair with a real crash-safe promotion rule
 - keep import/migration work deferred until the legacy-agent file-vs-directory decision is explicit
 
 Remaining work that is still open:
@@ -79,7 +80,7 @@ The project already acts like a cross-app compatibility layer, but the contract 
 
 - Canonical resources are loose markdown/YAML files with silent field dropping.
 - Import and migration still carry unresolved legacy-vs-bundle assumptions for some resource shapes.
-- Apply now stages generated files, state, and manifests, but it does not yet provide one crash-safe atomic promotion for the whole revision.
+- Apply now stages generated files, state, and manifests, and it can repair pending revisions on the next run, but it does not yet provide one crash-safe atomic promotion for the whole revision.
 - App-specific behavior leaks into source files and undocumented quirks.
 - There is no single compiler spec, capability matrix, or lossiness report.
 
