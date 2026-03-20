@@ -28,6 +28,8 @@ AI coding tools each want config in a different place and format. When you use m
 
 Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex, etc.
 
+Today the implementation is still mixed: some assets are compiled and some are symlinked. The active migration plan is to move to generated outputs everywhere with a strict compiler contract instead of implicit per-app behavior.
+
 ## Install
 
 ```bash
@@ -180,6 +182,18 @@ code-agnostic import plan -a codex -i    # interactive TUI picker
 ### CLI conventions
 
 All commands use named flags (`-a`, `-w`, `-v`). Singular aliases work too: `app` = `apps`, `workspace` = `workspaces`.
+
+## Compiler docs
+
+The compiler migration is documented in:
+
+- [ROADMAP.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/ROADMAP.md)
+- [docs/compiler/overview.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/overview.md)
+- [docs/compiler/skills.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/skills.md)
+- [docs/compiler/agents.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/agents.md)
+- [docs/compiler/rules.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/rules.md)
+- [docs/compiler/mcp.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/mcp.md)
+- [docs/compiler/lossiness.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/lossiness.md)
 
 ## Roadmap
 
