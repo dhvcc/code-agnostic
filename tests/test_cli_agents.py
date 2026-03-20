@@ -23,6 +23,22 @@ def test_agents_list_populated(
     assert "planner" in result.output
 
 
+def test_agents_list_bundle_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    agent_dir = core_root / "agents" / "planner"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: agent\nname: planner\n", encoding="utf-8"
+    )
+    (agent_dir / "prompt.md").write_text("agent content", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["agents", "list"])
+
+    assert result.exit_code == 0
+    assert "planner" in result.output
+
+
 def test_agents_remove_existing(
     minimal_shared_config: Path, core_root: Path, cli_runner
 ) -> None:
@@ -34,6 +50,23 @@ def test_agents_remove_existing(
     assert result.exit_code == 0
     assert "Removed" in result.output
     assert not (agents_dir / "old-agent.md").exists()
+
+
+def test_agents_remove_bundle_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    agent_dir = core_root / "agents" / "planner"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: agent\nname: planner\n", encoding="utf-8"
+    )
+    (agent_dir / "prompt.md").write_text("agent content", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["agents", "remove", "--name", "planner"])
+
+    assert result.exit_code == 0
+    assert "Removed" in result.output
+    assert not agent_dir.exists()
 
 
 def test_agents_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> None:

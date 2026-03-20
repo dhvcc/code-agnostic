@@ -23,6 +23,22 @@ def test_skills_list_populated(
     assert "my-skill" in result.output
 
 
+def test_skills_list_bundle_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    skill_dir = core_root / "skills" / "bundle-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: skill\nname: bundle-skill\n", encoding="utf-8"
+    )
+    (skill_dir / "prompt.md").write_text("skill content", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["skills", "list"])
+
+    assert result.exit_code == 0
+    assert "bundle-skill" in result.output
+
+
 def test_skills_remove_existing(
     minimal_shared_config: Path, core_root: Path, cli_runner
 ) -> None:
@@ -31,6 +47,23 @@ def test_skills_remove_existing(
     (skill_dir / "SKILL.md").write_text("content", encoding="utf-8")
 
     result = cli_runner.invoke(cli, ["skills", "remove", "--name", "old-skill"])
+    assert result.exit_code == 0
+    assert "Removed" in result.output
+    assert not skill_dir.exists()
+
+
+def test_skills_remove_bundle_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    skill_dir = core_root / "skills" / "bundle-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: skill\nname: bundle-skill\n", encoding="utf-8"
+    )
+    (skill_dir / "prompt.md").write_text("skill content", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["skills", "remove", "--name", "bundle-skill"])
+
     assert result.exit_code == 0
     assert "Removed" in result.output
     assert not skill_dir.exists()

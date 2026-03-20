@@ -629,12 +629,7 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
         root = core.workspace_config_dir(workspace)
     else:
         root = core.root
-    skill_sources = []
-    skills_dir = root / "skills"
-    if skills_dir.exists():
-        for child in sorted(skills_dir.iterdir()):
-            if child.is_dir() and (child / "SKILL.md").exists():
-                skill_sources.append(child)
+    skill_sources = CoreRepository(root).list_skill_sources()
     rows = [[source.name] for source in skill_sources]
     ui.render_list("skills", ["Skill"], rows, "No skills configured.")
 
@@ -684,13 +679,8 @@ def agents_list(obj: dict[str, str], workspace: str | None) -> None:
         root = core.workspace_config_dir(workspace)
     else:
         root = core.root
-    agents_dir = root / "agents"
-    agent_files = []
-    if agents_dir.exists():
-        for child in sorted(agents_dir.iterdir()):
-            if not child.name.startswith("."):
-                agent_files.append(child)
-    rows = [[f.stem] for f in agent_files]
+    agent_files = CoreRepository(root).list_agent_sources()
+    rows = [[f.stem if f.is_file() else f.name] for f in agent_files]
     ui.render_list("agents", ["Agent"], rows, "No agents configured.")
 
 
@@ -699,6 +689,8 @@ def agents_list(obj: dict[str, str], workspace: str | None) -> None:
 @workspace_option()
 @click.pass_obj
 def agents_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
+    import shutil
+
     core = CoreRepository()
     if workspace is not None:
         names = {item["name"] for item in core.load_workspaces()}
@@ -707,6 +699,11 @@ def agents_remove(obj: dict[str, str], name: str, workspace: str | None) -> None
         root = core.workspace_config_dir(workspace)
     else:
         root = core.root
+    agent_dir = root / "agents" / name
+    if agent_dir.is_dir():
+        shutil.rmtree(agent_dir)
+        click.echo(f"Removed: {name}")
+        return
     agent_path = root / "agents" / f"{name}.md"
     if not agent_path.exists():
         raise click.ClickException(f"Agent not found: {name}")
