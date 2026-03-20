@@ -7,12 +7,11 @@ from jsonschema import Draft7Validator
 from code_agnostic.agents.codex import normalize_codex_agent_filename
 from code_agnostic.agents.compilers import CodexAgentCompiler
 from code_agnostic.agents.parser import parse_agent
-from code_agnostic.apps.app_id import AppId, app_label, app_scope
+from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
 )
-from code_agnostic.apps.common.compiled_planning import plan_compiled_text_action
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
@@ -20,20 +19,13 @@ from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import (
     IAppConfigRepository,
     ISchemaRepository,
-    ISourceRepository,
 )
 from code_agnostic.apps.common.models import MCPServerDTO
-from code_agnostic.apps.common.symlink_planning import (
-    load_state_links,
-    load_state_paths,
-    plan_stale_files_group,
-    plan_stale_group,
-)
 from code_agnostic.errors import (
     InvalidConfigSchemaError,
     InvalidJsonFormatError,
 )
-from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.models import Action, ActionKind, ActionStatus
 from code_agnostic.utils import read_json_safe
 from code_agnostic.skills.compilers import CodexSkillCompiler
 from code_agnostic.skills.parser import parse_skill
@@ -146,105 +138,6 @@ class CodexConfigService(RegisteredAppConfigService):
             app=self.app_id.value,
         )
 
-    def build_plan(
-        self,
-        common_servers: dict[str, MCPServerDTO],
-        source_repository: ISourceRepository,
-    ) -> SyncPlan:
-        config_action = self.build_action(common_servers)
-        actions: list[Action] = [config_action]
-        skipped: list[str] = []
-
-        skill_sources = source_repository.list_skill_sources()
-        skill_scope = app_scope(self.app_id, "skills")
-        agent_scope = app_scope(self.app_id, "agents")
-
-        state = source_repository.load_state()
-        managed_links = state.get("managed_links", {})
-        if not isinstance(managed_links, dict):
-            managed_links = {}
-        managed_paths = state.get("managed_paths", {})
-        if not isinstance(managed_paths, dict):
-            managed_paths = {}
-
-        compiled_skill_actions, desired_skill_paths, compiled_skill_skipped = (
-            self.plan_skill_actions(
-                skill_sources,
-                self._codex_repo.skills_dir,
-                scope=skill_scope,
-                app=AppId.CODEX.value,
-                managed_paths=load_state_paths(managed_paths, skill_scope),
-                removable_links=load_state_links(managed_links, skill_scope),
-            )
-        )
-        actions.extend(compiled_skill_actions)
-        skipped.extend(compiled_skill_skipped)
-
-        skill_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, skill_scope),
-            desired_links=desired_skill_paths,
-            remove_detail="remove stale managed skill symlink",
-            conflict_detail="stale managed path is not a symlink",
-            noop_detail="stale symlink already absent",
-            app=AppId.CODEX.value,
-            scope=skill_scope,
-            skipped=skipped,
-            skipped_message="Stale link cleanup skipped (not symlink): {path}",
-        )
-        actions.extend(skill_link_actions)
-
-        agent_actions, desired_agent_paths, agent_skipped = self.plan_agent_actions(
-            source_repository.list_agent_sources(),
-            self._codex_repo.agents_dir,
-            scope=agent_scope,
-            app=AppId.CODEX.value,
-            managed_paths=load_state_paths(managed_paths, agent_scope),
-        )
-        actions.extend(agent_actions)
-        skipped.extend(agent_skipped)
-
-        actions.extend(
-            plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, skill_scope),
-                desired_paths=desired_skill_paths,
-                remove_detail="remove stale managed skill file",
-                conflict_detail="stale managed path is not a file",
-                noop_detail="stale managed file already absent",
-                app=AppId.CODEX.value,
-                scope=skill_scope,
-                skipped=skipped,
-                skipped_message="Stale file cleanup skipped (not file): {path}",
-            )
-        )
-        actions.extend(
-            plan_stale_group(
-                old_links=load_state_links(managed_links, agent_scope),
-                desired_links=desired_agent_paths,
-                remove_detail="remove stale managed agent symlink",
-                conflict_detail="stale managed path is not a symlink",
-                noop_detail="stale symlink already absent",
-                app=AppId.CODEX.value,
-                scope=agent_scope,
-                skipped=skipped,
-                skipped_message="Stale link cleanup skipped (not symlink): {path}",
-            )
-        )
-        actions.extend(
-            plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, agent_scope),
-                desired_paths=desired_agent_paths,
-                remove_detail="remove stale managed agent file",
-                conflict_detail="stale managed path is not a file",
-                noop_detail="stale managed file already absent",
-                app=AppId.CODEX.value,
-                scope=agent_scope,
-                skipped=skipped,
-                skipped_message="Stale file cleanup skipped (not file): {path}",
-            )
-        )
-
-        return SyncPlan(actions=actions, errors=[], skipped=skipped)
-
     def plan_skill_actions(
         self,
         sources: list[Path],
@@ -255,35 +148,27 @@ class CodexConfigService(RegisteredAppConfigService):
         removable_links: list[Path],
     ) -> tuple[list[Action], list[Path], list[str]]:
         compiler = CodexSkillCompiler()
-        managed_path_set = {path.resolve(strict=False) for path in managed_paths}
-        removable_link_set = {path.resolve(strict=False) for path in removable_links}
-        actions: list[Action] = []
-        desired_paths: list[Path] = []
-        skipped: list[str] = []
-
-        for source in sources:
-            skill = parse_skill(
-                source / "SKILL.md" if (source / "SKILL.md").exists() else source
-            )
-            target = target_dir / source.name / "SKILL.md"
-            desired_paths.append(target)
-            payload = compiler.compile(skill)
-            action = plan_compiled_text_action(
-                target=target,
-                payload=payload,
-                managed_paths=managed_path_set,
-                removable_link_paths=removable_link_set,
-                scope=scope,
-                app=app,
-                create_detail="create compiled codex skill",
-                noop_detail="compiled codex skill already up to date",
-                update_detail="update compiled codex skill",
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Codex skill sync skipped (conflict): {target}")
-
-        return actions, desired_paths, skipped
+        return self._plan_compiled_text_actions(
+            sources=sources,
+            scope=scope,
+            app=app,
+            managed_paths=managed_paths,
+            removable_links=removable_links,
+            compile_source=lambda source: (
+                target_dir / source.name / "SKILL.md",
+                compiler.compile(
+                    parse_skill(
+                        source / "SKILL.md"
+                        if (source / "SKILL.md").exists()
+                        else source
+                    )
+                ),
+            ),
+            create_detail="create compiled codex skill",
+            noop_detail="compiled codex skill already up to date",
+            update_detail="update compiled codex skill",
+            conflict_message="Codex skill sync skipped (conflict): {target}",
+        )
 
     def plan_agent_actions(
         self,
@@ -292,18 +177,11 @@ class CodexConfigService(RegisteredAppConfigService):
         scope: str,
         app: str,
         managed_paths: list[Path],
-        removable_links: list[Path] | None = None,
+        removable_links: list[Path],
     ) -> tuple[list[Action], list[Path], list[str]]:
         compiler = CodexAgentCompiler()
-        managed_path_set = {path.resolve(strict=False) for path in managed_paths}
-        removable_link_set = {
-            path.resolve(strict=False) for path in (removable_links or [])
-        }
-        actions: list[Action] = []
-        desired_paths: list[Path] = []
-        skipped: list[str] = []
 
-        for source in sources:
+        def compile_source(source: Path) -> tuple[Path, str]:
             try:
                 agent = parse_agent(source)
                 payload = compiler.compile(agent)
@@ -316,21 +194,20 @@ class CodexConfigService(RegisteredAppConfigService):
                 normalize_codex_agent_filename(agent.metadata.name, agent.name)
                 + ".toml"
             )
-            target = target_dir / target_name
-            desired_paths.append(target)
-            action = self._plan_compiled_agent_action(
-                target=target,
-                payload=payload,
-                managed_paths=managed_path_set,
-                removable_links=removable_link_set,
-                scope=scope,
-                app=app,
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Codex agent sync skipped (conflict): {target}")
+            return target_dir / target_name, payload
 
-        return actions, desired_paths, skipped
+        return self._plan_compiled_text_actions(
+            sources=sources,
+            scope=scope,
+            app=app,
+            managed_paths=managed_paths,
+            removable_links=removable_links,
+            compile_source=compile_source,
+            create_detail="create compiled codex agent",
+            noop_detail="compiled codex agent already up to date",
+            update_detail="update compiled codex agent",
+            conflict_message="Codex agent sync skipped (conflict): {target}",
+        )
 
     def _load_base_config(self) -> dict[str, Any]:
         if self._base_config_path is None or not self._base_config_path.exists():
@@ -343,25 +220,3 @@ class CodexConfigService(RegisteredAppConfigService):
                 self._base_config_path, "must be a JSON object"
             )
         return payload
-
-    @staticmethod
-    def _plan_compiled_agent_action(
-        *,
-        target: Path,
-        payload: str,
-        managed_paths: set[Path],
-        removable_links: set[Path],
-        scope: str,
-        app: str,
-    ) -> Action:
-        return plan_compiled_text_action(
-            target=target,
-            payload=payload,
-            managed_paths=managed_paths,
-            removable_link_paths=removable_links,
-            scope=scope,
-            app=app,
-            create_detail="create compiled codex agent",
-            noop_detail="compiled codex agent already up to date",
-            update_detail="update compiled codex agent",
-        )
