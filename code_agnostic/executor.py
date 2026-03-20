@@ -1,17 +1,28 @@
 from dataclasses import dataclass
 from datetime import datetime
+import os
+from pathlib import Path
 from typing import Any
 from typing import Protocol
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
-from code_agnostic.utils import backup_file, write_json
+from code_agnostic.utils import write_json
 
 
 @dataclass
 class ExecutionContext:
     core: ISourceRepository
+
+
+@dataclass(frozen=True)
+class PathSnapshot:
+    path: Path
+    existed: bool
+    is_symlink: bool
+    symlink_target: str | None = None
+    content: bytes | None = None
 
 
 class ActionHandler(Protocol):
@@ -26,8 +37,6 @@ class WriteJsonHandler:
     ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
             return False, None
-        if action.path.exists():
-            backup_file(action.path)
         write_json(action.path, action.payload)
         return True, None
 
@@ -59,8 +68,6 @@ class WriteTextHandler:
         if not isinstance(action.payload, str):
             return False, f"Missing text payload for write action: {action.path}"
 
-        if action.path.exists():
-            backup_file(action.path)
         action.path.parent.mkdir(parents=True, exist_ok=True)
         action.path.write_text(action.payload, encoding="utf-8")
         return True, None
@@ -126,29 +133,89 @@ class SyncExecutor:
         applied = 0
         failed = 0
         failures: list[str] = []
+        snapshots = self._capture_snapshots(plan=plan, persist_state=persist_state)
 
         for action in plan.actions:
             try:
                 handler = self.handlers.get(action.kind)
                 if handler is None:
-                    failed += 1
-                    failures.append(f"Unknown action kind: {action.kind.value}")
-                    continue
+                    failure = f"Unknown action kind: {action.kind.value}"
+                    self._rollback(snapshots)
+                    return 0, 1, [failure]
 
                 changed, failure = handler.handle(action, self.context)
                 if failure is not None:
-                    failed += 1
-                    failures.append(failure)
-                    continue
+                    self._rollback(snapshots)
+                    return 0, 1, [failure]
                 if changed:
                     applied += 1
             except Exception as exc:
-                failed += 1
-                failures.append(f"{action.kind.value} failed for {action.path}: {exc}")
+                self._rollback(snapshots)
+                return 0, 1, [f"{action.kind.value} failed for {action.path}: {exc}"]
 
         if persist_state:
-            self._persist_state(plan=plan)
+            try:
+                self._persist_state(plan=plan)
+            except Exception as exc:
+                self._rollback(snapshots)
+                return 0, 1, [f"persist_state failed: {exc}"]
         return applied, failed, failures
+
+    def _capture_snapshots(
+        self, *, plan: SyncPlan, persist_state: bool
+    ) -> dict[Path, PathSnapshot]:
+        paths: dict[Path, PathSnapshot] = {}
+        for action in plan.actions:
+            paths[action.path] = self._snapshot_path(action.path)
+
+        if persist_state:
+            core = self.context.core
+            core_state_path = core.root / ".sync-state.json"
+            paths[core_state_path] = self._snapshot_path(core_state_path)
+            for workspace_name in {
+                action.workspace
+                for action in plan.actions
+                if action.workspace is not None
+            }:
+                workspace_state_path = WorkspaceConfigRepository(
+                    root=core.workspace_config_dir(workspace_name)
+                ).state_json
+                paths[workspace_state_path] = self._snapshot_path(workspace_state_path)
+        return paths
+
+    def _snapshot_path(self, path: Path) -> PathSnapshot:
+        if path.is_symlink():
+            return PathSnapshot(
+                path=path,
+                existed=True,
+                is_symlink=True,
+                symlink_target=os.readlink(path),
+            )
+        if path.exists() and path.is_file():
+            return PathSnapshot(
+                path=path,
+                existed=True,
+                is_symlink=False,
+                content=path.read_bytes(),
+            )
+        return PathSnapshot(path=path, existed=False, is_symlink=False)
+
+    def _rollback(self, snapshots: dict[Path, PathSnapshot]) -> None:
+        for path, snapshot in sorted(
+            snapshots.items(),
+            key=lambda item: len(item[0].parts),
+            reverse=True,
+        ):
+            if path.is_symlink() or path.is_file():
+                path.unlink()
+
+            if snapshot.existed:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if snapshot.is_symlink:
+                    if snapshot.symlink_target is not None:
+                        path.symlink_to(snapshot.symlink_target)
+                elif snapshot.content is not None:
+                    path.write_bytes(snapshot.content)
 
     def _persist_state(self, plan: SyncPlan) -> None:
         global_links: dict[str, list[str]] = {}

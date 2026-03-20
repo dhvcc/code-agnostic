@@ -26,6 +26,12 @@ Current progress inside Phase 3:
 - [x] Cursor global app sync now generates agent files for legacy and bundle sources
 - [x] Default sync now generates workspace/root/repo artifacts instead of planning symlink actions
 
+Current progress inside Phase 4:
+
+- [x] Executor now rolls back applied file changes when a later action fails
+- [ ] Add revision manifests and explicit active revision tracking
+- [ ] Replace ad hoc backup behavior as the remaining recovery path
+
 Current progress inside Phase 5:
 
 - [x] Added `code-agnostic validate` for global and workspace canonical source checks
@@ -35,15 +41,15 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- removed remaining default workspace sync symlink actions in favor of generated files
-- added regression coverage for workspace/root/repo generated outputs and stale cleanup
+- executor now rolls back partial apply changes instead of leaving earlier writes behind
+- added regression coverage for failed writes and stale-file restore during rollback
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
-- start Phase 4 transactional apply work with failing rollback tests first
-- add staging/manifest primitives around the current executor path
-- keep rollback focused on restoring the last successful revision, not backup files
+- add revision manifests and active revision tracking around successful applies
+- teach rollback to restore the last successful revision from manifest data
+- remove backup-file behavior once manifest-backed rollback fully owns recovery
 
 Why I did not start import/migration changes:
 
