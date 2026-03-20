@@ -189,6 +189,19 @@ def test_list_skill_sources_skips_child_without_skill_md(
     assert sources[0].name == "valid-skill"
 
 
+def test_list_skill_sources_includes_bundle_dirs(core_repo: CoreRepository) -> None:
+    bundle_dir = core_repo.skills_dir / "bundle-skill"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: skill\nname: bundle-skill\n", encoding="utf-8"
+    )
+    (bundle_dir / "prompt.md").write_text("Skill content.\n", encoding="utf-8")
+
+    sources = core_repo.list_skill_sources()
+
+    assert [source.name for source in sources] == ["bundle-skill"]
+
+
 def test_list_agent_sources_skips_dotfiles(core_repo: CoreRepository) -> None:
     core_repo.agents_dir.mkdir(parents=True)
     (core_repo.agents_dir / "planner.md").write_text("agent", encoding="utf-8")
@@ -199,6 +212,19 @@ def test_list_agent_sources_skips_dotfiles(core_repo: CoreRepository) -> None:
     names = [s.name for s in sources]
     assert "planner.md" in names
     assert ".hidden" not in names
+
+
+def test_list_agent_sources_includes_bundle_dirs(core_repo: CoreRepository) -> None:
+    bundle_dir = core_repo.agents_dir / "planner"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: agent\nname: planner\n", encoding="utf-8"
+    )
+    (bundle_dir / "prompt.md").write_text("Agent content.\n", encoding="utf-8")
+
+    sources = core_repo.list_agent_sources()
+
+    assert [source.name for source in sources] == ["planner"]
 
 
 def test_list_agent_sources_when_dir_missing(core_repo: CoreRepository) -> None:

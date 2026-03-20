@@ -1,0 +1,73 @@
+from pathlib import Path
+
+from code_agnostic.models import Action, ActionKind, ActionStatus
+
+
+def plan_compiled_text_action(
+    *,
+    target: Path,
+    payload: str,
+    managed_paths: set[Path],
+    scope: str,
+    app: str,
+    create_detail: str,
+    noop_detail: str,
+    update_detail: str,
+    conflict_detail: str = "non-managed path exists",
+) -> Action:
+    target_key = target.resolve(strict=False)
+
+    if target.parent.is_symlink():
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CONFLICT,
+            detail=conflict_detail,
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
+
+    if not target.exists() and not target.is_symlink():
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CREATE,
+            detail=create_detail,
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
+
+    if target.is_file():
+        existing = target.read_text(encoding="utf-8")
+        if existing == payload:
+            return Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.NOOP,
+                detail=noop_detail,
+                payload=payload,
+                app=app,
+                scope=scope,
+            )
+        if target_key in managed_paths:
+            return Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.UPDATE,
+                detail=update_detail,
+                payload=payload,
+                app=app,
+                scope=scope,
+            )
+
+    return Action(
+        kind=ActionKind.WRITE_TEXT,
+        path=target,
+        status=ActionStatus.CONFLICT,
+        detail=conflict_detail,
+        payload=payload,
+        app=app,
+        scope=scope,
+    )

@@ -16,7 +16,9 @@ Current progress inside Phase 1:
 - [x] Added test coverage for valid bundles, unknown keys, missing `prompt.md`, and invalid MCP server shapes
 - [x] Wired rule bundle discovery into `RulesRepository`
 - [x] Added YAML `mcp.base.yaml` loading through existing source repositories
-- [ ] Wire skill and agent bundles into planner/import flows
+- [x] Wired skill and agent bundle parsing into current planner/app flows
+- [ ] Remove legacy symlink-first behavior for legacy source formats
+- [ ] Wire bundle loading into import/migration flows
 
 ## Why this exists
 

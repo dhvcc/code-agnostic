@@ -8,11 +8,15 @@ from pathlib import Path
 import yaml
 
 from code_agnostic.skills.models import Skill, SkillMetadata, SkillToolPermissions
+from code_agnostic.spec.loaders import load_skill_bundle
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
 def parse_skill(path: Path) -> Skill:
+    if _is_skill_bundle_dir(path):
+        return load_skill_bundle(path)
+
     text = path.read_text(encoding="utf-8")
     name = path.parent.name if path.name == "SKILL.md" else path.stem
 
@@ -72,3 +76,11 @@ def serialize_skill(skill: Skill) -> str:
 
     parts.append(skill.content)
     return "\n".join(parts)
+
+
+def _is_skill_bundle_dir(path: Path) -> bool:
+    return (
+        path.is_dir()
+        and (path / "meta.yaml").exists()
+        and (path / "prompt.md").exists()
+    )

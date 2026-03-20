@@ -382,6 +382,61 @@ def test_full_roundtrip_skills_agents_all_apps(
     assert (codex_root / "agents" / "planner.toml").is_file()
 
 
+def test_bundle_skills_and_agents_apply_all_apps(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    from code_agnostic.__main__ import cli
+
+    enable_app("opencode")
+    enable_app("cursor")
+    enable_app("codex")
+
+    core_root = tmp_path / ".config" / "code-agnostic"
+
+    skill_dir = core_root / "skills" / "shared-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: shared-skill\n"
+        "description: Shared skill\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "prompt.md").write_text("Skill body.\n", encoding="utf-8")
+
+    agent_dir = core_root / "agents" / "planner"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: planner\n"
+        "description: Shared planner\n",
+        encoding="utf-8",
+    )
+    (agent_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
+
+    apply_result = cli_runner.invoke(cli, ["apply"])
+    assert apply_result.exit_code == 0
+
+    opencode_root = tmp_path / ".config" / "opencode"
+    cursor_root = tmp_path / ".cursor"
+    codex_root = tmp_path / ".codex"
+
+    assert (opencode_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (opencode_root / "agents" / "planner.md").is_file()
+
+    assert (cursor_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert not (cursor_root / "skills" / "shared-skill").is_symlink()
+    assert (cursor_root / "agents" / "planner.md").is_file()
+    assert not (cursor_root / "agents" / "planner.md").is_symlink()
+
+    assert (codex_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (codex_root / "agents" / "planner.toml").is_file()
+
+
 def test_config_update_propagation(
     minimal_shared_config: Path,
     tmp_path: Path,

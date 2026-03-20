@@ -68,7 +68,10 @@ class BaseSourceRepository(ISourceRepository):
             return []
         result: list[Path] = []
         for child in sorted(self.skills_dir.iterdir()):
-            if child.is_dir() and (child / "SKILL.md").exists():
+            if child.is_dir() and (
+                (child / "SKILL.md").exists()
+                or ((child / "meta.yaml").exists() and (child / "prompt.md").exists())
+            ):
                 result.append(child)
         return result
 
@@ -79,7 +82,15 @@ class BaseSourceRepository(ISourceRepository):
         for child in sorted(self.agents_dir.iterdir()):
             if child.name.startswith("."):
                 continue
-            result.append(child)
+            if child.is_file():
+                result.append(child)
+                continue
+            if (
+                child.is_dir()
+                and (child / "meta.yaml").exists()
+                and (child / "prompt.md").exists()
+            ):
+                result.append(child)
         return result
 
     def load_state(self) -> dict[str, Any]:

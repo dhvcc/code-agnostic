@@ -15,11 +15,15 @@ from code_agnostic.agents.models import (
     AgentSkillConfig,
     AgentToolPermissions,
 )
+from code_agnostic.spec.loaders import load_agent_bundle
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
 def parse_agent(path: Path) -> Agent:
+    if _is_agent_bundle_dir(path):
+        return load_agent_bundle(path)
+
     text = path.read_text(encoding="utf-8")
     name = path.stem
 
@@ -160,3 +164,11 @@ def _serialize_skill_config(item: AgentSkillConfig) -> dict[str, Any]:
     if item.enabled is not None:
         payload["enabled"] = item.enabled
     return payload
+
+
+def _is_agent_bundle_dir(path: Path) -> bool:
+    return (
+        path.is_dir()
+        and (path / "meta.yaml").exists()
+        and (path / "prompt.md").exists()
+    )

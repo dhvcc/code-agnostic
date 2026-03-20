@@ -7,6 +7,7 @@ from code_agnostic.agents.compilers import OpenCodeAgentCompiler
 from code_agnostic.agents.parser import parse_agent
 from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.common.models import MCPServerDTO
+from code_agnostic.apps.common.compiled_planning import plan_compiled_text_action
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -30,6 +31,8 @@ from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.skills.compilers import OpenCodeSkillCompiler
+from code_agnostic.skills.parser import parse_skill
 
 
 class OpenCodeConfigService(RegisteredAppConfigService):
@@ -148,8 +151,16 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         actions: list[Action] = [config_action]
         skipped: list[str] = []
 
+        skill_sources = source_repository.list_skill_sources()
+        legacy_skills = [
+            source for source in skill_sources if (source / "SKILL.md").exists()
+        ]
+        bundle_skills = [
+            source for source in skill_sources if (source / "meta.yaml").exists()
+        ]
+
         skill_actions, desired_skill_links, skill_skipped = plan_resource_symlinks(
-            source_repository.list_skill_sources(),
+            legacy_skills,
             self._opencode_repo.skills_dir,
             scope="app:opencode:skills",
             app=AppId.OPENCODE.value,
@@ -164,6 +175,18 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         managed_paths = state.get("managed_paths", {})
         if not isinstance(managed_paths, dict):
             managed_paths = {}
+
+        compiled_skill_actions, desired_skill_paths, compiled_skill_skipped = (
+            self.plan_skill_actions(
+                bundle_skills,
+                self._opencode_repo.skills_dir,
+                scope="app:opencode:skills",
+                app=AppId.OPENCODE.value,
+                managed_paths=load_state_paths(managed_paths, "app:opencode:skills"),
+            )
+        )
+        actions.extend(compiled_skill_actions)
+        skipped.extend(compiled_skill_skipped)
 
         agent_actions, desired_agent_paths, agent_skipped = self.plan_agent_actions(
             source_repository.list_agent_sources(),
@@ -186,6 +209,19 @@ class OpenCodeConfigService(RegisteredAppConfigService):
                 scope="app:opencode:skills",
                 skipped=skipped,
                 skipped_message="Stale link cleanup skipped (not symlink): {path}",
+            )
+        )
+        actions.extend(
+            plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, "app:opencode:skills"),
+                desired_paths=desired_skill_paths,
+                remove_detail="remove stale managed skill file",
+                conflict_detail="stale managed path is not a file",
+                noop_detail="stale managed file already absent",
+                app=AppId.OPENCODE.value,
+                scope="app:opencode:skills",
+                skipped=skipped,
+                skipped_message="Stale file cleanup skipped (not file): {path}",
             )
         )
         actions.extend(
@@ -217,6 +253,41 @@ class OpenCodeConfigService(RegisteredAppConfigService):
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
 
+    def plan_skill_actions(
+        self,
+        sources: list[Path],
+        target_dir: Path,
+        scope: str,
+        app: str,
+        managed_paths: list[Path],
+    ) -> tuple[list[Action], list[Path], list[str]]:
+        compiler = OpenCodeSkillCompiler()
+        managed_path_set = {path.resolve(strict=False) for path in managed_paths}
+        actions: list[Action] = []
+        desired_paths: list[Path] = []
+        skipped: list[str] = []
+
+        for source in sources:
+            skill = parse_skill(source)
+            target = target_dir / source.name / "SKILL.md"
+            desired_paths.append(target)
+            payload = compiler.compile(skill)
+            action = plan_compiled_text_action(
+                target=target,
+                payload=payload,
+                managed_paths=managed_path_set,
+                scope=scope,
+                app=app,
+                create_detail="create compiled opencode skill",
+                noop_detail="compiled opencode skill already up to date",
+                update_detail="update compiled opencode skill",
+            )
+            actions.append(action)
+            if action.status == ActionStatus.CONFLICT:
+                skipped.append(f"OpenCode skill sync skipped (conflict): {target}")
+
+        return actions, desired_paths, skipped
+
     def plan_agent_actions(
         self,
         sources: list[Path],
@@ -233,7 +304,8 @@ class OpenCodeConfigService(RegisteredAppConfigService):
 
         for source in sources:
             agent = parse_agent(source)
-            target = target_dir / source.name
+            target_name = f"{source.name}.md" if source.is_dir() else source.name
+            target = target_dir / target_name
             desired_paths.append(target)
             payload = compiler.compile(agent)
             action = self._plan_compiled_agent_action(
@@ -258,47 +330,15 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         scope: str,
         app: str,
     ) -> Action:
-        target_key = target.resolve(strict=False)
-        if not target.exists() and not target.is_symlink():
-            return Action(
-                kind=ActionKind.WRITE_TEXT,
-                path=target,
-                status=ActionStatus.CREATE,
-                detail="create compiled opencode agent",
-                payload=payload,
-                app=app,
-                scope=scope,
-            )
-        if target.is_file():
-            existing = target.read_text(encoding="utf-8")
-            if existing == payload:
-                return Action(
-                    kind=ActionKind.WRITE_TEXT,
-                    path=target,
-                    status=ActionStatus.NOOP,
-                    detail="compiled opencode agent already up to date",
-                    payload=payload,
-                    app=app,
-                    scope=scope,
-                )
-            if target_key in managed_paths:
-                return Action(
-                    kind=ActionKind.WRITE_TEXT,
-                    path=target,
-                    status=ActionStatus.UPDATE,
-                    detail="update compiled opencode agent",
-                    payload=payload,
-                    app=app,
-                    scope=scope,
-                )
-        return Action(
-            kind=ActionKind.WRITE_TEXT,
-            path=target,
-            status=ActionStatus.CONFLICT,
-            detail="non-managed path exists",
+        return plan_compiled_text_action(
+            target=target,
             payload=payload,
-            app=app,
+            managed_paths=managed_paths,
             scope=scope,
+            app=app,
+            create_detail="create compiled opencode agent",
+            noop_detail="compiled opencode agent already up to date",
+            update_detail="update compiled opencode agent",
         )
 
     def set_mcp_payload(

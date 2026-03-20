@@ -390,6 +390,66 @@ def test_opencode_build_plan_includes_compiled_agent_files(
     assert "reasoningEffort: high" in agent_actions[0].payload
 
 
+def test_opencode_build_plan_includes_compiled_agent_files_for_bundle(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    bundle_dir = core_root / "agents" / "planner"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: agent\nname: planner\n", encoding="utf-8"
+    )
+    (bundle_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    agent_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:opencode:agents"
+    ]
+    assert len(agent_actions) == 1
+    assert agent_actions[0].path == opencode_root / "agents" / "planner.md"
+    assert "Agent body." in agent_actions[0].payload
+
+
+def test_opencode_build_plan_includes_compiled_skill_files_for_bundle(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    bundle_dir = core_root / "skills" / "my-skill"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: my-skill\n"
+        "description: Review skill\n",
+        encoding="utf-8",
+    )
+    (bundle_dir / "prompt.md").write_text("Skill body.\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    skill_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:opencode:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == opencode_root / "skills" / "my-skill" / "SKILL.md"
+    assert "description: Review skill" in skill_actions[0].payload
+
+
 def test_codex_build_plan_includes_skill_symlinks(
     minimal_shared_config: Path,
     core_root: Path,
@@ -414,6 +474,32 @@ def test_codex_build_plan_includes_skill_symlinks(
     assert skill_actions[0].status == ActionStatus.CREATE
 
 
+def test_codex_build_plan_includes_compiled_skill_files_for_bundle(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    bundle_dir = core_root / "skills" / "my-skill"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: skill\nname: my-skill\n", encoding="utf-8"
+    )
+    (bundle_dir / "prompt.md").write_text("Skill body.\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    skill_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:codex:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == codex_root / "skills" / "my-skill" / "SKILL.md"
+    assert "Skill body." in skill_actions[0].payload
+
+
 def test_codex_build_plan_includes_agent_symlinks(
     minimal_shared_config: Path,
     core_root: Path,
@@ -434,3 +520,33 @@ def test_codex_build_plan_includes_agent_symlinks(
     assert len(agent_actions) == 1
     assert agent_actions[0].path == codex_root / "agents" / "planner.toml"
     assert agent_actions[0].status == ActionStatus.CREATE
+
+
+def test_cursor_build_plan_includes_compiled_agent_files_for_bundle(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    bundle_dir = core_root / "agents" / "planner"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: planner\n"
+        "description: Reviewer\n",
+        encoding="utf-8",
+    )
+    (bundle_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    cursor_root = tmp_path / ".cursor"
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+
+    agent_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:cursor:agents"
+    ]
+    assert len(agent_actions) == 1
+    assert agent_actions[0].path == cursor_root / "agents" / "planner.md"
+    assert "description: Reviewer" in agent_actions[0].payload
