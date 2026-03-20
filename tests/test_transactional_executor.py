@@ -149,16 +149,19 @@ def test_execute_persists_global_revision_manifest_on_success(
     assert manifest["revision_id"] == active_revision["revision_id"]
     assert manifest["root"] == str(core_root)
     assert manifest["workspace"] is None
-    assert manifest["targets"] == [
-        {
-            "path": str(target),
-            "kind": "write_text",
-            "app": "opencode",
-            "scope": "app:test:text",
-            "exists": True,
-            "checksum": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
-        }
-    ]
+    assert len(manifest["targets"]) == 1
+    target_entry = manifest["targets"][0]
+    assert target_entry["path"] == str(target)
+    assert target_entry["kind"] == "write_text"
+    assert target_entry["app"] == "opencode"
+    assert target_entry["scope"] == "app:test:text"
+    assert target_entry["exists"] is True
+    assert (
+        target_entry["checksum"] == hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    )
+    artifact_path = Path(target_entry["artifact_path"])
+    assert artifact_path.exists()
+    assert artifact_path.read_text(encoding="utf-8") == payload
 
 
 def test_execute_persists_workspace_revision_manifest_on_success(
@@ -205,13 +208,93 @@ def test_execute_persists_workspace_revision_manifest_on_success(
     assert manifest["revision_id"] == active_revision["revision_id"]
     assert manifest["root"] == str(core_root / "workspaces" / "myws")
     assert manifest["workspace"] == "myws"
-    assert manifest["targets"] == [
-        {
-            "path": str(target),
-            "kind": "write_text",
-            "app": "workspace",
-            "scope": "rules",
-            "exists": True,
-            "checksum": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
-        }
+    assert len(manifest["targets"]) == 1
+    target_entry = manifest["targets"][0]
+    assert target_entry["path"] == str(target)
+    assert target_entry["kind"] == "write_text"
+    assert target_entry["app"] == "workspace"
+    assert target_entry["scope"] == "rules"
+    assert target_entry["exists"] is True
+    assert (
+        target_entry["checksum"] == hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    )
+    artifact_path = Path(target_entry["artifact_path"])
+    assert artifact_path.exists()
+    assert artifact_path.read_text(encoding="utf-8") == payload
+
+
+def test_execute_restores_last_successful_revision_from_manifest(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    core = CoreRepository(core_root)
+    executor = SyncExecutor(core=core)
+    primary = tmp_path / "primary.txt"
+    sibling = tmp_path / "sibling.txt"
+
+    first_plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=primary,
+                status=ActionStatus.CREATE,
+                detail="create primary",
+                payload="v1\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=sibling,
+                status=ActionStatus.CREATE,
+                detail="create sibling",
+                payload="sibling\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+    applied, failed, failures = executor.execute(first_plan)
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+
+    sibling.unlink()
+
+    second_plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=primary,
+                status=ActionStatus.UPDATE,
+                detail="update primary",
+                payload="v2\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=tmp_path / "broken.txt",
+                status=ActionStatus.CREATE,
+                detail="break apply",
+                payload=None,
+                scope="app:test:text",
+                app="opencode",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = executor.execute(second_plan)
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Missing text payload for write action: {tmp_path / 'broken.txt'}"
     ]
+    assert primary.read_text(encoding="utf-8") == "v1\n"
+    assert sibling.read_text(encoding="utf-8") == "sibling\n"
