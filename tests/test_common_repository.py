@@ -120,6 +120,7 @@ def test_load_mcp_base_reads_yaml_bundle_when_json_missing(
         "    args:\n"
         "      - -y\n"
         "      - '@modelcontextprotocol/server-github'\n"
+        "    timeout: 900000\n"
         "    env:\n"
         "      GITHUB_TOKEN: ${GITHUB_TOKEN}\n",
         encoding="utf-8",
@@ -132,10 +133,43 @@ def test_load_mcp_base_reads_yaml_bundle_when_json_missing(
             "github": {
                 "command": "npx",
                 "args": ["-y", "@modelcontextprotocol/server-github"],
+                "timeout": 900000,
                 "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"},
             }
         }
     }
+
+
+def test_load_mcp_base_json_accepts_schema_property(core_repo: CoreRepository) -> None:
+    repo = core_repo
+    repo.config_dir.mkdir(parents=True, exist_ok=True)
+    repo.mcp_base_path.write_text(
+        "{\n"
+        '  "$schema": "https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.base.schema.json",\n'
+        '  "mcpServers": {\n'
+        '    "github": {"command": "npx", "timeout": 900000}\n'
+        "  }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    payload = repo.load_mcp_base()
+
+    assert payload["mcpServers"]["github"]["timeout"] == 900000
+
+
+def test_load_mcp_base_json_rejects_unknown_server_keys(
+    core_repo: CoreRepository,
+) -> None:
+    repo = core_repo
+    repo.config_dir.mkdir(parents=True, exist_ok=True)
+    repo.mcp_base_path.write_text(
+        '{"mcpServers": {"github": {"command": "npx", "badKey": true}}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(InvalidConfigSchemaError):
+        repo.load_mcp_base()
 
 
 def test_load_state_with_corrupted_json(

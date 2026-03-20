@@ -109,6 +109,71 @@ def test_load_agent_bundle(tmp_path: Path) -> None:
     assert agent.content == "Design the system.\n"
 
 
+def test_load_agent_bundle_with_app_overrides(tmp_path: Path) -> None:
+    agent_dir = tmp_path / "agents" / "architect"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: architect\n"
+        "model: gpt-5.4-mini\n"
+        "x-opencode:\n"
+        "  model: opencode/big-pickle\n"
+        "  temperature: 0.2\n",
+        encoding="utf-8",
+    )
+    (agent_dir / "prompt.md").write_text("Design the system.\n", encoding="utf-8")
+
+    agent = load_agent_bundle(agent_dir)
+
+    assert agent.metadata.model == "gpt-5.4-mini"
+    assert agent.metadata.app_overrides == {
+        "opencode": {"model": "opencode/big-pickle", "temperature": 0.2}
+    }
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "meta_text", "loader"),
+    [
+        (
+            "rules/example/meta.yaml",
+            "$schema: https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/rule.v1.schema.json\n"
+            "spec_version: v1\n"
+            "kind: rule\n"
+            "description: Example rule\n",
+            load_rule_bundle,
+        ),
+        (
+            "skills/example/meta.yaml",
+            "$schema: https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/skill.v1.schema.json\n"
+            "spec_version: v1\n"
+            "kind: skill\n"
+            "name: example\n",
+            load_skill_bundle,
+        ),
+        (
+            "agents/example/meta.yaml",
+            "$schema: https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/agent.v1.schema.json\n"
+            "spec_version: v1\n"
+            "kind: agent\n"
+            "name: example\n",
+            load_agent_bundle,
+        ),
+    ],
+)
+def test_bundle_loader_accepts_schema_property(
+    tmp_path: Path, relative_path: str, meta_text: str, loader
+) -> None:
+    bundle_dir = tmp_path / Path(relative_path).parent
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(meta_text, encoding="utf-8")
+    (bundle_dir / "prompt.md").write_text("Content.\n", encoding="utf-8")
+
+    resource = loader(bundle_dir)
+
+    assert resource.content == "Content.\n"
+
+
 def test_load_mcp_base(tmp_path: Path) -> None:
     path = tmp_path / "config" / "mcp.base.yaml"
     path.parent.mkdir(parents=True)
@@ -121,6 +186,7 @@ def test_load_mcp_base(tmp_path: Path) -> None:
         "    args:\n"
         "      - -y\n"
         "      - '@modelcontextprotocol/server-github'\n"
+        "    timeout: 900000\n"
         "    env:\n"
         "      GITHUB_TOKEN: ${GITHUB_TOKEN}\n",
         encoding="utf-8",
@@ -132,7 +198,26 @@ def test_load_mcp_base(tmp_path: Path) -> None:
     assert github.type == MCPServerType.STDIO
     assert github.command == "npx"
     assert github.args == ["-y", "@modelcontextprotocol/server-github"]
+    assert github.timeout_ms == 900000
     assert github.env == {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
+
+
+def test_load_mcp_base_accepts_schema_property(tmp_path: Path) -> None:
+    path = tmp_path / "config" / "mcp.base.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "$schema: https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.v1.schema.json\n"
+        "spec_version: v1\n"
+        "mcp_servers:\n"
+        "  github:\n"
+        "    type: stdio\n"
+        "    command: npx\n",
+        encoding="utf-8",
+    )
+
+    servers = load_mcp_base(path)
+
+    assert servers["github"].command == "npx"
 
 
 @pytest.mark.parametrize("loader_name", ["rule", "skill", "agent"])
@@ -195,7 +280,7 @@ def test_load_mcp_base_rejects_invalid_server_shape(tmp_path: Path) -> None:
     path = tmp_path / "config" / "mcp.base.yaml"
     path.parent.mkdir(parents=True)
     path.write_text(
-        "spec_version: v1\n" "mcp_servers:\n" "  github:\n" "    type: stdio\n",
+        "spec_version: v1\nmcp_servers:\n  github:\n    type: stdio\n",
         encoding="utf-8",
     )
 

@@ -55,6 +55,7 @@ class MCPManagementService:
         command: str | None = None,
         args: list[str] | None = None,
         url: str | None = None,
+        timeout_ms: int | None = None,
         headers: dict[str, str] | None = None,
         env: dict[str, str] | None = None,
         workspace: str | None = None,
@@ -79,6 +80,9 @@ class MCPManagementService:
                 entry["args"] = args
         elif url is not None:
             entry["url"] = url
+
+        if timeout_ms is not None:
+            entry["timeout"] = timeout_ms
 
         if headers:
             entry["headers"] = headers

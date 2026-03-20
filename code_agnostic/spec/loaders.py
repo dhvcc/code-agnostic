@@ -13,6 +13,7 @@ from code_agnostic.agents.models import (
     AgentMetadata,
     AgentSkillConfig,
     AgentToolPermissions,
+    normalize_agent_override_key,
 )
 from code_agnostic.apps.common.framework import format_schema_error
 from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
@@ -23,11 +24,20 @@ from code_agnostic.skills.models import Skill, SkillMetadata, SkillToolPermissio
 _SCHEMA_DIR = Path(__file__).with_name("schemas")
 
 
+def validate_schema_payload(
+    path: Path, schema_name: str, payload: dict[str, Any]
+) -> None:
+    schema = json.loads((_SCHEMA_DIR / schema_name).read_text(encoding="utf-8"))
+    error = next(iter(Draft202012Validator(schema).iter_errors(payload)), None)
+    if error is not None:
+        raise InvalidConfigSchemaError(path, format_schema_error(error))
+
+
 def load_rule_bundle(path: Path) -> Rule:
     meta_path = path / "meta.yaml"
     prompt_path = path / "prompt.md"
     payload = _load_yaml(meta_path)
-    _validate(meta_path, "rule.v1.schema.json", payload)
+    validate_schema_payload(meta_path, "rule.v1.schema.json", payload)
     prompt = _load_prompt(prompt_path)
 
     return Rule(
@@ -46,7 +56,7 @@ def load_skill_bundle(path: Path) -> Skill:
     meta_path = path / "meta.yaml"
     prompt_path = path / "prompt.md"
     payload = _load_yaml(meta_path)
-    _validate(meta_path, "skill.v1.schema.json", payload)
+    validate_schema_payload(meta_path, "skill.v1.schema.json", payload)
     prompt = _load_prompt(prompt_path)
 
     tools = payload.get("tools", {})
@@ -72,12 +82,13 @@ def load_agent_bundle(path: Path) -> Agent:
     meta_path = path / "meta.yaml"
     prompt_path = path / "prompt.md"
     payload = _load_yaml(meta_path)
-    _validate(meta_path, "agent.v1.schema.json", payload)
+    validate_schema_payload(meta_path, "agent.v1.schema.json", payload)
     prompt = _load_prompt(prompt_path)
 
     tools = payload.get("tools", {})
     codex = payload.get("codex", {})
     skills = codex.get("skills", {})
+    app_overrides = _coerce_agent_app_overrides(payload)
 
     return Agent(
         name=path.name,
@@ -96,6 +107,7 @@ def load_agent_bundle(path: Path) -> Agent:
                 write=bool(tools.get("write", True)),
                 mcp=[dict(item) for item in tools.get("mcp", [])],
             ),
+            app_overrides=app_overrides,
             codex=AgentCodexConfig(
                 mcp_servers={
                     str(name): dict(config)
@@ -120,7 +132,7 @@ def load_agent_bundle(path: Path) -> Agent:
 
 def load_mcp_base(path: Path) -> dict[str, MCPServerDTO]:
     payload = _load_yaml(path)
-    _validate(path, "mcp.v1.schema.json", payload)
+    validate_schema_payload(path, "mcp.v1.schema.json", payload)
 
     result: dict[str, MCPServerDTO] = {}
     for name, config in payload.get("mcp_servers", {}).items():
@@ -144,6 +156,12 @@ def load_mcp_base(path: Path) -> dict[str, MCPServerDTO]:
             command=str(config["command"]) if config.get("command") else None,
             args=[str(item) for item in config.get("args", [])],
             url=str(config["url"]) if config.get("url") else None,
+            timeout_ms=(
+                int(config["timeout"])
+                if isinstance(config.get("timeout"), int)
+                and not isinstance(config.get("timeout"), bool)
+                else None
+            ),
             headers={
                 str(key): str(value) for key, value in config.get("headers", {}).items()
             },
@@ -173,8 +191,13 @@ def _load_prompt(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _validate(path: Path, schema_name: str, payload: dict[str, Any]) -> None:
-    schema = json.loads((_SCHEMA_DIR / schema_name).read_text(encoding="utf-8"))
-    error = next(iter(Draft202012Validator(schema).iter_errors(payload)), None)
-    if error is not None:
-        raise InvalidConfigSchemaError(path, format_schema_error(error))
+def _coerce_agent_app_overrides(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    overrides: dict[str, dict[str, Any]] = {}
+    for app_name in ("cursor", "codex", "opencode"):
+        raw = payload.get(f"x-{app_name}")
+        if not isinstance(raw, dict):
+            continue
+        overrides[app_name] = {
+            normalize_agent_override_key(str(key)): value for key, value in raw.items()
+        }
+    return overrides

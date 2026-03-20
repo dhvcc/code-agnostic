@@ -23,6 +23,7 @@ class MCPServerDTO:
     command: str | None = None
     args: list[str] = field(default_factory=list)
     url: str | None = None
+    timeout_ms: int | None = None
     headers: dict[str, str] = field(default_factory=dict)
     env: dict[str, str] = field(default_factory=dict)
     auth: MCPAuthDTO | None = None

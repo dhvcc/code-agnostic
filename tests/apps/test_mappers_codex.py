@@ -30,6 +30,7 @@ def test_codex_mapper_from_common_splits_env_and_headers() -> None:
                 name="demo",
                 type=MCPServerType.HTTP,
                 url="https://example.com/mcp",
+                timeout_ms=900000,
                 env={"API_KEY": "${API_KEY}", "PLAIN": "value"},
                 headers={
                     "Authorization": "Bearer ${TOKEN}",
@@ -47,6 +48,7 @@ def test_codex_mapper_from_common_splits_env_and_headers() -> None:
     assert server["bearer_token_env_var"] == "TOKEN"
     assert server["env_http_headers"] == {"X-Test": "HEADER_ENV"}
     assert server["http_headers"] == {"X-Static": "x"}
+    assert server["tool_timeout_sec"] == 900.0
 
 
 def test_codex_mapper_from_common_empty_servers() -> None:
@@ -139,6 +141,20 @@ def test_codex_mapper_to_common_stdio_server() -> None:
     assert server.type == MCPServerType.STDIO
     assert server.command == "npx"
     assert server.args == ["-y", "demo"]
+
+
+def test_codex_mapper_to_common_with_tool_timeout() -> None:
+    mapper = CodexMCPMapper()
+    mapped = mapper.to_common(
+        {
+            "demo": {
+                "url": "https://x",
+                "tool_timeout_sec": 900,
+            }
+        }
+    )
+
+    assert mapped["demo"].timeout_ms == 900000
 
 
 def test_codex_mapper_to_common_non_dict_skipped() -> None:

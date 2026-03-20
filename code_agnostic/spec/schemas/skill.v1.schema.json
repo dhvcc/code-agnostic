@@ -1,9 +1,11 @@
 {
+  "$id": "https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/skill.v1.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
   "required": ["spec_version", "kind", "name"],
   "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
     "spec_version": { "const": "v1" },
     "kind": { "const": "skill" },
     "name": { "type": "string", "minLength": 1 },

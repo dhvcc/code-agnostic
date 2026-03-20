@@ -412,6 +412,41 @@ def test_opencode_build_plan_includes_compiled_agent_files_for_bundle(
     assert "Agent body." in agent_actions[0].payload
 
 
+def test_opencode_build_plan_uses_app_specific_model_override(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    bundle_dir = core_root / "agents" / "planner"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: planner\n"
+        "model: gpt-5.4-mini\n"
+        "x-opencode:\n"
+        "  model: opencode/big-pickle\n"
+        "  temperature: 0.2\n",
+        encoding="utf-8",
+    )
+    (bundle_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    agent_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:opencode:agents"
+    ]
+    assert len(agent_actions) == 1
+    assert "model: opencode/big-pickle" in agent_actions[0].payload
+    assert "temperature: 0.2" in agent_actions[0].payload
+
+
 def test_opencode_build_plan_includes_compiled_skill_files_for_bundle(
     minimal_shared_config: Path,
     core_root: Path,
@@ -633,6 +668,38 @@ def test_codex_build_plan_includes_agent_symlinks(
     assert len(agent_actions) == 1
     assert agent_actions[0].path == codex_root / "agents" / "planner.toml"
     assert agent_actions[0].status == ActionStatus.CREATE
+
+
+def test_codex_build_plan_keeps_generic_model_when_only_opencode_override_exists(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    bundle_dir = core_root / "agents" / "planner"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: planner\n"
+        "model: gpt-5.4-mini\n"
+        "x-opencode:\n"
+        "  model: opencode/big-pickle\n",
+        encoding="utf-8",
+    )
+    (bundle_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    agent_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:codex:agents"
+    ]
+    assert len(agent_actions) == 1
+    assert 'model = "gpt-5.4-mini"' in agent_actions[0].payload
+    assert "opencode/big-pickle" not in agent_actions[0].payload
 
 
 def test_cursor_build_plan_includes_compiled_agent_files_for_bundle(

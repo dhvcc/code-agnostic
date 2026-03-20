@@ -28,6 +28,7 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "timeout": { "type": "integer", "minimum": 0 },
         "env": { "$ref": "#/$defs/stringMap" },
         "headers": { "$ref": "#/$defs/stringMap" },
         "auth": { "$ref": "#/$defs/stringMap" }
@@ -42,6 +43,7 @@
           "type": "string",
           "pattern": "^https?://"
         },
+        "timeout": { "type": "integer", "minimum": 0 },
         "headers": { "$ref": "#/$defs/stringMap" },
         "auth": { "$ref": "#/$defs/stringMap" }
       },

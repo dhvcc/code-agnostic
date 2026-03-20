@@ -37,13 +37,21 @@ def test_cursor_mapper_from_common_writes_expected_keys() -> None:
                 name="http", type=MCPServerType.HTTP, url="https://example.com"
             ),
             "local": MCPServerDTO(
-                name="local", type=MCPServerType.STDIO, command="uvx", args=["demo"]
+                name="local",
+                type=MCPServerType.STDIO,
+                command="uvx",
+                args=["demo"],
+                timeout_ms=900000,
             ),
         }
     )
 
     assert mapped["http"] == {"url": "https://example.com"}
-    assert mapped["local"] == {"command": "uvx", "args": ["demo"]}
+    assert mapped["local"] == {
+        "command": "uvx",
+        "args": ["demo"],
+        "timeout": 900000,
+    }
 
 
 def test_cursor_mapper_from_common_empty_servers() -> None:
@@ -154,3 +162,17 @@ def test_cursor_mapper_to_common_env_and_headers() -> None:
 
     assert mapped["local"].env == {"TOKEN": "val"}
     assert mapped["local"].headers == {"X-Custom": "x"}
+
+
+def test_cursor_mapper_to_common_with_timeout() -> None:
+    mapper = CursorMCPMapper()
+    mapped = mapper.to_common(
+        {
+            "local": {
+                "command": "npx",
+                "timeout": 900000,
+            }
+        }
+    )
+
+    assert mapped["local"].timeout_ms == 900000

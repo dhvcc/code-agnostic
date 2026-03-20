@@ -49,6 +49,27 @@ def plan_compiled_text_action(
         )
 
     if has_symlink_ancestor and is_removable_ancestor:
+        if target.is_file():
+            existing = target.read_text(encoding="utf-8")
+            if existing == payload:
+                return Action(
+                    kind=ActionKind.WRITE_TEXT,
+                    path=target,
+                    status=ActionStatus.NOOP,
+                    detail=noop_detail,
+                    payload=payload,
+                    app=app,
+                    scope=scope,
+                )
+            return Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.UPDATE,
+                detail=update_detail,
+                payload=payload,
+                app=app,
+                scope=scope,
+            )
         return Action(
             kind=ActionKind.WRITE_TEXT,
             path=target,

@@ -61,6 +61,31 @@ def test_mcp_add_http(minimal_shared_config: Path, core_root: Path, cli_runner) 
     assert payload["mcpServers"]["remote"]["url"] == "https://example.com/mcp"
 
 
+def test_mcp_add_with_timeout(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(
+        cli,
+        [
+            "mcp",
+            "add",
+            "github",
+            "--command",
+            "npx",
+            "--args",
+            "mcp-github",
+            "--timeout-ms",
+            "900000",
+        ],
+    )
+    assert result.exit_code == 0
+
+    payload = json.loads(
+        (core_root / "config" / "mcp.base.json").read_text(encoding="utf-8")
+    )
+    assert payload["mcpServers"]["github"]["timeout"] == 900000
+
+
 def test_mcp_add_with_env(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(
         cli,

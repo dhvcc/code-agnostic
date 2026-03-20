@@ -90,6 +90,27 @@ def test_parse_opencode_reasoning_effort_alias(tmp_path: Path) -> None:
     assert agent.metadata.model_reasoning_effort == "high"
 
 
+def test_parse_app_prefixed_agent_overrides(tmp_path: Path) -> None:
+    (tmp_path / "reviewer.md").write_text(
+        "---\n"
+        "name: reviewer\n"
+        "model: gpt-5.4-mini\n"
+        "opencode-model: opencode/big-pickle\n"
+        "opencode-temperature: 0.2\n"
+        "---\n"
+        "\n"
+        "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    agent = parse_agent(tmp_path / "reviewer.md")
+
+    assert agent.metadata.model == "gpt-5.4-mini"
+    assert agent.metadata.app_overrides == {
+        "opencode": {"model": "opencode/big-pickle", "temperature": 0.2}
+    }
+
+
 def test_serialize_roundtrip(tmp_path: Path) -> None:
     agent = Agent(
         name="test-agent",
@@ -102,6 +123,9 @@ def test_serialize_roundtrip(tmp_path: Path) -> None:
             sandbox_mode="workspace-write",
             nickname_candidates=["Atlas", "Delta"],
             tools=AgentToolPermissions(read=True, write=True),
+            app_overrides={
+                "opencode": {"model": "opencode/big-pickle", "temperature": 0.2}
+            },
             codex=AgentCodexConfig(
                 mcp_servers={
                     "openaiDeveloperDocs": {"url": "https://developers.openai.com/mcp"}
@@ -123,6 +147,9 @@ def test_serialize_roundtrip(tmp_path: Path) -> None:
     assert parsed.metadata.model_reasoning_effort == "medium"
     assert parsed.metadata.sandbox_mode == "workspace-write"
     assert parsed.metadata.nickname_candidates == ["Atlas", "Delta"]
+    assert parsed.metadata.app_overrides == {
+        "opencode": {"model": "opencode/big-pickle", "temperature": 0.2}
+    }
     assert parsed.metadata.codex.mcp_servers["openaiDeveloperDocs"]["url"] == (
         "https://developers.openai.com/mcp"
     )

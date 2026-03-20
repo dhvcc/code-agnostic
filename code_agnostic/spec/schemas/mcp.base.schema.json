@@ -1,13 +1,12 @@
 {
-  "$id": "https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.v1.schema.json",
+  "$id": "https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.base.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["spec_version", "mcp_servers"],
+  "required": ["mcpServers"],
   "properties": {
     "$schema": { "type": "string", "minLength": 1 },
-    "spec_version": { "const": "v1" },
-    "mcp_servers": {
+    "mcpServers": {
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/server"
@@ -25,18 +24,17 @@
         "scopes": {
           "type": "array",
           "items": { "type": "string" }
-        },
-        "token_endpoint": { "type": "string", "minLength": 1 }
+        }
       }
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
     },
     "server": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type"],
       "properties": {
-        "type": {
-          "enum": ["stdio", "http", "oauth"]
-        },
         "command": { "type": "string", "minLength": 1 },
         "args": {
           "type": "array",
@@ -44,39 +42,14 @@
         },
         "url": { "type": "string", "minLength": 1 },
         "timeout": { "type": "integer", "minimum": 0 },
-        "headers": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "env": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
+        "headers": { "$ref": "#/$defs/stringMap" },
+        "env": { "$ref": "#/$defs/stringMap" },
+        "environment": { "$ref": "#/$defs/stringMap" },
         "auth": { "$ref": "#/$defs/auth" }
       },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "type": { "const": "stdio" }
-            }
-          },
-          "then": {
-            "required": ["command"]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "type": {
-                "enum": ["http", "oauth"]
-              }
-            }
-          },
-          "then": {
-            "required": ["url"]
-          }
-        }
+      "anyOf": [
+        { "required": ["command"] },
+        { "required": ["url"] }
       ]
     }
   }

@@ -819,6 +819,12 @@ def _parse_env_pair(raw: str) -> tuple[str, str]:
 )
 @click.option("--url", default=None, help="URL for HTTP/SSE server.")
 @click.option(
+    "--timeout-ms",
+    type=int,
+    default=None,
+    help="Request timeout in milliseconds.",
+)
+@click.option(
     "--env",
     "env_pairs",
     multiple=True,
@@ -841,6 +847,7 @@ def mcp_add(
     command: str | None,
     args_str: str | None,
     url: str | None,
+    timeout_ms: int | None,
     env_pairs: tuple[str, ...],
     header_pairs: tuple[str, ...],
     on_conflict: str,
@@ -858,6 +865,7 @@ def mcp_add(
             command=command,
             args=args or None,
             url=url,
+            timeout_ms=timeout_ms,
             env=env or None,
             headers=headers or None,
             workspace=workspace,

@@ -15,10 +15,12 @@ def serialize_opencode_agent(agent: Agent) -> str:
         fm["name"] = agent.metadata.name
     if agent.metadata.description:
         fm["description"] = agent.metadata.description
-    if agent.metadata.model:
-        fm["model"] = agent.metadata.model
-    if agent.metadata.model_reasoning_effort:
-        fm["reasoningEffort"] = agent.metadata.model_reasoning_effort
+    model = agent.metadata.effective_value("opencode", "model")
+    if model:
+        fm["model"] = model
+    reasoning_effort = agent.metadata.effective_value("opencode", "reasoning_effort")
+    if reasoning_effort:
+        fm["reasoningEffort"] = reasoning_effort
 
     tools: dict[str, Any] = {}
     if agent.metadata.tools.read is not True:
@@ -29,6 +31,19 @@ def serialize_opencode_agent(agent: Agent) -> str:
         tools["mcp"] = agent.metadata.tools.mcp
     if tools:
         fm["tools"] = tools
+
+    for key, value in agent.metadata.app_passthrough(
+        "opencode",
+        consumed_keys={
+            "model",
+            "reasoning_effort",
+            "sandbox_mode",
+            "nickname_candidates",
+        },
+    ).items():
+        if key in fm:
+            continue
+        fm[key] = value
 
     parts: list[str] = []
     if fm:

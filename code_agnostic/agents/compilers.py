@@ -27,7 +27,7 @@ class CursorAgentCompiler(IAgentCompiler):
     """Cross-compile for Cursor."""
 
     def compile(self, agent: Agent) -> str:
-        return serialize_agent(agent)
+        return serialize_agent(agent, target_app="cursor")
 
 
 class CodexAgentCompiler(IAgentCompiler):

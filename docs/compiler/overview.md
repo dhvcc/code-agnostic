@@ -32,8 +32,29 @@ Rules:
 
 - `meta.yaml` is schema-validated
 - `prompt.md` contains instruction text only
+- canonical bundle files can declare `$schema` to get editor validation from published schema URLs
 - app-specific data is allowed only inside `x-cursor`, `x-codex`, or `x-opencode`
-- unknown keys fail validation
+- matching `x-*` blocks can override shared fields for that app and can carry app-native passthrough keys
+- unknown top-level keys fail validation
+
+## Schema URLs
+
+Compiler-owned source syntax is backed by publishable JSON Schemas in `code_agnostic/spec/schemas/`.
+
+- canonical rule bundle meta: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/rule.v1.schema.json`
+- canonical skill bundle meta: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/skill.v1.schema.json`
+- canonical agent bundle meta: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/agent.v1.schema.json`
+- canonical MCP bundle: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.v1.schema.json`
+- legacy/common `config/mcp.base.json`: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.base.schema.json`
+
+Example:
+
+```yaml
+$schema: https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/agent.v1.schema.json
+spec_version: v1
+kind: agent
+name: reviewer
+```
 
 ## Target outputs
 

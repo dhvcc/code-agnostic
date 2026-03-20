@@ -19,6 +19,21 @@ def _extract_bearer_env_var(value: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _coerce_timeout_ms(tool_timeout_sec: Any) -> int | None:
+    if isinstance(tool_timeout_sec, bool):
+        return None
+    if isinstance(tool_timeout_sec, (int, float)):
+        if tool_timeout_sec < 0:
+            return None
+        return int(tool_timeout_sec * 1000)
+    return None
+
+
+def _encode_tool_timeout(timeout_ms: int) -> int | float:
+    seconds = timeout_ms / 1000
+    return int(seconds) if timeout_ms % 1000 == 0 else seconds
+
+
 class CodexMCPMapper(IAppMCPMapper):
     def to_common(self, payload: dict[str, Any]) -> dict[str, MCPServerDTO]:
         mapped: dict[str, MCPServerDTO] = {}
@@ -68,6 +83,7 @@ class CodexMCPMapper(IAppMCPMapper):
                 if isinstance(server.get("args"), list)
                 else [],
                 url=url if isinstance(url, str) else None,
+                timeout_ms=_coerce_timeout_ms(server.get("tool_timeout_sec")),
                 headers=headers,
                 env=env,
                 auth=None,
@@ -122,6 +138,9 @@ class CodexMCPMapper(IAppMCPMapper):
                 out["http_headers"] = http_headers
             if env_http_headers:
                 out["env_http_headers"] = env_http_headers
+
+            if server.timeout_ms is not None:
+                out["tool_timeout_sec"] = _encode_tool_timeout(server.timeout_ms)
 
             if (
                 server.type == MCPServerType.OAUTH

@@ -66,6 +66,7 @@ def test_apply_codex_generates_schema_valid_config(
                     "local": {
                         "command": "uvx",
                         "args": ["tool"],
+                        "timeout": 900000,
                         "env": {"TOKEN": "${TOKEN}"},
                     },
                     "remote": {
@@ -89,6 +90,7 @@ def test_apply_codex_generates_schema_valid_config(
     )
     validator = Draft7Validator(_load_local_codex_schema())
     assert list(validator.iter_errors(codex_payload)) == []
+    assert codex_payload["mcp_servers"]["local"]["tool_timeout_sec"] == 900.0
 
 
 def test_apply_codex_renders_agents_and_global_agents_config(

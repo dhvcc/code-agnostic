@@ -2,6 +2,13 @@
 
 Canonical MCP source should move to `config/mcp.base.yaml`.
 
+Published schemas:
+
+- canonical YAML bundle: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.v1.schema.json`
+- legacy/common JSON source: `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/mcp.base.schema.json`
+
+Both formats support an optional top-level `$schema` property for editor validation.
+
 Top-level fields for v1:
 
 - `spec_version`
@@ -13,6 +20,7 @@ Per-server fields for v1:
 - `command`
 - `args`
 - `url`
+- `timeout`
 - `headers`
 - `env`
 - `auth.client_id`
@@ -36,9 +44,10 @@ Unknown keys fail validation.
 | `auth.client_secret` | supported | compiled | compiled | compiled |
 | `auth.scopes` | supported | compiled | compiled | compiled |
 | `auth.token_endpoint` | supported | compiled | compiled | compiled |
-| `timeout` | planned | document per app | document per app | document per app |
+| `timeout` | supported | native | compiled to `tool_timeout_sec` | native |
 
 ## Notes
 
 - If a property is not in this table, it is not part of the compiler contract.
 - Target-specific MCP extensions belong under `x-*` only after a concrete use case and test exist.
+- Canonical `timeout` is expressed in milliseconds.

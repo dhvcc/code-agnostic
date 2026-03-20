@@ -83,6 +83,17 @@ def test_add_with_headers(service: MCPManagementService) -> None:
     assert servers["remote"].headers == {"Authorization": "Bearer ${TOKEN}"}
 
 
+def test_add_with_timeout(service: MCPManagementService) -> None:
+    service.add_server(
+        name="github",
+        command="npx",
+        args=["mcp-github"],
+        timeout_ms=900000,
+    )
+    servers = service.list_servers()
+    assert servers["github"].timeout_ms == 900000
+
+
 def test_add_conflict_fail(service: MCPManagementService) -> None:
     service.add_server(name="demo", command="uvx", args=["tool"])
     with pytest.raises(ValueError, match="already exists"):

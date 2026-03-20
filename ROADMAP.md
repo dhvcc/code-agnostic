@@ -17,6 +17,8 @@ Current progress inside Phase 1:
 - [x] Wired rule bundle discovery into `RulesRepository`
 - [x] Added YAML `mcp.base.yaml` loading through existing source repositories
 - [x] Wired skill and agent bundle parsing into current planner/app flows
+- [x] Added canonical MCP `timeout` support and mapped it into generated Cursor, Codex, and OpenCode configs
+- [x] Added publishable schema URLs and `$schema` support for bundle meta files plus strict schema validation for legacy `mcp.base.json`
 - [x] Removed legacy symlink-first behavior from default sync for legacy source formats too
 - [ ] Wire bundle loading into import/migration flows
 
@@ -105,9 +107,18 @@ Prompt-heavy assets are bad to author as escaped JSON strings. We still want str
 
 YAML gives us schema validation and editor tooling. Markdown keeps prompts readable. This is a better tradeoff than markdown frontmatter because frontmatter inside `.md` is much harder to validate and autocomplete reliably.
 
-### 3. Unknown properties must fail validation
+### 3. Unknown properties must fail validation, except inside app vendor blocks
 
-The compiler must only accept properties we explicitly support. Unknown keys, misplaced keys, and unsupported combinations must fail fast with a clear diagnostic. We should stop forwarding unknown fields into generated outputs.
+The compiler must only accept properties we explicitly support at the top level. Unknown keys, misplaced keys, and unsupported combinations must fail fast with a clear diagnostic.
+
+Exception: vendor extensions inside `x-cursor`, `x-codex`, and `x-opencode` are allowed. Those blocks are the supported escape hatch for app-native parameters that do not belong in the shared canonical schema yet.
+
+Compiler rule:
+
+- unknown top-level keys fail validation
+- unknown keys inside `x-*` app blocks are preserved as vendor data
+- known shared fields like `model` can be overridden per app inside the matching `x-*` block
+- vendor data must never leak into other apps' generated outputs
 
 ### 4. The compiler should live in its own package inside this repo
 
@@ -208,6 +219,21 @@ Use a versioned compiler spec from day one:
 - `kind: rule | skill | agent | mcp`
 - namespaced vendor blocks only under `x-*`
 - no unscoped vendor keys
+
+For agents, shared fields remain the default layer. Matching `x-*` blocks can override those shared fields per app and can carry app-native passthrough keys. Example:
+
+```yaml
+spec_version: v1
+kind: agent
+name: reviewer
+model: gpt-5.4-mini
+
+x-opencode:
+  model: opencode/big-pickle
+  temperature: 0.2
+```
+
+This means Codex still receives the shared `model`, while OpenCode receives the overridden `model` plus its own vendor-only keys.
 
 Suggested package split:
 

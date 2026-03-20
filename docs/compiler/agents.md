@@ -8,6 +8,10 @@ agents/<name>/
   prompt.md
 ```
 
+`meta.yaml` can declare `$schema` and point at:
+
+- `https://raw.githubusercontent.com/dhvcc/code-agnostic/main/code_agnostic/spec/schemas/agent.v1.schema.json`
+
 `meta.yaml` fields for v1:
 
 - `spec_version`
@@ -27,7 +31,26 @@ agents/<name>/
 - `x-codex.*`
 - `x-opencode.*`
 
-Unknown keys fail validation.
+Unknown keys fail validation outside app vendor blocks.
+
+App vendor blocks are the supported place for per-app overrides and passthrough settings. Shared fields remain the default layer, and a matching `x-*` block can override them for one app only.
+
+Example:
+
+```yaml
+spec_version: v1
+kind: agent
+name: reviewer
+model: gpt-5.4-mini
+
+x-opencode:
+  model: opencode/big-pickle
+  temperature: 0.2
+```
+
+This means Codex still receives `model: gpt-5.4-mini`, while OpenCode receives `model: opencode/big-pickle` plus `temperature: 0.2`.
+
+Legacy single-file markdown agents can express the same override with flat aliases such as `opencode-model: opencode/big-pickle`.
 
 ## Capability matrix
 

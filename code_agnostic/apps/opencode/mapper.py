@@ -32,6 +32,12 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                     type=MCPServerType.STDIO,
                     command=command,
                     args=args,
+                    timeout_ms=(
+                        int(server["timeout"])
+                        if isinstance(server.get("timeout"), int)
+                        and not isinstance(server.get("timeout"), bool)
+                        else None
+                    ),
                     env={
                         k: str(v) for k, v in (server.get("environment") or {}).items()
                     },
@@ -63,6 +69,12 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                 name=name,
                 type=normalized_type,
                 url=url,
+                timeout_ms=(
+                    int(server["timeout"])
+                    if isinstance(server.get("timeout"), int)
+                    and not isinstance(server.get("timeout"), bool)
+                    else None
+                ),
                 env={k: str(v) for k, v in (server.get("environment") or {}).items()},
                 headers={k: str(v) for k, v in (server.get("headers") or {}).items()},
                 auth=auth,
@@ -92,6 +104,9 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                         out["oauth"]["scope"] = server.auth.scopes[0]
 
             out["enabled"] = True
+
+            if server.timeout_ms is not None:
+                out["timeout"] = server.timeout_ms
 
             if server.headers:
                 out["headers"] = deepcopy(server.headers)

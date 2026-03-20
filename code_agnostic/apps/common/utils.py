@@ -3,6 +3,16 @@ from typing import Any
 from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
 
 
+def _coerce_timeout_ms(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float):
+        return int(value) if value >= 0 else None
+    return None
+
+
 def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
     mapped: dict[str, MCPServerDTO] = {}
     for name, raw in mcp_servers.items():
@@ -12,6 +22,7 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
         command = raw.get("command")
         args = raw.get("args")
         url = raw.get("url")
+        timeout_ms = _coerce_timeout_ms(raw.get("timeout"))
 
         headers = raw.get("headers")
         env = raw.get("env")
@@ -39,6 +50,7 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
                 type=MCPServerType.STDIO,
                 command=command,
                 args=[str(item) for item in args] if isinstance(args, list) else [],
+                timeout_ms=timeout_ms,
                 headers={str(k): str(v) for k, v in headers.items()}
                 if isinstance(headers, dict)
                 else {},
@@ -53,6 +65,7 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
                 name=name,
                 type=MCPServerType.OAUTH if auth is not None else MCPServerType.HTTP,
                 url=url,
+                timeout_ms=timeout_ms,
                 headers={str(k): str(v) for k, v in headers.items()}
                 if isinstance(headers, dict)
                 else {},
@@ -78,6 +91,9 @@ def dto_to_common_mcp(servers: dict[str, MCPServerDTO]) -> dict[str, Any]:
             item["url"] = server.url
         else:
             continue
+
+        if server.timeout_ms is not None:
+            item["timeout"] = server.timeout_ms
 
         if server.headers:
             item["headers"] = {str(k): str(v) for k, v in server.headers.items()}

@@ -22,6 +22,12 @@ class CursorMCPMapper(IAppMCPMapper):
                         for item in server.get("args", [])
                         if isinstance(item, (str, int, float, bool))
                     ],
+                    timeout_ms=(
+                        int(server["timeout"])
+                        if isinstance(server.get("timeout"), int)
+                        and not isinstance(server.get("timeout"), bool)
+                        else None
+                    ),
                     env={k: str(v) for k, v in (server.get("env") or {}).items()},
                     headers={
                         k: str(v) for k, v in (server.get("headers") or {}).items()
@@ -57,6 +63,12 @@ class CursorMCPMapper(IAppMCPMapper):
                 name=name,
                 type=server_type,
                 url=url,
+                timeout_ms=(
+                    int(server["timeout"])
+                    if isinstance(server.get("timeout"), int)
+                    and not isinstance(server.get("timeout"), bool)
+                    else None
+                ),
                 headers={k: str(v) for k, v in (server.get("headers") or {}).items()},
                 env={k: str(v) for k, v in (server.get("env") or {}).items()},
                 auth=auth,
@@ -78,16 +90,19 @@ class CursorMCPMapper(IAppMCPMapper):
                     continue
                 out["url"] = server.url
                 if server.type == MCPServerType.OAUTH and server.auth is not None:
-                    out["auth"] = {
+                    auth: dict[str, Any] = {
                         "CLIENT_ID": server.auth.client_id,
                         "CLIENT_SECRET": server.auth.client_secret,
                     }
                     if server.auth.scopes:
-                        out["auth"]["scopes"] = deepcopy(server.auth.scopes)
+                        auth["scopes"] = deepcopy(server.auth.scopes)
+                    out["auth"] = auth
 
             if server.headers:
                 out["headers"] = deepcopy(server.headers)
             if server.env:
                 out["env"] = deepcopy(server.env)
+            if server.timeout_ms is not None:
+                out["timeout"] = server.timeout_ms
             mapped[name] = out
         return mapped

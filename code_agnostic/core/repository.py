@@ -9,7 +9,10 @@ from code_agnostic.errors import (
     InvalidJsonFormatError,
     MissingConfigFileError,
 )
-from code_agnostic.spec.loaders import load_mcp_base as load_mcp_bundle
+from code_agnostic.spec.loaders import (
+    load_mcp_base as load_mcp_bundle,
+    validate_schema_payload,
+)
 from code_agnostic.utils import read_json_safe, write_json
 
 
@@ -49,9 +52,12 @@ class BaseSourceRepository(ISourceRepository):
             payload, error = read_json_safe(self.mcp_base_path)
             if error is not None:
                 raise InvalidJsonFormatError(self.mcp_base_path, error)
-            if not isinstance(payload, dict) or not isinstance(
-                payload.get("mcpServers"), dict
-            ):
+            if not isinstance(payload, dict):
+                raise InvalidConfigSchemaError(
+                    self.mcp_base_path, "must be a JSON object"
+                )
+            validate_schema_payload(self.mcp_base_path, "mcp.base.schema.json", payload)
+            if not isinstance(payload.get("mcpServers"), dict):
                 raise InvalidConfigSchemaError(
                     self.mcp_base_path, "must contain object key 'mcpServers'"
                 )

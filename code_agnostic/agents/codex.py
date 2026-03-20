@@ -19,6 +19,7 @@ from code_agnostic.agents.models import (
     AgentMetadata,
     AgentSkillConfig,
     AgentToolPermissions,
+    normalize_agent_override_key,
 )
 
 _SAFE_FILE_STEM_RE = re.compile(r"[^A-Za-z0-9_-]+")
@@ -53,6 +54,7 @@ def parse_codex_agent(path: Path) -> Agent:
             str(item) for item in nickname_candidates if isinstance(item, str)
         ],
         tools=AgentToolPermissions(),
+        app_overrides={"codex": _coerce_codex_app_overrides(payload)},
         codex=codex,
     )
     content = str(payload.get("developer_instructions", ""))
@@ -71,12 +73,15 @@ def serialize_codex_agent(agent: Agent) -> str:
     doc.add("description", description)
     if agent.metadata.nickname_candidates:
         doc.add("nickname_candidates", list(agent.metadata.nickname_candidates))
-    if agent.metadata.model:
-        doc.add("model", agent.metadata.model)
-    if agent.metadata.model_reasoning_effort:
-        doc.add("model_reasoning_effort", agent.metadata.model_reasoning_effort)
-    if agent.metadata.sandbox_mode:
-        doc.add("sandbox_mode", agent.metadata.sandbox_mode)
+    model = agent.metadata.effective_value("codex", "model")
+    if model:
+        doc.add("model", model)
+    reasoning_effort = agent.metadata.effective_value("codex", "reasoning_effort")
+    if reasoning_effort:
+        doc.add("model_reasoning_effort", reasoning_effort)
+    sandbox_mode = agent.metadata.effective_value("codex", "sandbox_mode")
+    if sandbox_mode:
+        doc.add("sandbox_mode", sandbox_mode)
     doc.add("developer_instructions", tomlkit.string(instructions, multiline=True))
 
     if agent.metadata.codex.mcp_servers:
@@ -94,6 +99,19 @@ def serialize_codex_agent(agent: Agent) -> str:
             ),
         )
         doc.add("skills", skills)
+
+    for key, value in agent.metadata.app_passthrough(
+        "codex",
+        consumed_keys={
+            "model",
+            "reasoning_effort",
+            "sandbox_mode",
+            "nickname_candidates",
+        },
+    ).items():
+        if key in doc:
+            continue
+        doc.add(key, _toml_item(value))
 
     return tomlkit.dumps(doc)
 
@@ -154,3 +172,22 @@ def _toml_item(value: Any) -> Any:
                 array.append(_toml_item(item))
         return array
     return value
+
+
+def _coerce_codex_app_overrides(payload: dict[str, Any]) -> dict[str, Any]:
+    known_keys = {
+        "name",
+        "description",
+        "model",
+        "model_reasoning_effort",
+        "sandbox_mode",
+        "nickname_candidates",
+        "developer_instructions",
+        "mcp_servers",
+        "skills",
+    }
+    return {
+        normalize_agent_override_key(str(key)): value
+        for key, value in payload.items()
+        if key not in known_keys
+    }

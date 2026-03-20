@@ -110,6 +110,21 @@ def test_server_with_headers() -> None:
     assert server.headers == {"Authorization": "Bearer token", "X-Custom": "val"}
 
 
+def test_server_with_timeout() -> None:
+    result = common_mcp_to_dto(
+        {
+            "demo": {
+                "command": "npx",
+                "args": ["tool"],
+                "timeout": 900000,
+            }
+        }
+    )
+
+    server = result["demo"]
+    assert server.timeout_ms == 900000
+
+
 def test_auth_missing_client_id_results_in_no_auth() -> None:
     result = common_mcp_to_dto(
         {
