@@ -1,12 +1,6 @@
 import json
-import shutil
-from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-
-def now_stamp() -> str:
-    return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def read_json(path: Path) -> Any:
@@ -32,12 +26,6 @@ def write_json(path: Path, payload: Any) -> None:
         handle.write("\n")
 
 
-def backup_file(path: Path) -> Path:
-    backup_path = Path(f"{path}.bak-{now_stamp()}")
-    shutil.copy2(path, backup_path)
-    return backup_path
-
-
 def is_under(path: Path, root: Path) -> bool:
     try:
         path.resolve().relative_to(root.resolve())
@@ -53,7 +41,7 @@ def compact_home_path(path: str | Path) -> str:
         return "~"
     home_prefix = f"{home}/"
     if text.startswith(home_prefix):
-        return f"~/{text[len(home_prefix):]}"
+        return f"~/{text[len(home_prefix) :]}"
     return text
 
 

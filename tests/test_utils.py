@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 from code_agnostic.utils import (
-    backup_file,
     compact_home_path,
     compact_home_paths_in_text,
     is_under,
@@ -87,21 +86,6 @@ def test_is_under_symlink_resolving_outside(tmp_path: Path) -> None:
     link.symlink_to(outside)
 
     assert is_under(link, root) is False
-
-
-# --- backup_file ---
-
-
-def test_backup_file_creates_bak_copy(tmp_path: Path) -> None:
-    original = tmp_path / "config.json"
-    original.write_text('{"key": "value"}', encoding="utf-8")
-
-    backup_path = backup_file(original)
-
-    assert backup_path.exists()
-    assert ".bak-" in backup_path.name
-    assert backup_path.read_text(encoding="utf-8") == '{"key": "value"}'
-    assert original.exists()
 
 
 def test_compact_home_path_for_absolute_home_path(tmp_path: Path, monkeypatch) -> None:

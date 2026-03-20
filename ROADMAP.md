@@ -31,7 +31,7 @@ Current progress inside Phase 4:
 - [x] Executor now rolls back applied file changes when a later action fails
 - [x] Successful applies now persist per-root revision manifests and active revision pointers
 - [x] Failed applies now restore the last successful revision from manifest snapshots when available
-- [ ] Replace ad hoc backup behavior as the remaining recovery path
+- [x] Removed the remaining ad hoc backup-file recovery helper in favor of manifest-backed rollback
 
 Current progress inside Phase 5:
 
@@ -42,15 +42,14 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- failed applies now restore missing managed outputs from the last successful revision manifest
-- revision manifests now store artifact snapshots that rollback can replay deterministically
+- removed the obsolete `.bak-*` helper after rollback moved to manifest-backed recovery
+- kept utility coverage focused on behavior still used by the product surface
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
 - include richer manifest inputs, like source files, so revision restore has compiler context
 - add a real restore command or internal primitive that can replay an active revision on demand
-- remove backup-file behavior once manifest-backed rollback fully owns recovery
 
 Why I did not start import/migration changes:
 
