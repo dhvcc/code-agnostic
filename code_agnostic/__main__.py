@@ -10,6 +10,7 @@ from code_agnostic.apps.common.framework import list_registered_app_services
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.imports.models import ConflictPolicy, ImportSection
 from code_agnostic.imports.service import ImportService
+from code_agnostic.lossiness import LossinessExplainer
 from code_agnostic.mcp_service import MCPManagementService
 from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 from code_agnostic.status import StatusService
@@ -291,6 +292,46 @@ def validate(obj: dict[str, str], workspace: str | None) -> None:
         raise click.exceptions.Exit(1)
 
     click.echo(f"Validated {result.validated} resources.")
+
+
+@cli.command(help="Explain documented lossy mappings without applying.")
+@app_option()
+@workspace_option()
+@click.pass_obj
+def explain_lossiness(obj: dict[str, str], app: str, workspace: str | None) -> None:
+    target = app or "all"
+    core = CoreRepository()
+    explainer = LossinessExplainer()
+
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        findings = explainer.explain_workspace_root(
+            core.workspace_config_dir(workspace),
+            workspace=workspace,
+            app=target,
+        )
+    else:
+        findings = explainer.explain_core_root(core.root, app=target)
+
+    if not findings:
+        click.echo("No lossy mappings found.")
+        return
+
+    click.echo("resource_path\tapp\tproperty\tstatus\treason")
+    for finding in findings:
+        click.echo(
+            "\t".join(
+                [
+                    finding.resource_path,
+                    finding.app,
+                    finding.property,
+                    finding.status,
+                    finding.reason,
+                ]
+            )
+        )
 
 
 # ---------------------------------------------------------------------------

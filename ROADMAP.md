@@ -29,7 +29,28 @@ Current progress inside Phase 3:
 Current progress inside Phase 5:
 
 - [x] Added `code-agnostic validate` for global and workspace canonical source checks
-- [ ] Add `code-agnostic explain-lossiness`
+- [x] Added `code-agnostic explain-lossiness`
+
+## Handoff
+
+Latest completed slice:
+
+- added `code-agnostic explain-lossiness`
+- kept it read-only and deterministic for documented rule/agent lossy fields
+- full test suite was green after that slice: `uv run pytest`
+
+Next slice I was about to implement:
+
+- remove remaining workspace and legacy symlink-era paths from default sync
+- add regression coverage that locks in regular-file planning for default flows
+- keep any symlink behavior, if retained at all, behind an explicit non-default debug path
+
+Why I did not start import/migration changes:
+
+- importing agents directly into bundle directories is underspecified right now
+- legacy canonical agents still use `agents/<name>.md`, while bundle agents use `agents/<name>/`
+- changing import without a clear migration rule would create real file-vs-directory collisions for the same agent name
+- that needs an explicit product decision before implementation
 
 ## Why this exists
 
