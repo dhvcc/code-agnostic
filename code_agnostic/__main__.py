@@ -14,6 +14,7 @@ from code_agnostic.mcp_service import MCPManagementService
 from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
+from code_agnostic.validation import ConfigValidator
 from code_agnostic.workspaces import WorkspaceService
 
 
@@ -267,6 +268,29 @@ def status(obj: dict[str, str], app: str, verbose: bool) -> None:
         editor_rows,
         status_service.build_workspace_status(core, app_services=enabled_services),
     )
+
+
+@cli.command(help="Validate canonical config files without applying.")
+@workspace_option()
+@click.pass_obj
+def validate(obj: dict[str, str], workspace: str | None) -> None:
+    core = CoreRepository()
+    validator = ConfigValidator()
+
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+        result = validator.validate_workspace_root(core.workspace_config_dir(workspace))
+    else:
+        result = validator.validate_core_root(core.root)
+
+    if result.issues:
+        for issue in result.issues:
+            click.echo(f"{issue.path}: {issue.message}")
+        raise click.exceptions.Exit(1)
+
+    click.echo(f"Validated {result.validated} resources.")
 
 
 # ---------------------------------------------------------------------------

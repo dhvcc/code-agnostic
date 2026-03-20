@@ -167,8 +167,6 @@ def _serialize_skill_config(item: AgentSkillConfig) -> dict[str, Any]:
 
 
 def _is_agent_bundle_dir(path: Path) -> bool:
-    return (
-        path.is_dir()
-        and (path / "meta.yaml").exists()
-        and (path / "prompt.md").exists()
+    return path.is_dir() and (
+        (path / "meta.yaml").exists() or (path / "prompt.md").exists()
     )

@@ -20,6 +20,11 @@ Current progress inside Phase 1:
 - [ ] Remove legacy symlink-first behavior for legacy source formats
 - [ ] Wire bundle loading into import/migration flows
 
+Current progress inside Phase 5:
+
+- [x] Added `code-agnostic validate` for global and workspace canonical source checks
+- [ ] Add `code-agnostic explain-lossiness`
+
 ## Why this exists
 
 The project already acts like a cross-app compatibility layer, but the contract is implicit and spread across code. That is why it still feels alpha:
