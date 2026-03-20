@@ -525,6 +525,13 @@ class SyncExecutor:
                 child.rmdir()
         root.rmdir()
 
+    def _remove_existing_path(self, path: Path) -> None:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+            return
+        if path.is_dir():
+            self._remove_tree(path)
+
     def _capture_snapshots(
         self,
         *,
@@ -582,8 +589,7 @@ class SyncExecutor:
             key=lambda item: len(item[0].parts),
             reverse=True,
         ):
-            if path.is_symlink() or path.is_file():
-                path.unlink()
+            self._remove_existing_path(path)
 
             if snapshot.existed:
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -843,9 +849,8 @@ class SyncExecutor:
         if not isinstance(path_text, str):
             return False
         path = Path(path_text)
-        existed_before = path.is_symlink() or path.is_file()
-        if path.is_symlink() or path.is_file():
-            path.unlink()
+        existed_before = path.exists() or path.is_symlink()
+        self._remove_existing_path(path)
 
         if target.get("exists") is not True:
             return existed_before

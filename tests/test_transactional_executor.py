@@ -35,12 +35,12 @@ def test_execute_rolls_back_partial_writes_and_skips_state_persist(
                 scope="app:test:text",
             ),
             Action(
-                kind=ActionKind.WRITE_TEXT,
-                path=tmp_path / "broken.txt",
+                kind=ActionKind.SYMLINK,
+                path=tmp_path / "broken-link",
                 status=ActionStatus.CREATE,
                 detail="break apply",
-                payload=None,
-                scope="app:test:text",
+                source=None,
+                scope="app:test:link",
             ),
         ],
         errors=[],
@@ -54,7 +54,7 @@ def test_execute_rolls_back_partial_writes_and_skips_state_persist(
     assert applied == 0
     assert failed == 1
     assert failures == [
-        f"Missing text payload for write action: {tmp_path / 'broken.txt'}"
+        f"Missing source for symlink action: {tmp_path / 'broken-link'}"
     ]
     assert existing.read_text(encoding="utf-8") == "before\n"
     assert not created.exists()
@@ -101,6 +101,62 @@ def test_execute_restores_removed_file_when_later_action_fails(
     assert "write_json failed" in failures[0]
     assert existing.read_text(encoding="utf-8") == "keep me\n"
     assert not (core_root / ".sync-state.json").exists()
+
+
+def test_execute_restores_symlink_snapshot_after_directory_is_recreated(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    symlink_target = tmp_path / "legacy-skill"
+    symlink_target.mkdir()
+    legacy_link = tmp_path / "skills" / "backend-coder-standards"
+    legacy_link.parent.mkdir()
+    legacy_link.symlink_to(symlink_target)
+
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.REMOVE_SYMLINK,
+                path=legacy_link,
+                status=ActionStatus.REMOVE,
+                detail="remove legacy symlink",
+                scope="app:opencode:skills",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=legacy_link / "SKILL.md",
+                status=ActionStatus.CREATE,
+                detail="write compiled skill",
+                payload="compiled\n",
+                scope="app:opencode:skills",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.SYMLINK,
+                path=tmp_path / "broken-link",
+                status=ActionStatus.CREATE,
+                detail="break apply",
+                source=None,
+                scope="app:test:link",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Missing source for symlink action: {tmp_path / 'broken-link'}"
+    ]
+    assert legacy_link.is_symlink()
+    assert legacy_link.resolve() == symlink_target.resolve()
 
 
 def test_execute_persists_global_revision_manifest_on_success(
