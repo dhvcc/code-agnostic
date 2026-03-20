@@ -14,7 +14,9 @@ Current progress inside Phase 1:
 - [x] Added a new `code_agnostic.spec` package for strict canonical loading
 - [x] Added local v1 schemas for rules, skills, agents, and MCP
 - [x] Added test coverage for valid bundles, unknown keys, missing `prompt.md`, and invalid MCP server shapes
-- [ ] Wire bundle loading into planner/import flows
+- [x] Wired rule bundle discovery into `RulesRepository`
+- [x] Added YAML `mcp.base.yaml` loading through existing source repositories
+- [ ] Wire skill and agent bundles into planner/import flows
 
 ## Why this exists
 

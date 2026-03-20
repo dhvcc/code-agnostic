@@ -3,11 +3,13 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
+from code_agnostic.apps.common.utils import dto_to_common_mcp
 from code_agnostic.errors import (
     InvalidConfigSchemaError,
     InvalidJsonFormatError,
     MissingConfigFileError,
 )
+from code_agnostic.spec.loaders import load_mcp_base as load_mcp_bundle
 from code_agnostic.utils import read_json_safe, write_json
 
 
@@ -27,6 +29,10 @@ class BaseSourceRepository(ISourceRepository):
         raise NotImplementedError
 
     @property
+    def mcp_base_yaml_path(self) -> Path:
+        return self.mcp_base_path.with_suffix(".yaml")
+
+    @property
     def skills_dir(self) -> Path:
         return self.root / "skills"
 
@@ -39,18 +45,23 @@ class BaseSourceRepository(ISourceRepository):
         return self.root / ".sync-state.json"
 
     def load_mcp_base(self) -> dict[str, Any]:
-        if not self.mcp_base_path.exists():
-            raise MissingConfigFileError(self.mcp_base_path)
-        payload, error = read_json_safe(self.mcp_base_path)
-        if error is not None:
-            raise InvalidJsonFormatError(self.mcp_base_path, error)
-        if not isinstance(payload, dict) or not isinstance(
-            payload.get("mcpServers"), dict
-        ):
-            raise InvalidConfigSchemaError(
-                self.mcp_base_path, "must contain object key 'mcpServers'"
-            )
-        return payload
+        if self.mcp_base_path.exists():
+            payload, error = read_json_safe(self.mcp_base_path)
+            if error is not None:
+                raise InvalidJsonFormatError(self.mcp_base_path, error)
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("mcpServers"), dict
+            ):
+                raise InvalidConfigSchemaError(
+                    self.mcp_base_path, "must contain object key 'mcpServers'"
+                )
+            return payload
+
+        if self.mcp_base_yaml_path.exists():
+            servers = load_mcp_bundle(self.mcp_base_yaml_path)
+            return {"mcpServers": dto_to_common_mcp(servers)}
+
+        raise MissingConfigFileError(self.mcp_base_path)
 
     def list_skill_sources(self) -> list[Path]:
         if not self.skills_dir.exists():

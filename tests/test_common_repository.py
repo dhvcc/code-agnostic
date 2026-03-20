@@ -105,6 +105,39 @@ def test_load_mcp_base_raises_schema_error(core_repo: CoreRepository) -> None:
         repo.load_mcp_base()
 
 
+def test_load_mcp_base_reads_yaml_bundle_when_json_missing(
+    core_repo: CoreRepository,
+) -> None:
+    repo = core_repo
+    repo.config_dir.mkdir(parents=True, exist_ok=True)
+    yaml_path = repo.config_dir / "mcp.base.yaml"
+    yaml_path.write_text(
+        "spec_version: v1\n"
+        "mcp_servers:\n"
+        "  github:\n"
+        "    type: stdio\n"
+        "    command: npx\n"
+        "    args:\n"
+        "      - -y\n"
+        "      - '@modelcontextprotocol/server-github'\n"
+        "    env:\n"
+        "      GITHUB_TOKEN: ${GITHUB_TOKEN}\n",
+        encoding="utf-8",
+    )
+
+    payload = repo.load_mcp_base()
+
+    assert payload == {
+        "mcpServers": {
+            "github": {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-github"],
+                "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"},
+            }
+        }
+    }
+
+
 def test_load_state_with_corrupted_json(
     tmp_path: Path, core_repo: CoreRepository
 ) -> None:

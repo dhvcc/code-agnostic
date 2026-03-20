@@ -74,6 +74,21 @@ def test_workspace_config_repository_has_rules(tmp_path: Path) -> None:
     assert repo.has_any_config()
 
 
+def test_workspace_config_repository_has_bundle_rules(tmp_path: Path) -> None:
+    ws_root = tmp_path / "ws-config"
+    bundle_dir = ws_root / "rules" / "python-style"
+    bundle_dir.mkdir(parents=True)
+    (bundle_dir / "meta.yaml").write_text(
+        "spec_version: v1\nkind: rule\ndescription: Python style\n",
+        encoding="utf-8",
+    )
+    (bundle_dir / "prompt.md").write_text("Use type hints.\n", encoding="utf-8")
+    repo = WorkspaceConfigRepository(root=ws_root)
+
+    assert repo.has_rules()
+    assert repo.has_any_config()
+
+
 def test_workspace_config_repository_has_mcp(tmp_path: Path, write_json) -> None:
     ws_root = tmp_path / "ws-config"
     ws_root.mkdir(parents=True)

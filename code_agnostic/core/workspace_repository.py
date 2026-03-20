@@ -22,7 +22,7 @@ class WorkspaceConfigRepository(BaseSourceRepository):
         return self.root / "rules"
 
     def has_mcp(self) -> bool:
-        return self.mcp_base_path.exists()
+        return self.mcp_base_path.exists() or self.mcp_base_yaml_path.exists()
 
     @property
     def codex_base_path(self) -> Path:
@@ -31,7 +31,15 @@ class WorkspaceConfigRepository(BaseSourceRepository):
     def has_rules(self) -> bool:
         if self.rules_dir.exists():
             return any(
-                f.suffix == ".md" and not f.name.startswith(".")
+                (
+                    f.suffix == ".md"
+                    or (
+                        f.is_dir()
+                        and (f / "meta.yaml").exists()
+                        and (f / "prompt.md").exists()
+                    )
+                )
+                and not f.name.startswith(".")
                 for f in self.rules_dir.iterdir()
             )
         return self.rules_file.exists()
