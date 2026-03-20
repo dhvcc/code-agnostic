@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "kind", "name"],
+  "properties": {
+    "spec_version": { "const": "v1" },
+    "kind": { "const": "skill" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "read": { "type": "boolean" },
+        "write": { "type": "boolean" },
+        "mcp": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    },
+    "x-cursor": { "type": "object" },
+    "x-codex": { "type": "object" },
+    "x-opencode": { "type": "object" }
+  }
+}

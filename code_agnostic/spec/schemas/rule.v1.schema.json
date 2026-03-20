@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "kind"],
+  "properties": {
+    "spec_version": { "const": "v1" },
+    "kind": { "const": "rule" },
+    "description": { "type": "string" },
+    "globs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "always_apply": { "type": "boolean" },
+    "x-cursor": { "type": "object" },
+    "x-codex": { "type": "object" },
+    "x-opencode": { "type": "object" }
+  }
+}
