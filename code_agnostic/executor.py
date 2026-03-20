@@ -50,6 +50,12 @@ class RestoreResult:
     restored: int
 
 
+@dataclass(frozen=True)
+class StagedAction:
+    action: Action
+    staged_path: Path | None = None
+
+
 class ActionHandler(Protocol):
     def handle(
         self, action: Action, context: ExecutionContext
@@ -165,32 +171,50 @@ class SyncExecutor:
             persist_state=persist_state,
             revision_records=revision_records,
         )
+        staging_id = (
+            revision_records[0].revision_id
+            if revision_records
+            else datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        )
+        staging_dirs: set[Path] = set()
 
-        for action in plan.actions:
-            try:
-                handler = self.handlers.get(action.kind)
-                if handler is None:
-                    failure = f"Unknown action kind: {action.kind.value}"
-                    self._rollback(snapshots, previous_revisions)
-                    return 0, 1, [failure]
-
-                changed, failure = handler.handle(action, self.context)
-                if failure is not None:
-                    self._rollback(snapshots, previous_revisions)
-                    return 0, 1, [failure]
-                if changed:
-                    applied += 1
-            except Exception as exc:
+        try:
+            staged_actions, failure = self._stage_actions(
+                plan=plan,
+                revision_records=revision_records,
+                staging_id=staging_id,
+                staging_dirs=staging_dirs,
+            )
+            if failure is not None:
                 self._rollback(snapshots, previous_revisions)
-                return 0, 1, [f"{action.kind.value} failed for {action.path}: {exc}"]
+                return 0, 1, [failure]
 
-        if persist_state:
-            try:
-                self._persist_state(plan=plan, revision_records=revision_records)
-            except Exception as exc:
-                self._rollback(snapshots, previous_revisions)
-                return 0, 1, [f"persist_state failed: {exc}"]
-        return applied, failed, failures
+            for staged_action in staged_actions:
+                action = staged_action.action
+                try:
+                    changed, failure = self._apply_staged_action(staged_action)
+                    if failure is not None:
+                        self._rollback(snapshots, previous_revisions)
+                        return 0, 1, [failure]
+                    if changed:
+                        applied += 1
+                except Exception as exc:
+                    self._rollback(snapshots, previous_revisions)
+                    return (
+                        0,
+                        1,
+                        [f"{action.kind.value} failed for {action.path}: {exc}"],
+                    )
+
+            if persist_state:
+                try:
+                    self._persist_state(plan=plan, revision_records=revision_records)
+                except Exception as exc:
+                    self._rollback(snapshots, previous_revisions)
+                    return 0, 1, [f"persist_state failed: {exc}"]
+            return applied, failed, failures
+        finally:
+            self._cleanup_staging_dirs(staging_dirs)
 
     def _prepare_revision_records(
         self, plan: SyncPlan, persist_state: bool
@@ -312,6 +336,137 @@ class SyncExecutor:
             raise
 
         return RestoreResult(revision_id=record.revision_id, restored=restored)
+
+    def _stage_actions(
+        self,
+        *,
+        plan: SyncPlan,
+        revision_records: list[RevisionRecord],
+        staging_id: str,
+        staging_dirs: set[Path],
+    ) -> tuple[list[StagedAction], str | None]:
+        staged_actions: list[StagedAction] = []
+        for index, action in enumerate(plan.actions):
+            staged_path: Path | None = None
+            if action.kind in {
+                ActionKind.WRITE_JSON,
+                ActionKind.WRITE_TEXT,
+                ActionKind.WRITE_RULE,
+            }:
+                staged_path, failure = self._stage_write_action(
+                    action=action,
+                    revision_records=revision_records,
+                    staging_id=staging_id,
+                    staging_dirs=staging_dirs,
+                    index=index,
+                )
+                if failure is not None:
+                    return [], failure
+            staged_actions.append(StagedAction(action=action, staged_path=staged_path))
+        return staged_actions, None
+
+    def _stage_write_action(
+        self,
+        *,
+        action: Action,
+        revision_records: list[RevisionRecord],
+        staging_id: str,
+        staging_dirs: set[Path],
+        index: int,
+    ) -> tuple[Path | None, str | None]:
+        if action.status == ActionStatus.NOOP:
+            return None, None
+
+        staging_root = self._staging_root_for_action(
+            action=action,
+            revision_records=revision_records,
+            staging_id=staging_id,
+        )
+        staging_root.mkdir(parents=True, exist_ok=True)
+        staging_dirs.add(staging_root)
+        suffix = action.path.suffix or ".tmp"
+        staged_path = staging_root / f"{index}{suffix}"
+
+        if action.kind in {ActionKind.WRITE_TEXT, ActionKind.WRITE_RULE}:
+            if not isinstance(action.payload, str):
+                if action.kind == ActionKind.WRITE_RULE:
+                    return None, f"Missing rule payload for write action: {action.path}"
+                return None, f"Missing text payload for write action: {action.path}"
+            try:
+                staged_path.write_text(action.payload, encoding="utf-8")
+            except Exception as exc:
+                return None, f"{action.kind.value} failed for {action.path}: {exc}"
+            return staged_path, None
+
+        try:
+            write_json(staged_path, action.payload)
+        except Exception as exc:
+            return None, f"{action.kind.value} failed for {action.path}: {exc}"
+        return staged_path, None
+
+    def _staging_root_for_action(
+        self,
+        *,
+        action: Action,
+        revision_records: list[RevisionRecord],
+        staging_id: str,
+    ) -> Path:
+        for record in revision_records:
+            if record.workspace == action.workspace:
+                return record.root / ".sync-staging" / record.revision_id
+
+        if action.workspace is not None:
+            return (
+                self.context.core.workspace_config_dir(action.workspace)
+                / ".sync-staging"
+                / staging_id
+            )
+        return self.context.core.root / ".sync-staging" / staging_id
+
+    def _apply_staged_action(
+        self, staged_action: StagedAction
+    ) -> tuple[bool, str | None]:
+        action = staged_action.action
+        if action.kind in {
+            ActionKind.WRITE_JSON,
+            ActionKind.WRITE_TEXT,
+            ActionKind.WRITE_RULE,
+        }:
+            if action.status == ActionStatus.NOOP:
+                return False, None
+            if staged_action.staged_path is None:
+                return False, f"Missing staged payload for write action: {action.path}"
+            action.path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(staged_action.staged_path, action.path)
+            return True, None
+
+        handler = self.handlers.get(action.kind)
+        if handler is None:
+            return False, f"Unknown action kind: {action.kind.value}"
+        return handler.handle(action, self.context)
+
+    def _cleanup_staging_dirs(self, staging_dirs: set[Path]) -> None:
+        for staging_root in sorted(
+            staging_dirs, key=lambda path: len(path.parts), reverse=True
+        ):
+            if staging_root.exists():
+                for child in sorted(
+                    staging_root.rglob("*"),
+                    key=lambda path: len(path.parts),
+                    reverse=True,
+                ):
+                    if child.is_file() or child.is_symlink():
+                        child.unlink()
+                    elif child.is_dir():
+                        child.rmdir()
+                staging_root.rmdir()
+
+            sync_staging_root = staging_root.parent
+            if sync_staging_root.name == ".sync-staging" and sync_staging_root.exists():
+                try:
+                    sync_staging_root.rmdir()
+                except OSError:
+                    pass
 
     def _capture_snapshots(
         self,

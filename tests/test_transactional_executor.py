@@ -306,3 +306,90 @@ def test_execute_restores_last_successful_revision_from_manifest(
     ]
     assert primary.read_text(encoding="utf-8") == "v1\n"
     assert sibling.read_text(encoding="utf-8") == "sibling\n"
+
+
+def test_execute_places_written_files_via_staging_replace(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "generated.txt"
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create file",
+                payload="hello\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    replace_calls: list[tuple[Path, Path]] = []
+    original_replace = __import__("os").replace
+
+    def recording_replace(src: str | Path, dst: str | Path) -> None:
+        src_path = Path(src)
+        dst_path = Path(dst)
+        replace_calls.append((src_path, dst_path))
+        original_replace(src_path, dst_path)
+
+    monkeypatch.setattr("os.replace", recording_replace)
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+    assert replace_calls == [(replace_calls[0][0], target)]
+    assert ".sync-staging" in str(replace_calls[0][0])
+    assert not (core_root / ".sync-staging").exists()
+
+
+def test_execute_cleans_staging_dir_when_replace_fails(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    target = tmp_path / "generated.txt"
+    target.write_text("before\n", encoding="utf-8")
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.UPDATE,
+                detail="update file",
+                payload="after\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    def failing_replace(src: str | Path, dst: str | Path) -> None:
+        raise OSError("boom")
+
+    monkeypatch.setattr("os.replace", failing_replace)
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 0
+    assert failed == 1
+    assert len(failures) == 1
+    assert "write_text failed" in failures[0]
+    assert target.read_text(encoding="utf-8") == "before\n"
+    assert not (core_root / ".sync-staging").exists()
