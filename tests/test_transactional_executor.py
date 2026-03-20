@@ -149,6 +149,9 @@ def test_execute_persists_global_revision_manifest_on_success(
     assert manifest["revision_id"] == active_revision["revision_id"]
     assert manifest["root"] == str(core_root)
     assert manifest["workspace"] is None
+    source_paths = {entry["path"] for entry in manifest["sources"]}
+    assert str(core_root / "config" / "mcp.base.json") in source_paths
+    assert str(core_root / "config" / "opencode.base.json") in source_paths
     assert len(manifest["targets"]) == 1
     target_entry = manifest["targets"][0]
     assert target_entry["path"] == str(target)
@@ -173,6 +176,9 @@ def test_execute_persists_workspace_revision_manifest_on_success(
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
     core.add_workspace("myws", workspace_root)
+    ws_source = core_root / "workspaces" / "myws" / "rules"
+    ws_source.mkdir(parents=True)
+    (ws_source / "shared.md").write_text("workspace rules\n", encoding="utf-8")
 
     target = workspace_root / "AGENTS.md"
     payload = "workspace\n"
@@ -208,6 +214,8 @@ def test_execute_persists_workspace_revision_manifest_on_success(
     assert manifest["revision_id"] == active_revision["revision_id"]
     assert manifest["root"] == str(core_root / "workspaces" / "myws")
     assert manifest["workspace"] == "myws"
+    source_paths = {entry["path"] for entry in manifest["sources"]}
+    assert str(ws_source / "shared.md") in source_paths
     assert len(manifest["targets"]) == 1
     target_entry = manifest["targets"][0]
     assert target_entry["path"] == str(target)

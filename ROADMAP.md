@@ -33,6 +33,7 @@ Current progress inside Phase 4:
 - [x] Failed applies now restore the last successful revision from manifest snapshots when available
 - [x] Removed the remaining ad hoc backup-file recovery helper in favor of manifest-backed rollback
 - [x] Added a restore path that can replay the active revision for the global root or a workspace
+- [x] Revision manifests now include source-file inputs and checksums for compiler context
 
 Current progress inside Phase 5:
 
@@ -43,13 +44,12 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- added `code-agnostic restore` to replay the active manifest-backed revision on demand
-- covered both global and workspace revision restore flows
+- revision manifests now record canonical source-file inputs alongside emitted targets
+- checksum coverage now applies to both source inputs and restored target artifacts
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
-- include richer manifest inputs, like source files, so revision restore has compiler context
 
 Why I did not start import/migration changes:
 

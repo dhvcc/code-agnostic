@@ -487,6 +487,7 @@ class SyncExecutor:
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
                 "root": str(record.root),
                 "workspace": record.workspace,
+                "sources": self._serialize_manifest_sources(record.root),
                 "targets": [
                     self._serialize_manifest_target(record, action, index)
                     for index, action in enumerate(actions)
@@ -531,6 +532,24 @@ class SyncExecutor:
             "checksum": checksum,
             "artifact_path": artifact_path,
         }
+
+    def _serialize_manifest_sources(self, root: Path) -> list[dict[str, str]]:
+        entries: list[dict[str, str]] = []
+        if not root.exists():
+            return entries
+
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            if any(part.startswith(".") for part in path.relative_to(root).parts):
+                continue
+            entries.append(
+                {
+                    "path": str(path),
+                    "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+            )
+        return entries
 
     def _restore_manifest_target(self, target: dict[str, Any]) -> bool:
         path_text = target.get("path")
