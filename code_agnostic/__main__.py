@@ -8,6 +8,7 @@ from code_agnostic.apps.app_id import app_ids_by_capability
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.apps.common.framework import list_registered_app_services
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.executor import SyncExecutor
 from code_agnostic.imports.models import ConflictPolicy, ImportSection
 from code_agnostic.imports.service import ImportService
 from code_agnostic.lossiness import LossinessExplainer
@@ -231,6 +232,28 @@ def apply(obj: dict[str, str], app: str, verbose: bool) -> None:
 
     if failed:
         raise click.exceptions.Exit(1)
+
+
+@cli.command(
+    help="Restore the active synced revision for the global root or a workspace."
+)
+@workspace_option()
+@click.pass_obj
+def restore(obj: dict[str, str], workspace: str | None) -> None:
+    core = CoreRepository()
+
+    if workspace is not None:
+        names = {item["name"] for item in core.load_workspaces()}
+        if workspace not in names:
+            raise click.ClickException(f"Workspace not found: {workspace}")
+
+    executor = SyncExecutor(core=core)
+    try:
+        result = executor.restore_active_revision(workspace=workspace)
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc))
+
+    click.echo(f"Restored revision {result.revision_id} ({result.restored} targets).")
 
 
 @cli.command(help="Show sync status for editors and workspaces.")

@@ -32,6 +32,7 @@ Current progress inside Phase 4:
 - [x] Successful applies now persist per-root revision manifests and active revision pointers
 - [x] Failed applies now restore the last successful revision from manifest snapshots when available
 - [x] Removed the remaining ad hoc backup-file recovery helper in favor of manifest-backed rollback
+- [x] Added a restore path that can replay the active revision for the global root or a workspace
 
 Current progress inside Phase 5:
 
@@ -42,14 +43,13 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- removed the obsolete `.bak-*` helper after rollback moved to manifest-backed recovery
-- kept utility coverage focused on behavior still used by the product surface
+- added `code-agnostic restore` to replay the active manifest-backed revision on demand
+- covered both global and workspace revision restore flows
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
 - include richer manifest inputs, like source files, so revision restore has compiler context
-- add a real restore command or internal primitive that can replay an active revision on demand
 
 Why I did not start import/migration changes:
 

@@ -39,8 +39,15 @@ class RevisionRecord:
 
 @dataclass(frozen=True)
 class StoredRevision:
+    revision_id: str
     manifest_path: Path
     targets: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class RestoreResult:
+    revision_id: str
+    restored: int
 
 
 class ActionHandler(Protocol):
@@ -259,8 +266,52 @@ class SyncExecutor:
             targets = manifest.get("targets")
             if not isinstance(targets, list):
                 continue
-            stored.append(StoredRevision(manifest_path=manifest_path, targets=targets))
+            revision_id = manifest.get("revision_id")
+            if not isinstance(revision_id, str):
+                continue
+            stored.append(
+                StoredRevision(
+                    revision_id=revision_id,
+                    manifest_path=manifest_path,
+                    targets=targets,
+                )
+            )
         return stored
+
+    def restore_active_revision(self, workspace: str | None = None) -> RestoreResult:
+        if workspace is None:
+            root = self.context.core.root
+        else:
+            root = self.context.core.workspace_config_dir(workspace)
+
+        records = self._load_previous_revisions(
+            [
+                self._build_revision_record(
+                    root=root, workspace=workspace, revision_id="restore"
+                )
+            ]
+        )
+        if not records:
+            label = f"workspace {workspace}" if workspace is not None else "global root"
+            raise FileNotFoundError(f"No active revision found for {label}.")
+
+        record = records[0]
+        snapshots = {
+            Path(target["path"]): self._snapshot_path(Path(target["path"]))
+            for target in record.targets
+            if isinstance(target, dict) and isinstance(target.get("path"), str)
+        }
+
+        restored = 0
+        try:
+            for target in record.targets:
+                if self._restore_manifest_target(target):
+                    restored += 1
+        except Exception:
+            self._rollback(snapshots, [])
+            raise
+
+        return RestoreResult(revision_id=record.revision_id, restored=restored)
 
     def _capture_snapshots(
         self,
@@ -481,30 +532,32 @@ class SyncExecutor:
             "artifact_path": artifact_path,
         }
 
-    def _restore_manifest_target(self, target: dict[str, Any]) -> None:
+    def _restore_manifest_target(self, target: dict[str, Any]) -> bool:
         path_text = target.get("path")
         if not isinstance(path_text, str):
-            return
+            return False
         path = Path(path_text)
+        existed_before = path.is_symlink() or path.is_file()
         if path.is_symlink() or path.is_file():
             path.unlink()
 
         if target.get("exists") is not True:
-            return
+            return existed_before
 
         artifact_path_text = target.get("artifact_path")
         if not isinstance(artifact_path_text, str):
-            return
+            return False
 
         artifact_path = Path(artifact_path_text)
         if not artifact_path.exists():
-            return
+            return False
 
         path.parent.mkdir(parents=True, exist_ok=True)
         if artifact_path.suffix == ".symlink":
             path.symlink_to(artifact_path.read_text(encoding="utf-8"))
-            return
+            return True
         path.write_bytes(artifact_path.read_bytes())
+        return True
 
     @staticmethod
     def _merge_managed_links(
