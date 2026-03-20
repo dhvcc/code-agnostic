@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,15 @@ class PathSnapshot:
     is_symlink: bool
     symlink_target: str | None = None
     content: bytes | None = None
+
+
+@dataclass(frozen=True)
+class RevisionRecord:
+    root: Path
+    workspace: str | None
+    revision_id: str
+    manifest_path: Path
+    active_path: Path
 
 
 class ActionHandler(Protocol):
@@ -133,7 +143,12 @@ class SyncExecutor:
         applied = 0
         failed = 0
         failures: list[str] = []
-        snapshots = self._capture_snapshots(plan=plan, persist_state=persist_state)
+        revision_records = self._prepare_revision_records(plan, persist_state)
+        snapshots = self._capture_snapshots(
+            plan=plan,
+            persist_state=persist_state,
+            revision_records=revision_records,
+        )
 
         for action in plan.actions:
             try:
@@ -155,14 +170,65 @@ class SyncExecutor:
 
         if persist_state:
             try:
-                self._persist_state(plan=plan)
+                self._persist_state(plan=plan, revision_records=revision_records)
             except Exception as exc:
                 self._rollback(snapshots)
                 return 0, 1, [f"persist_state failed: {exc}"]
         return applied, failed, failures
 
+    def _prepare_revision_records(
+        self, plan: SyncPlan, persist_state: bool
+    ) -> list[RevisionRecord]:
+        if not persist_state:
+            return []
+
+        records: list[RevisionRecord] = []
+        revision_id = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        if any(action.workspace is None for action in plan.actions):
+            records.append(
+                self._build_revision_record(
+                    root=self.context.core.root,
+                    workspace=None,
+                    revision_id=revision_id,
+                )
+            )
+
+        for workspace_name in sorted(
+            {
+                action.workspace
+                for action in plan.actions
+                if action.workspace is not None
+            }
+        ):
+            workspace_root = self.context.core.workspace_config_dir(workspace_name)
+            records.append(
+                self._build_revision_record(
+                    root=workspace_root,
+                    workspace=workspace_name,
+                    revision_id=revision_id,
+                )
+            )
+
+        return records
+
+    def _build_revision_record(
+        self, *, root: Path, workspace: str | None, revision_id: str
+    ) -> RevisionRecord:
+        revisions_root = root / ".sync-revisions"
+        return RevisionRecord(
+            root=root,
+            workspace=workspace,
+            revision_id=revision_id,
+            manifest_path=revisions_root / f"{revision_id}.json",
+            active_path=revisions_root / "active.json",
+        )
+
     def _capture_snapshots(
-        self, *, plan: SyncPlan, persist_state: bool
+        self,
+        *,
+        plan: SyncPlan,
+        persist_state: bool,
+        revision_records: list[RevisionRecord],
     ) -> dict[Path, PathSnapshot]:
         paths: dict[Path, PathSnapshot] = {}
         for action in plan.actions:
@@ -181,6 +247,9 @@ class SyncExecutor:
                     root=core.workspace_config_dir(workspace_name)
                 ).state_json
                 paths[workspace_state_path] = self._snapshot_path(workspace_state_path)
+            for record in revision_records:
+                paths[record.active_path] = self._snapshot_path(record.active_path)
+                paths[record.manifest_path] = self._snapshot_path(record.manifest_path)
         return paths
 
     def _snapshot_path(self, path: Path) -> PathSnapshot:
@@ -217,7 +286,9 @@ class SyncExecutor:
                 elif snapshot.content is not None:
                     path.write_bytes(snapshot.content)
 
-    def _persist_state(self, plan: SyncPlan) -> None:
+    def _persist_state(
+        self, plan: SyncPlan, revision_records: list[RevisionRecord]
+    ) -> None:
         global_links: dict[str, list[str]] = {}
         global_paths: dict[str, list[str]] = {}
         global_touched_scopes: set[str] = set()
@@ -293,6 +364,62 @@ class SyncExecutor:
             }
             ws_repo.root.mkdir(parents=True, exist_ok=True)
             ws_repo.save_state(ws_state)
+
+        self._persist_revision_manifests(plan=plan, revision_records=revision_records)
+
+    def _persist_revision_manifests(
+        self, *, plan: SyncPlan, revision_records: list[RevisionRecord]
+    ) -> None:
+        actions_by_workspace: dict[str | None, list[Action]] = {}
+        for action in plan.actions:
+            actions_by_workspace.setdefault(action.workspace, []).append(action)
+
+        for record in revision_records:
+            actions = sorted(
+                actions_by_workspace.get(record.workspace, []),
+                key=lambda action: (
+                    str(action.path),
+                    action.kind.value,
+                    action.scope or "",
+                    action.app or "",
+                ),
+            )
+            manifest = {
+                "revision_id": record.revision_id,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "root": str(record.root),
+                "workspace": record.workspace,
+                "targets": [
+                    self._serialize_manifest_target(action) for action in actions
+                ],
+            }
+            write_json(record.manifest_path, manifest)
+            write_json(
+                record.active_path,
+                {
+                    "revision_id": record.revision_id,
+                    "manifest_path": str(record.manifest_path),
+                },
+            )
+
+    def _serialize_manifest_target(self, action: Action) -> dict[str, Any]:
+        checksum: str | None = None
+        exists = action.path.exists() or action.path.is_symlink()
+        if action.path.is_symlink():
+            checksum = hashlib.sha256(
+                os.readlink(action.path).encode("utf-8")
+            ).hexdigest()
+        elif action.path.exists() and action.path.is_file():
+            checksum = hashlib.sha256(action.path.read_bytes()).hexdigest()
+
+        return {
+            "path": str(action.path),
+            "kind": action.kind.value,
+            "app": action.app,
+            "scope": action.scope,
+            "exists": exists,
+            "checksum": checksum,
+        }
 
     @staticmethod
     def _merge_managed_links(

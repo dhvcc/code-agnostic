@@ -29,7 +29,7 @@ Current progress inside Phase 3:
 Current progress inside Phase 4:
 
 - [x] Executor now rolls back applied file changes when a later action fails
-- [ ] Add revision manifests and explicit active revision tracking
+- [x] Successful applies now persist per-root revision manifests and active revision pointers
 - [ ] Replace ad hoc backup behavior as the remaining recovery path
 
 Current progress inside Phase 5:
@@ -41,14 +41,14 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- executor now rolls back partial apply changes instead of leaving earlier writes behind
-- added regression coverage for failed writes and stale-file restore during rollback
+- successful applies now write revision manifests plus active revision pointers for global and workspace roots
+- added regression coverage for manifest persistence and revision target checksums
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
-- add revision manifests and active revision tracking around successful applies
 - teach rollback to restore the last successful revision from manifest data
+- include richer manifest inputs, like source files, so revision restore has compiler context
 - remove backup-file behavior once manifest-backed rollback fully owns recovery
 
 Why I did not start import/migration changes:
