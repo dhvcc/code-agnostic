@@ -20,6 +20,12 @@ Current progress inside Phase 1:
 - [ ] Remove legacy symlink-first behavior for legacy source formats
 - [ ] Wire bundle loading into import/migration flows
 
+Current progress inside Phase 3:
+
+- [x] Global app sync now generates skill files for legacy and bundle sources
+- [x] Cursor global app sync now generates agent files for legacy and bundle sources
+- [ ] Remove remaining workspace and legacy symlink-era paths from default sync
+
 Current progress inside Phase 5:
 
 - [x] Added `code-agnostic validate` for global and workspace canonical source checks

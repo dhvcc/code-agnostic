@@ -312,7 +312,7 @@ def test_plan_treats_empty_opencode_config_as_update(
     assert config_actions[0].status == ActionStatus.UPDATE
 
 
-def test_cursor_build_plan_includes_skill_symlinks(
+def test_cursor_build_plan_includes_compiled_skill_files(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -329,14 +329,14 @@ def test_cursor_build_plan_includes_skill_symlinks(
     skill_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "app:cursor:skills"
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:cursor:skills"
     ]
     assert len(skill_actions) == 1
-    assert skill_actions[0].path == cursor_root / "skills" / "my-skill"
+    assert skill_actions[0].path == cursor_root / "skills" / "my-skill" / "SKILL.md"
     assert skill_actions[0].status == ActionStatus.CREATE
 
 
-def test_cursor_build_plan_includes_agent_symlinks(
+def test_cursor_build_plan_includes_compiled_agent_files(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -351,7 +351,7 @@ def test_cursor_build_plan_includes_agent_symlinks(
     agent_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "app:cursor:agents"
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:cursor:agents"
     ]
     assert len(agent_actions) == 1
     assert agent_actions[0].path == cursor_root / "agents" / "planner.md"
@@ -450,7 +450,7 @@ def test_opencode_build_plan_includes_compiled_skill_files_for_bundle(
     assert "description: Review skill" in skill_actions[0].payload
 
 
-def test_codex_build_plan_includes_skill_symlinks(
+def test_codex_build_plan_includes_compiled_skill_files(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -467,10 +467,10 @@ def test_codex_build_plan_includes_skill_symlinks(
     skill_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "app:codex:skills"
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:codex:skills"
     ]
     assert len(skill_actions) == 1
-    assert skill_actions[0].path == codex_root / "skills" / "my-skill"
+    assert skill_actions[0].path == codex_root / "skills" / "my-skill" / "SKILL.md"
     assert skill_actions[0].status == ActionStatus.CREATE
 
 

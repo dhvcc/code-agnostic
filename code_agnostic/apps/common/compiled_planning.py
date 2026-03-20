@@ -8,6 +8,7 @@ def plan_compiled_text_action(
     target: Path,
     payload: str,
     managed_paths: set[Path],
+    removable_link_paths: set[Path] | None = None,
     scope: str,
     app: str,
     create_detail: str,
@@ -16,13 +17,37 @@ def plan_compiled_text_action(
     conflict_detail: str = "non-managed path exists",
 ) -> Action:
     target_key = target.resolve(strict=False)
+    removable = removable_link_paths or set()
+    parent_key = target.parent.resolve(strict=False)
 
-    if target.parent.is_symlink():
+    if target.parent.is_symlink() and parent_key not in removable:
         return Action(
             kind=ActionKind.WRITE_TEXT,
             path=target,
             status=ActionStatus.CONFLICT,
             detail=conflict_detail,
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
+
+    if target.is_symlink() and target_key in removable:
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CREATE,
+            detail=create_detail,
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
+
+    if target.parent.is_symlink() and parent_key in removable:
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CREATE,
+            detail=create_detail,
             payload=payload,
             app=app,
             scope=scope,

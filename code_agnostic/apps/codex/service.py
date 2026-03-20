@@ -26,7 +26,6 @@ from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
     load_state_paths,
-    plan_resource_symlinks,
     plan_stale_files_group,
     plan_stale_group,
 )
@@ -157,21 +156,6 @@ class CodexConfigService(RegisteredAppConfigService):
         skipped: list[str] = []
 
         skill_sources = source_repository.list_skill_sources()
-        legacy_skills = [
-            source for source in skill_sources if (source / "SKILL.md").exists()
-        ]
-        bundle_skills = [
-            source for source in skill_sources if (source / "meta.yaml").exists()
-        ]
-
-        skill_actions, desired_skill_links, skill_skipped = plan_resource_symlinks(
-            legacy_skills,
-            self._codex_repo.skills_dir,
-            scope="app:codex:skills",
-            app=AppId.CODEX.value,
-        )
-        actions.extend(skill_actions)
-        skipped.extend(skill_skipped)
 
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
@@ -181,13 +165,27 @@ class CodexConfigService(RegisteredAppConfigService):
         if not isinstance(managed_paths, dict):
             managed_paths = {}
 
+        skill_link_actions = plan_stale_group(
+            old_links=load_state_links(managed_links, "app:codex:skills"),
+            desired_links=[],
+            remove_detail="remove stale managed skill symlink",
+            conflict_detail="stale managed path is not a symlink",
+            noop_detail="stale symlink already absent",
+            app=AppId.CODEX.value,
+            scope="app:codex:skills",
+            skipped=skipped,
+            skipped_message="Stale link cleanup skipped (not symlink): {path}",
+        )
+        actions.extend(skill_link_actions)
+
         compiled_skill_actions, desired_skill_paths, compiled_skill_skipped = (
             self.plan_skill_actions(
-                bundle_skills,
+                skill_sources,
                 self._codex_repo.skills_dir,
                 scope="app:codex:skills",
                 app=AppId.CODEX.value,
                 managed_paths=load_state_paths(managed_paths, "app:codex:skills"),
+                removable_links=load_state_links(managed_links, "app:codex:skills"),
             )
         )
         actions.extend(compiled_skill_actions)
@@ -203,19 +201,6 @@ class CodexConfigService(RegisteredAppConfigService):
         actions.extend(agent_actions)
         skipped.extend(agent_skipped)
 
-        actions.extend(
-            plan_stale_group(
-                old_links=load_state_links(managed_links, "app:codex:skills"),
-                desired_links=desired_skill_links,
-                remove_detail="remove stale managed skill symlink",
-                conflict_detail="stale managed path is not a symlink",
-                noop_detail="stale symlink already absent",
-                app=AppId.CODEX.value,
-                scope="app:codex:skills",
-                skipped=skipped,
-                skipped_message="Stale link cleanup skipped (not symlink): {path}",
-            )
-        )
         actions.extend(
             plan_stale_files_group(
                 old_paths=load_state_paths(managed_paths, "app:codex:skills"),
@@ -265,15 +250,19 @@ class CodexConfigService(RegisteredAppConfigService):
         scope: str,
         app: str,
         managed_paths: list[Path],
+        removable_links: list[Path],
     ) -> tuple[list[Action], list[Path], list[str]]:
         compiler = CodexSkillCompiler()
         managed_path_set = {path.resolve(strict=False) for path in managed_paths}
+        removable_link_set = {path.resolve(strict=False) for path in removable_links}
         actions: list[Action] = []
         desired_paths: list[Path] = []
         skipped: list[str] = []
 
         for source in sources:
-            skill = parse_skill(source)
+            skill = parse_skill(
+                source / "SKILL.md" if (source / "SKILL.md").exists() else source
+            )
             target = target_dir / source.name / "SKILL.md"
             desired_paths.append(target)
             payload = compiler.compile(skill)
@@ -281,6 +270,7 @@ class CodexConfigService(RegisteredAppConfigService):
                 target=target,
                 payload=payload,
                 managed_paths=managed_path_set,
+                removable_link_paths=removable_link_set,
                 scope=scope,
                 app=app,
                 create_detail="create compiled codex skill",

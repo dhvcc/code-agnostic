@@ -23,7 +23,6 @@ from code_agnostic.apps.common.symlink_planning import (
     load_state_paths,
     plan_stale_group,
     plan_stale_files_group,
-    plan_resource_symlinks,
 )
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
@@ -152,21 +151,6 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         skipped: list[str] = []
 
         skill_sources = source_repository.list_skill_sources()
-        legacy_skills = [
-            source for source in skill_sources if (source / "SKILL.md").exists()
-        ]
-        bundle_skills = [
-            source for source in skill_sources if (source / "meta.yaml").exists()
-        ]
-
-        skill_actions, desired_skill_links, skill_skipped = plan_resource_symlinks(
-            legacy_skills,
-            self._opencode_repo.skills_dir,
-            scope="app:opencode:skills",
-            app=AppId.OPENCODE.value,
-        )
-        actions.extend(skill_actions)
-        skipped.extend(skill_skipped)
 
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
@@ -176,13 +160,27 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         if not isinstance(managed_paths, dict):
             managed_paths = {}
 
+        skill_link_actions = plan_stale_group(
+            old_links=load_state_links(managed_links, "app:opencode:skills"),
+            desired_links=[],
+            remove_detail="remove stale managed skill symlink",
+            conflict_detail="stale managed path is not a symlink",
+            noop_detail="stale symlink already absent",
+            app=AppId.OPENCODE.value,
+            scope="app:opencode:skills",
+            skipped=skipped,
+            skipped_message="Stale link cleanup skipped (not symlink): {path}",
+        )
+        actions.extend(skill_link_actions)
+
         compiled_skill_actions, desired_skill_paths, compiled_skill_skipped = (
             self.plan_skill_actions(
-                bundle_skills,
+                skill_sources,
                 self._opencode_repo.skills_dir,
                 scope="app:opencode:skills",
                 app=AppId.OPENCODE.value,
                 managed_paths=load_state_paths(managed_paths, "app:opencode:skills"),
+                removable_links=load_state_links(managed_links, "app:opencode:skills"),
             )
         )
         actions.extend(compiled_skill_actions)
@@ -198,19 +196,6 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         actions.extend(agent_actions)
         skipped.extend(agent_skipped)
 
-        actions.extend(
-            plan_stale_group(
-                old_links=load_state_links(managed_links, "app:opencode:skills"),
-                desired_links=desired_skill_links,
-                remove_detail="remove stale managed skill symlink",
-                conflict_detail="stale managed path is not a symlink",
-                noop_detail="stale symlink already absent",
-                app=AppId.OPENCODE.value,
-                scope="app:opencode:skills",
-                skipped=skipped,
-                skipped_message="Stale link cleanup skipped (not symlink): {path}",
-            )
-        )
         actions.extend(
             plan_stale_files_group(
                 old_paths=load_state_paths(managed_paths, "app:opencode:skills"),
@@ -260,15 +245,19 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         scope: str,
         app: str,
         managed_paths: list[Path],
+        removable_links: list[Path],
     ) -> tuple[list[Action], list[Path], list[str]]:
         compiler = OpenCodeSkillCompiler()
         managed_path_set = {path.resolve(strict=False) for path in managed_paths}
+        removable_link_set = {path.resolve(strict=False) for path in removable_links}
         actions: list[Action] = []
         desired_paths: list[Path] = []
         skipped: list[str] = []
 
         for source in sources:
-            skill = parse_skill(source)
+            skill = parse_skill(
+                source / "SKILL.md" if (source / "SKILL.md").exists() else source
+            )
             target = target_dir / source.name / "SKILL.md"
             desired_paths.append(target)
             payload = compiler.compile(skill)
@@ -276,6 +265,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
                 target=target,
                 payload=payload,
                 managed_paths=managed_path_set,
+                removable_link_paths=removable_link_set,
                 scope=scope,
                 app=app,
                 create_detail="create compiled opencode skill",

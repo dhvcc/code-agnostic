@@ -210,11 +210,10 @@ def test_skills_agents_symlink_e2e(
     assert apply_result.exit_code == 0
 
     opencode_root = tmp_path / ".config" / "opencode"
-    skill_link = opencode_root / "skills" / "my-skill"
+    skill_path = opencode_root / "skills" / "my-skill" / "SKILL.md"
     agent_path = opencode_root / "agents" / "planner.md"
 
-    if skill_link.exists() or skill_link.is_symlink():
-        assert skill_link.is_symlink()
+    assert skill_path.is_file()
     assert agent_path.is_file()
     assert "agent content" in agent_path.read_text(encoding="utf-8")
 
@@ -251,7 +250,7 @@ def test_opencode_agent_compiles_reasoning_effort_e2e(
     assert "model_reasoning_effort" not in content
 
 
-def test_cursor_skills_agents_symlink_e2e(
+def test_cursor_skills_agents_generated_e2e(
     minimal_shared_config: Path,
     tmp_path: Path,
     cli_runner,
@@ -273,14 +272,15 @@ def test_cursor_skills_agents_symlink_e2e(
     assert apply_result.exit_code == 0
 
     cursor_root = tmp_path / ".cursor"
-    skill_link = cursor_root / "skills" / "my-skill"
-    agent_link = cursor_root / "agents" / "planner.md"
+    skill_path = cursor_root / "skills" / "my-skill" / "SKILL.md"
+    agent_path = cursor_root / "agents" / "planner.md"
 
-    assert skill_link.is_symlink()
-    assert agent_link.is_symlink()
+    assert skill_path.is_file()
+    assert agent_path.is_file()
+    assert not agent_path.is_symlink()
 
 
-def test_codex_skills_agents_symlink_e2e(
+def test_codex_skills_agents_generated_e2e(
     minimal_shared_config: Path,
     tmp_path: Path,
     cli_runner,
@@ -302,10 +302,10 @@ def test_codex_skills_agents_symlink_e2e(
     assert apply_result.exit_code == 0
 
     codex_root = tmp_path / ".codex"
-    skill_link = codex_root / "skills" / "my-skill"
+    skill_path = codex_root / "skills" / "my-skill" / "SKILL.md"
     agent_path = codex_root / "agents" / "planner.toml"
 
-    assert skill_link.is_symlink()
+    assert skill_path.is_file()
     assert agent_path.is_file()
     payload = tomllib.loads(agent_path.read_text(encoding="utf-8"))
     assert payload["name"] == "planner"
@@ -333,8 +333,8 @@ def test_cursor_stale_skill_cleanup_e2e(
     assert apply1.exit_code == 0
 
     cursor_root = tmp_path / ".cursor"
-    old_link = cursor_root / "skills" / "old-skill"
-    assert old_link.is_symlink()
+    old_skill_path = cursor_root / "skills" / "old-skill" / "SKILL.md"
+    assert old_skill_path.is_file()
 
     import shutil
 
@@ -342,7 +342,7 @@ def test_cursor_stale_skill_cleanup_e2e(
 
     apply2 = cli_runner.invoke(cli, ["apply"])
     assert apply2.exit_code == 0
-    assert not old_link.exists()
+    assert not old_skill_path.exists()
 
 
 def test_full_roundtrip_skills_agents_all_apps(
@@ -372,13 +372,13 @@ def test_full_roundtrip_skills_agents_all_apps(
     cursor_root = tmp_path / ".cursor"
     codex_root = tmp_path / ".codex"
 
-    assert (opencode_root / "skills" / "shared-skill").is_symlink()
+    assert (opencode_root / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (opencode_root / "agents" / "planner.md").is_file()
 
-    assert (cursor_root / "skills" / "shared-skill").is_symlink()
-    assert (cursor_root / "agents" / "planner.md").is_symlink()
+    assert (cursor_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (cursor_root / "agents" / "planner.md").is_file()
 
-    assert (codex_root / "skills" / "shared-skill").is_symlink()
+    assert (codex_root / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (codex_root / "agents" / "planner.toml").is_file()
 
 
