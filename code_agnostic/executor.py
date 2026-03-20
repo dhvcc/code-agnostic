@@ -58,6 +58,10 @@ class StagedAction:
     staged_path: Path | None = None
 
 
+def _write_text_utf8(path: Path, payload: str) -> None:
+    path.write_text(payload, encoding="utf-8", newline="")
+
+
 def _remove_tree(root: Path) -> None:
     for child in sorted(
         root.rglob("*"),
@@ -115,7 +119,7 @@ class WriteTextHandler:
             return False, f"Missing text payload for write action: {action.path}"
 
         action.path.parent.mkdir(parents=True, exist_ok=True)
-        action.path.write_text(action.payload, encoding="utf-8")
+        _write_text_utf8(action.path, action.payload)
         return True, None
 
 
@@ -160,7 +164,7 @@ class WriteRuleHandler:
             return False, f"Missing rule payload for write action: {action.path}"
 
         action.path.parent.mkdir(parents=True, exist_ok=True)
-        action.path.write_text(action.payload, encoding="utf-8")
+        _write_text_utf8(action.path, action.payload)
         return True, None
 
 
@@ -479,7 +483,7 @@ class SyncExecutor:
                     return None, f"Missing rule payload for write action: {action.path}"
                 return None, f"Missing text payload for write action: {action.path}"
             try:
-                staged_path.write_text(action.payload, encoding="utf-8")
+                _write_text_utf8(staged_path, action.payload)
             except Exception as exc:
                 return None, f"{action.kind.value} failed for {action.path}: {exc}"
             return staged_path, None
