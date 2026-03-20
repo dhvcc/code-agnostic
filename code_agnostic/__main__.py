@@ -105,6 +105,24 @@ def verbose_option() -> Callable:
     return click.option("-v", "--verbose", is_flag=True, default=False)
 
 
+def _workspace_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]]:
+    return {item["name"]: item for item in core.load_workspaces()}
+
+
+def _require_workspace_entry(core: CoreRepository, workspace: str) -> dict[str, str]:
+    entry = _workspace_entries_by_name(core).get(workspace)
+    if entry is None:
+        raise click.ClickException(f"Workspace not found: {workspace}")
+    return entry
+
+
+def _workspace_config_root(core: CoreRepository, workspace: str | None) -> Path:
+    if workspace is None:
+        return core.root
+    _require_workspace_entry(core, workspace)
+    return core.workspace_config_dir(workspace)
+
+
 # ---------------------------------------------------------------------------
 # Status helper
 # ---------------------------------------------------------------------------
@@ -243,9 +261,7 @@ def restore(obj: dict[str, str], workspace: str | None) -> None:
     core = CoreRepository()
 
     if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
+        _require_workspace_entry(core, workspace)
 
     executor = SyncExecutor(core=core)
     try:
@@ -302,10 +318,9 @@ def validate(obj: dict[str, str], workspace: str | None) -> None:
     validator = ConfigValidator()
 
     if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        result = validator.validate_workspace_root(core.workspace_config_dir(workspace))
+        result = validator.validate_workspace_root(
+            _workspace_config_root(core, workspace)
+        )
     else:
         result = validator.validate_core_root(core.root)
 
@@ -327,11 +342,8 @@ def explain_lossiness(obj: dict[str, str], app: str, workspace: str | None) -> N
     explainer = LossinessExplainer()
 
     if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
         findings = explainer.explain_workspace_root(
-            core.workspace_config_dir(workspace),
+            _workspace_config_root(core, workspace),
             workspace=workspace,
             app=target,
         )
@@ -521,11 +533,11 @@ def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
 
     enabled_apps = apps.enabled_apps()
 
-    ws_list = core.load_workspaces()
-    if workspace is not None:
-        ws_list = [item for item in ws_list if item["name"] == workspace]
-        if not ws_list:
-            raise click.ClickException(f"Workspace not found: {workspace}")
+    ws_list = (
+        [_require_workspace_entry(core, workspace)]
+        if workspace is not None
+        else core.load_workspaces()
+    )
 
     processed = 0
     touched = 0
@@ -631,13 +643,7 @@ def rules_list(obj: dict[str, str], workspace: str | None) -> None:
 
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
-    if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        root = core.workspace_config_dir(workspace)
-    else:
-        root = core.root
+    root = _workspace_config_root(core, workspace)
 
     repo = RulesRepository(root)
     rule_list = repo.list_rules()
@@ -656,13 +662,7 @@ def rules_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
     from code_agnostic.rules.repository import RulesRepository
 
     core = CoreRepository()
-    if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        root = core.workspace_config_dir(workspace)
-    else:
-        root = core.root
+    root = _workspace_config_root(core, workspace)
 
     repo = RulesRepository(root)
     if not repo.remove_rule(name):
@@ -686,13 +686,7 @@ def skills() -> None:
 def skills_list(obj: dict[str, str], workspace: str | None) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
-    if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        root = core.workspace_config_dir(workspace)
-    else:
-        root = core.root
+    root = _workspace_config_root(core, workspace)
     skill_sources = CoreRepository(root).list_skill_sources()
     rows = [[source.name] for source in skill_sources]
     ui.render_list("skills", ["Skill"], rows, "No skills configured.")
@@ -706,13 +700,7 @@ def skills_remove(obj: dict[str, str], name: str, workspace: str | None) -> None
     import shutil
 
     core = CoreRepository()
-    if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        root = core.workspace_config_dir(workspace)
-    else:
-        root = core.root
+    root = _workspace_config_root(core, workspace)
     skill_dir = root / "skills" / name
     if not skill_dir.exists():
         raise click.ClickException(f"Skill not found: {name}")
@@ -736,13 +724,7 @@ def agents_group() -> None:
 def agents_list(obj: dict[str, str], workspace: str | None) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
-    if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        root = core.workspace_config_dir(workspace)
-    else:
-        root = core.root
+    root = _workspace_config_root(core, workspace)
     agent_files = CoreRepository(root).list_agent_sources()
     rows = [[f.stem if f.is_file() else f.name] for f in agent_files]
     ui.render_list("agents", ["Agent"], rows, "No agents configured.")
@@ -756,13 +738,7 @@ def agents_remove(obj: dict[str, str], name: str, workspace: str | None) -> None
     import shutil
 
     core = CoreRepository()
-    if workspace is not None:
-        names = {item["name"] for item in core.load_workspaces()}
-        if workspace not in names:
-            raise click.ClickException(f"Workspace not found: {workspace}")
-        root = core.workspace_config_dir(workspace)
-    else:
-        root = core.root
+    root = _workspace_config_root(core, workspace)
     agent_dir = root / "agents" / name
     if agent_dir.is_dir():
         shutil.rmtree(agent_dir)
