@@ -149,6 +149,8 @@ def test_execute_persists_global_revision_manifest_on_success(
     assert manifest["revision_id"] == active_revision["revision_id"]
     assert manifest["root"] == str(core_root)
     assert manifest["workspace"] is None
+    assert manifest["state"]["path"] == str(core_root / ".sync-state.json")
+    assert Path(manifest["state"]["artifact_path"]).exists()
     source_paths = {entry["path"] for entry in manifest["sources"]}
     assert str(core_root / "config" / "mcp.base.json") in source_paths
     assert str(core_root / "config" / "opencode.base.json") in source_paths
@@ -214,6 +216,10 @@ def test_execute_persists_workspace_revision_manifest_on_success(
     assert manifest["revision_id"] == active_revision["revision_id"]
     assert manifest["root"] == str(core_root / "workspaces" / "myws")
     assert manifest["workspace"] == "myws"
+    assert manifest["state"]["path"] == str(
+        core_root / "workspaces" / "myws" / ".sync-state.json"
+    )
+    assert Path(manifest["state"]["artifact_path"]).exists()
     source_paths = {entry["path"] for entry in manifest["sources"]}
     assert str(ws_source / "shared.md") in source_paths
     assert len(manifest["targets"]) == 1

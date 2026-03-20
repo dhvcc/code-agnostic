@@ -41,6 +41,7 @@ class RevisionRecord:
 class StoredRevision:
     revision_id: str
     manifest_path: Path
+    state: dict[str, Any] | None
     targets: list[dict[str, Any]]
 
 
@@ -295,6 +296,9 @@ class SyncExecutor:
             targets = manifest.get("targets")
             if not isinstance(targets, list):
                 continue
+            state = manifest.get("state")
+            if state is not None and not isinstance(state, dict):
+                state = None
             revision_id = manifest.get("revision_id")
             if not isinstance(revision_id, str):
                 continue
@@ -302,6 +306,7 @@ class SyncExecutor:
                 StoredRevision(
                     revision_id=revision_id,
                     manifest_path=manifest_path,
+                    state=state,
                     targets=targets,
                 )
             )
@@ -330,11 +335,16 @@ class SyncExecutor:
             for target in record.targets
             if isinstance(target, dict) and isinstance(target.get("path"), str)
         }
+        if record.state is not None and isinstance(record.state.get("path"), str):
+            state_path = Path(record.state["path"])
+            snapshots[state_path] = self._snapshot_path(state_path)
 
         restored = 0
         try:
+            if record.state is not None and self._restore_manifest_file(record.state):
+                restored += 1
             for target in record.targets:
-                if self._restore_manifest_target(target):
+                if self._restore_manifest_file(target):
                     restored += 1
         except Exception:
             self._rollback(snapshots, [])
@@ -541,8 +551,10 @@ class SyncExecutor:
                     path.write_bytes(snapshot.content)
 
         for stored_revision in previous_revisions:
+            if stored_revision.state is not None:
+                self._restore_manifest_file(stored_revision.state)
             for target in stored_revision.targets:
-                self._restore_manifest_target(target)
+                self._restore_manifest_file(target)
 
     def _persist_state(
         self,
@@ -670,6 +682,10 @@ class SyncExecutor:
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
                 "root": str(record.root),
                 "workspace": record.workspace,
+                "state": self._serialize_manifest_file(
+                    path=record.root / ".sync-state.json",
+                    artifact_path=record.artifacts_root / "state.bin",
+                ),
                 "sources": self._serialize_manifest_sources(record.root),
                 "targets": [
                     self._serialize_manifest_target(record, action, index)
@@ -716,35 +732,49 @@ class SyncExecutor:
         target.parent.mkdir(parents=True, exist_ok=True)
         os.replace(staged_path, target)
 
+    def _serialize_manifest_file(
+        self, *, path: Path, artifact_path: Path
+    ) -> dict[str, Any]:
+        checksum: str | None = None
+        serialized_artifact_path: str | None = None
+        exists = path.exists() or path.is_symlink()
+        if path.is_symlink():
+            checksum = hashlib.sha256(os.readlink(path).encode("utf-8")).hexdigest()
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_text(os.readlink(path), encoding="utf-8")
+            serialized_artifact_path = str(artifact_path.with_suffix(".symlink"))
+            artifact_path.unlink()
+            Path(serialized_artifact_path).write_text(
+                os.readlink(path), encoding="utf-8"
+            )
+        elif path.exists() and path.is_file():
+            checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_bytes(path.read_bytes())
+            serialized_artifact_path = str(artifact_path)
+
+        return {
+            "path": str(path),
+            "exists": exists,
+            "checksum": checksum,
+            "artifact_path": serialized_artifact_path,
+        }
+
     def _serialize_manifest_target(
         self, record: RevisionRecord, action: Action, index: int
     ) -> dict[str, Any]:
-        checksum: str | None = None
-        exists = action.path.exists() or action.path.is_symlink()
-        artifact_path: str | None = None
-        if action.path.is_symlink():
-            checksum = hashlib.sha256(
-                os.readlink(action.path).encode("utf-8")
-            ).hexdigest()
-            artifact = record.artifacts_root / f"{index}.symlink"
-            artifact.parent.mkdir(parents=True, exist_ok=True)
-            artifact.write_text(os.readlink(action.path), encoding="utf-8")
-            artifact_path = str(artifact)
-        elif action.path.exists() and action.path.is_file():
-            checksum = hashlib.sha256(action.path.read_bytes()).hexdigest()
-            artifact = record.artifacts_root / f"{index}.bin"
-            artifact.parent.mkdir(parents=True, exist_ok=True)
-            artifact.write_bytes(action.path.read_bytes())
-            artifact_path = str(artifact)
-
+        payload = self._serialize_manifest_file(
+            path=action.path,
+            artifact_path=record.artifacts_root / f"{index}.bin",
+        )
         return {
             "path": str(action.path),
             "kind": action.kind.value,
             "app": action.app,
             "scope": action.scope,
-            "exists": exists,
-            "checksum": checksum,
-            "artifact_path": artifact_path,
+            "exists": payload["exists"],
+            "checksum": payload["checksum"],
+            "artifact_path": payload["artifact_path"],
         }
 
     def _serialize_manifest_sources(self, root: Path) -> list[dict[str, str]]:
@@ -765,7 +795,7 @@ class SyncExecutor:
             )
         return entries
 
-    def _restore_manifest_target(self, target: dict[str, Any]) -> bool:
+    def _restore_manifest_file(self, target: dict[str, Any]) -> bool:
         path_text = target.get("path")
         if not isinstance(path_text, str):
             return False

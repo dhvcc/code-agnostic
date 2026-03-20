@@ -5,7 +5,7 @@
 - [x] Phase 0: compiler contract documented in repo and linked from `README.md`
 - [ ] Phase 1: strict bundle loading and schema validation
 - [ ] Phase 2: dedicated compiler package and capability evaluation
-- [ ] Phase 3: generated artifact planning replaces default symlink planning
+- [x] Phase 3: generated artifact planning replaces default symlink planning
 - [ ] Phase 4: transactional apply and rollback
 - [ ] Phase 5: validation and lossiness CLI UX
 
@@ -17,7 +17,7 @@ Current progress inside Phase 1:
 - [x] Wired rule bundle discovery into `RulesRepository`
 - [x] Added YAML `mcp.base.yaml` loading through existing source repositories
 - [x] Wired skill and agent bundle parsing into current planner/app flows
-- [ ] Remove legacy symlink-first behavior for legacy source formats
+- [x] Removed legacy symlink-first behavior from default sync for legacy source formats too
 - [ ] Wire bundle loading into import/migration flows
 
 Current progress inside Phase 3:
@@ -36,8 +36,9 @@ Current progress inside Phase 4:
 - [x] Revision manifests now include source-file inputs and checksums for compiler context
 - [x] Generated file writes now stage payloads under `.sync-staging/` before final placement
 - [x] Global/workspace state and revision metadata now stage before final placement too
+- [x] Active revision restore now replays persisted state snapshots, not just emitted target files
 - [ ] Apply still lacks one atomic revision swap across all staged outputs/state/manifests/roots
-- [ ] Revision manifests still need to become the primary restore contract, not just a replay log
+- [ ] Revision manifests still need crash-safe promotion semantics so they are the only recovery contract we depend on
 
 Current progress inside Phase 5:
 
@@ -48,21 +49,21 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- global/workspace state plus revision manifests now use the same staged placement flow as generated outputs
-- added regression coverage that state/manifest writes also pass through `.sync-staging/`
+- revision manifests now snapshot `.sync-state.json` so restore can replay state as part of the active revision
+- added regression coverage that restore repairs corrupted global/workspace state files too
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
 - define the smallest safe atomic-swap boundary we can enforce across mixed target roots
 - decide whether multi-root apply should become per-root atomic or require a single higher-level revision coordinator
+- use that boundary to define when an active revision is considered crash-safe and promotable
 - keep import/migration work deferred until the legacy-agent file-vs-directory decision is explicit
 
 Remaining work that is still open:
 
-- finish Phase 1 by removing the remaining legacy symlink-era behavior for legacy source formats
 - finish Phase 4 by turning staged placement into a real atomic revision boundary instead of path-by-path replace
-- finish Phase 4 by making manifest-backed restore the canonical recovery mechanism for every successful revision
+- finish Phase 4 by making promoted revision manifests the crash-safe recovery mechanism for every successful revision
 - finish the import/migration wiring once the agent bundle migration rule is decided
 
 Why I did not start import/migration changes:
@@ -77,8 +78,8 @@ Why I did not start import/migration changes:
 The project already acts like a cross-app compatibility layer, but the contract is implicit and spread across code. That is why it still feels alpha:
 
 - Canonical resources are loose markdown/YAML files with silent field dropping.
-- Some legacy source flows still carry symlink-era assumptions even though default sync now generates files.
-- Apply now stages generated files, state, and manifests, but it does not yet provide one atomic swap for the whole revision.
+- Import and migration still carry unresolved legacy-vs-bundle assumptions for some resource shapes.
+- Apply now stages generated files, state, and manifests, but it does not yet provide one crash-safe atomic promotion for the whole revision.
 - App-specific behavior leaks into source files and undocumented quirks.
 - There is no single compiler spec, capability matrix, or lossiness report.
 
