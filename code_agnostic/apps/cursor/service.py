@@ -127,19 +127,6 @@ class CursorConfigService(RegisteredAppConfigService):
 
         skill_sources = source_repository.list_skill_sources()
 
-        skill_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, "app:cursor:skills"),
-            desired_links=[],
-            remove_detail="remove stale managed skill symlink",
-            conflict_detail="stale managed path is not a symlink",
-            noop_detail="stale symlink already absent",
-            app=AppId.CURSOR.value,
-            scope="app:cursor:skills",
-            skipped=skipped,
-            skipped_message="Stale link cleanup skipped (not symlink): {path}",
-        )
-        actions.extend(skill_link_actions)
-
         compiled_skill_actions, desired_skill_paths, compiled_skill_skipped = (
             self.plan_skill_actions(
                 skill_sources,
@@ -153,20 +140,20 @@ class CursorConfigService(RegisteredAppConfigService):
         actions.extend(compiled_skill_actions)
         skipped.extend(compiled_skill_skipped)
 
-        agent_sources = source_repository.list_agent_sources()
-
-        agent_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, "app:cursor:agents"),
-            desired_links=[],
-            remove_detail="remove stale managed agent symlink",
+        skill_link_actions = plan_stale_group(
+            old_links=load_state_links(managed_links, "app:cursor:skills"),
+            desired_links=desired_skill_paths,
+            remove_detail="remove stale managed skill symlink",
             conflict_detail="stale managed path is not a symlink",
             noop_detail="stale symlink already absent",
             app=AppId.CURSOR.value,
-            scope="app:cursor:agents",
+            scope="app:cursor:skills",
             skipped=skipped,
             skipped_message="Stale link cleanup skipped (not symlink): {path}",
         )
-        actions.extend(agent_link_actions)
+        actions.extend(skill_link_actions)
+
+        agent_sources = source_repository.list_agent_sources()
 
         compiled_agent_actions, desired_agent_paths, compiled_agent_skipped = (
             self.plan_agent_actions(
@@ -180,6 +167,19 @@ class CursorConfigService(RegisteredAppConfigService):
         )
         actions.extend(compiled_agent_actions)
         skipped.extend(compiled_agent_skipped)
+
+        agent_link_actions = plan_stale_group(
+            old_links=load_state_links(managed_links, "app:cursor:agents"),
+            desired_links=desired_agent_paths,
+            remove_detail="remove stale managed agent symlink",
+            conflict_detail="stale managed path is not a symlink",
+            noop_detail="stale symlink already absent",
+            app=AppId.CURSOR.value,
+            scope="app:cursor:agents",
+            skipped=skipped,
+            skipped_message="Stale link cleanup skipped (not symlink): {path}",
+        )
+        actions.extend(agent_link_actions)
 
         actions.extend(
             plan_stale_files_group(

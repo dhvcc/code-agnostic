@@ -100,7 +100,9 @@ def plan_stale_group(
     desired = {str(path) for path in desired_links}
     actions: list[Action] = []
     for old in old_links:
-        if str(old) in desired:
+        if str(old) in desired or any(
+            _is_parent_or_same(old, path) for path in desired_links
+        ):
             continue
         if old.is_symlink():
             actions.append(
@@ -116,15 +118,14 @@ def plan_stale_group(
         elif old.exists():
             actions.append(
                 Action(
-                    ActionKind.REMOVE_SYMLINK,
+                    ActionKind.REMOVE_FILE,
                     old,
-                    ActionStatus.CONFLICT,
-                    conflict_detail,
+                    ActionStatus.REMOVE,
+                    remove_detail,
                     app=app,
                     scope=scope,
                 )
             )
-            skipped.append(skipped_message.format(path=old))
         else:
             actions.append(
                 Action(
@@ -137,6 +138,14 @@ def plan_stale_group(
                 )
             )
     return actions
+
+
+def _is_parent_or_same(parent: Path, child: Path) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
 
 
 def plan_stale_files_group(

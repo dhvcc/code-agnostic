@@ -165,19 +165,6 @@ class CodexConfigService(RegisteredAppConfigService):
         if not isinstance(managed_paths, dict):
             managed_paths = {}
 
-        skill_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, "app:codex:skills"),
-            desired_links=[],
-            remove_detail="remove stale managed skill symlink",
-            conflict_detail="stale managed path is not a symlink",
-            noop_detail="stale symlink already absent",
-            app=AppId.CODEX.value,
-            scope="app:codex:skills",
-            skipped=skipped,
-            skipped_message="Stale link cleanup skipped (not symlink): {path}",
-        )
-        actions.extend(skill_link_actions)
-
         compiled_skill_actions, desired_skill_paths, compiled_skill_skipped = (
             self.plan_skill_actions(
                 skill_sources,
@@ -190,6 +177,19 @@ class CodexConfigService(RegisteredAppConfigService):
         )
         actions.extend(compiled_skill_actions)
         skipped.extend(compiled_skill_skipped)
+
+        skill_link_actions = plan_stale_group(
+            old_links=load_state_links(managed_links, "app:codex:skills"),
+            desired_links=desired_skill_paths,
+            remove_detail="remove stale managed skill symlink",
+            conflict_detail="stale managed path is not a symlink",
+            noop_detail="stale symlink already absent",
+            app=AppId.CODEX.value,
+            scope="app:codex:skills",
+            skipped=skipped,
+            skipped_message="Stale link cleanup skipped (not symlink): {path}",
+        )
+        actions.extend(skill_link_actions)
 
         agent_actions, desired_agent_paths, agent_skipped = self.plan_agent_actions(
             source_repository.list_agent_sources(),
@@ -217,7 +217,7 @@ class CodexConfigService(RegisteredAppConfigService):
         actions.extend(
             plan_stale_group(
                 old_links=load_state_links(managed_links, "app:codex:agents"),
-                desired_links=[],
+                desired_links=desired_agent_paths,
                 remove_detail="remove stale managed agent symlink",
                 conflict_detail="stale managed path is not a symlink",
                 noop_detail="stale symlink already absent",

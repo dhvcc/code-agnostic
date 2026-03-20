@@ -55,14 +55,15 @@ def _workspace_symlink_override_status(
 ) -> ActionStatus | None:
     removable = {path.resolve(strict=False) for path in removable_links}
     current = target
+    found_symlink = False
     while True:
         if current.is_symlink():
+            found_symlink = True
             current_key = current.resolve(strict=False)
             if current_key in removable:
                 return ActionStatus.CREATE
-            return ActionStatus.CONFLICT
         if current.parent == current:
-            return None
+            return ActionStatus.CONFLICT if found_symlink else None
         current = current.parent
 
 
@@ -516,7 +517,7 @@ class SyncPlanner:
 
         stale_rules = plan_stale_group(
             old_links=load_state_links(managed_links, "rules"),
-            desired_links=[],
+            desired_links=desired_paths_by_scope.get("rules", []),
             remove_detail="remove stale workspace rules symlink",
             conflict_detail="stale workspace rules path is not a symlink",
             noop_detail="stale workspace rules symlink already absent",
@@ -539,7 +540,7 @@ class SyncPlanner:
                 continue
             stale_actions = plan_stale_group(
                 old_links=load_state_links(managed_links, scope),
-                desired_links=[],
+                desired_links=desired,
                 remove_detail=f"remove stale workspace {scope} symlink",
                 conflict_detail=f"stale workspace {scope} path is not a symlink",
                 noop_detail=f"stale workspace {scope} symlink already absent",

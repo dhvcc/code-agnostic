@@ -148,9 +148,9 @@ def test_plan_stale_group_old_regular_file_not_desired(tmp_path: Path) -> None:
     )
 
     assert len(actions) == 1
-    assert actions[0].status == ActionStatus.CONFLICT
-    assert len(skipped) == 1
-    assert str(regular) in skipped[0]
+    assert actions[0].status == ActionStatus.REMOVE
+    assert actions[0].kind == ActionKind.REMOVE_FILE
+    assert skipped == []
 
 
 def test_plan_stale_group_old_link_does_not_exist(tmp_path: Path) -> None:

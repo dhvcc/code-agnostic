@@ -58,6 +58,19 @@ class StagedAction:
     staged_path: Path | None = None
 
 
+def _remove_tree(root: Path) -> None:
+    for child in sorted(
+        root.rglob("*"),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    ):
+        if child.is_file() or child.is_symlink():
+            child.unlink()
+        elif child.is_dir():
+            child.rmdir()
+    root.rmdir()
+
+
 class ActionHandler(Protocol):
     def handle(
         self, action: Action, context: ExecutionContext
@@ -131,6 +144,9 @@ class RemoveFileHandler:
         if action.path.is_file() or action.path.is_symlink():
             action.path.unlink()
             return True, None
+        if action.path.is_dir():
+            _remove_tree(action.path)
+            return True, None
         return False, None
 
 
@@ -195,7 +211,7 @@ class SyncExecutor:
                 self._clear_pending_revisions(revision_records)
                 return 0, 1, [failure]
 
-            for staged_action in staged_actions:
+            for staged_action in self._ordered_staged_actions(staged_actions):
                 action = staged_action.action
                 try:
                     changed, failure = self._apply_staged_action(staged_action)
@@ -230,6 +246,22 @@ class SyncExecutor:
             return applied, failed, failures
         finally:
             self._cleanup_staging_dirs(staging_dirs)
+
+    def _ordered_staged_actions(
+        self, staged_actions: list[StagedAction]
+    ) -> list[StagedAction]:
+        removals = [
+            action
+            for action in staged_actions
+            if action.action.kind in {ActionKind.REMOVE_FILE, ActionKind.REMOVE_SYMLINK}
+        ]
+        others = [
+            action
+            for action in staged_actions
+            if action.action.kind
+            not in {ActionKind.REMOVE_FILE, ActionKind.REMOVE_SYMLINK}
+        ]
+        return removals + others
 
     def _prepare_revision_records(
         self, plan: SyncPlan, persist_state: bool
@@ -514,16 +546,7 @@ class SyncExecutor:
                     pass
 
     def _remove_tree(self, root: Path) -> None:
-        for child in sorted(
-            root.rglob("*"),
-            key=lambda path: len(path.parts),
-            reverse=True,
-        ):
-            if child.is_file() or child.is_symlink():
-                child.unlink()
-            elif child.is_dir():
-                child.rmdir()
-        root.rmdir()
+        _remove_tree(root)
 
     def _remove_existing_path(self, path: Path) -> None:
         if path.is_symlink() or path.is_file():

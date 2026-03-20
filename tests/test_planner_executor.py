@@ -18,7 +18,7 @@ from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaReposito
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import ActionKind, ActionStatus
-from code_agnostic.planner import SyncPlanner
+from code_agnostic.planner import SyncPlanner, _workspace_symlink_override_status
 from code_agnostic.core.repository import CoreRepository
 
 
@@ -489,6 +489,128 @@ def test_codex_build_plan_includes_compiled_skill_files_for_bundle(
     assert len(skill_actions) == 1
     assert skill_actions[0].path == codex_root / "skills" / "my-skill" / "SKILL.md"
     assert "Skill body." in skill_actions[0].payload
+
+
+def test_opencode_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+
+    core = CoreRepository(core_root)
+    opencode_root = tmp_path / ".config" / "opencode"
+    legacy_dir = opencode_root / "skills" / "my-skill"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "SKILL.md").write_text("old", encoding="utf-8")
+    core.save_state({"managed_links": {"app:opencode:skills": [str(legacy_dir)]}})
+
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    assert not any(
+        action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_dir
+        for action in plan.actions
+    )
+    skill_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT
+        and action.scope == "app:opencode:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == legacy_dir / "SKILL.md"
+    assert skill_actions[0].status == ActionStatus.UPDATE
+
+
+def test_codex_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+
+    core = CoreRepository(core_root)
+    codex_root = tmp_path / ".codex"
+    legacy_dir = codex_root / "skills" / "my-skill"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "SKILL.md").write_text("old", encoding="utf-8")
+    core.save_state({"managed_links": {"app:codex:skills": [str(legacy_dir)]}})
+
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    assert not any(
+        action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_dir
+        for action in plan.actions
+    )
+    skill_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT and action.scope == "app:codex:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == legacy_dir / "SKILL.md"
+    assert skill_actions[0].status == ActionStatus.UPDATE
+
+
+def test_cursor_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "skill", encoding="utf-8"
+    )
+
+    core = CoreRepository(core_root)
+    cursor_root = tmp_path / ".cursor"
+    legacy_dir = cursor_root / "skills" / "my-skill"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "SKILL.md").write_text("old", encoding="utf-8")
+    core.save_state({"managed_links": {"app:cursor:skills": [str(legacy_dir)]}})
+
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+
+    assert not any(
+        action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_dir
+        for action in plan.actions
+    )
+    skill_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT and action.scope == "app:cursor:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == legacy_dir / "SKILL.md"
+    assert skill_actions[0].status == ActionStatus.UPDATE
+
+
+def test_workspace_symlink_override_uses_removable_parent_symlink(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "source"
+    skill_dir = source_root / "my-skill"
+    skill_dir.mkdir(parents=True)
+
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    removable_parent = target_root / "skills"
+    removable_parent.symlink_to(source_root)
+
+    target = removable_parent / "my-skill" / "SKILL.md"
+
+    assert (
+        _workspace_symlink_override_status(target, removable_links=[removable_parent])
+        == ActionStatus.CREATE
+    )
 
 
 def test_codex_build_plan_includes_agent_symlinks(

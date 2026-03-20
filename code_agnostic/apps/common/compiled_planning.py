@@ -7,12 +7,15 @@ def _symlink_ancestor_state(
     target: Path, removable_link_paths: set[Path]
 ) -> tuple[bool, bool]:
     current = target
+    found_symlink = False
     while True:
         if current.is_symlink():
+            found_symlink = True
             current_key = current.resolve(strict=False)
-            return True, current_key in removable_link_paths
+            if current_key in removable_link_paths:
+                return True, True
         if current.parent == current:
-            return False, False
+            return found_symlink, False
         current = current.parent
 
 
@@ -29,7 +32,6 @@ def plan_compiled_text_action(
     update_detail: str,
     conflict_detail: str = "non-managed path exists",
 ) -> Action:
-    target_key = target.resolve(strict=False)
     removable = removable_link_paths or set()
     has_symlink_ancestor, is_removable_ancestor = _symlink_ancestor_state(
         target, removable
@@ -80,16 +82,15 @@ def plan_compiled_text_action(
                 app=app,
                 scope=scope,
             )
-        if target_key in managed_paths:
-            return Action(
-                kind=ActionKind.WRITE_TEXT,
-                path=target,
-                status=ActionStatus.UPDATE,
-                detail=update_detail,
-                payload=payload,
-                app=app,
-                scope=scope,
-            )
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.UPDATE,
+            detail=update_detail,
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
 
     return Action(
         kind=ActionKind.WRITE_TEXT,

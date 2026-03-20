@@ -354,6 +354,53 @@ def test_workspace_targeted_plan_does_not_cleanup_other_app_scopes(
     assert stale_codex_link not in stale_cleanup_paths
 
 
+def test_workspace_plan_skips_legacy_link_cleanup_when_same_path_is_now_generated(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"test-server": {"url": "https://test.example.com/mcp"}}},
+    )
+
+    stale_codex_file = workspace_root / "repo-a" / ".codex" / "config.toml"
+    stale_codex_file.parent.mkdir(parents=True, exist_ok=True)
+    stale_codex_file.write_text('model = "gpt-5"\n', encoding="utf-8")
+
+    WorkspaceConfigRepository(root=ws_config).save_state(
+        {"managed_links": {"ws:codex:repo_mcp": [str(stale_codex_file)]}}
+    )
+
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    stale_cleanup_paths = {
+        action.path
+        for action in plan.actions
+        if action.kind == ActionKind.REMOVE_SYMLINK
+    }
+    assert stale_codex_file not in stale_cleanup_paths
+
+    repo_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT and action.scope == "ws:codex:repo_mcp"
+    ]
+    assert len(repo_actions) == 1
+    assert repo_actions[0].path == stale_codex_file
+    assert repo_actions[0].status in {ActionStatus.UPDATE, ActionStatus.NOOP}
+
+
 # --- Workspace skill symlinks ---
 
 
