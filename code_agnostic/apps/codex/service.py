@@ -7,7 +7,7 @@ from jsonschema import Draft7Validator
 from code_agnostic.agents.codex import normalize_codex_agent_filename
 from code_agnostic.agents.compilers import CodexAgentCompiler
 from code_agnostic.agents.parser import parse_agent
-from code_agnostic.apps.app_id import AppId, app_label
+from code_agnostic.apps.app_id import AppId, app_label, app_scope
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -156,6 +156,8 @@ class CodexConfigService(RegisteredAppConfigService):
         skipped: list[str] = []
 
         skill_sources = source_repository.list_skill_sources()
+        skill_scope = app_scope(self.app_id, "skills")
+        agent_scope = app_scope(self.app_id, "agents")
 
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
@@ -169,23 +171,23 @@ class CodexConfigService(RegisteredAppConfigService):
             self.plan_skill_actions(
                 skill_sources,
                 self._codex_repo.skills_dir,
-                scope="app:codex:skills",
+                scope=skill_scope,
                 app=AppId.CODEX.value,
-                managed_paths=load_state_paths(managed_paths, "app:codex:skills"),
-                removable_links=load_state_links(managed_links, "app:codex:skills"),
+                managed_paths=load_state_paths(managed_paths, skill_scope),
+                removable_links=load_state_links(managed_links, skill_scope),
             )
         )
         actions.extend(compiled_skill_actions)
         skipped.extend(compiled_skill_skipped)
 
         skill_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, "app:codex:skills"),
+            old_links=load_state_links(managed_links, skill_scope),
             desired_links=desired_skill_paths,
             remove_detail="remove stale managed skill symlink",
             conflict_detail="stale managed path is not a symlink",
             noop_detail="stale symlink already absent",
             app=AppId.CODEX.value,
-            scope="app:codex:skills",
+            scope=skill_scope,
             skipped=skipped,
             skipped_message="Stale link cleanup skipped (not symlink): {path}",
         )
@@ -194,48 +196,48 @@ class CodexConfigService(RegisteredAppConfigService):
         agent_actions, desired_agent_paths, agent_skipped = self.plan_agent_actions(
             source_repository.list_agent_sources(),
             self._codex_repo.agents_dir,
-            scope="app:codex:agents",
+            scope=agent_scope,
             app=AppId.CODEX.value,
-            managed_paths=load_state_paths(managed_paths, "app:codex:agents"),
+            managed_paths=load_state_paths(managed_paths, agent_scope),
         )
         actions.extend(agent_actions)
         skipped.extend(agent_skipped)
 
         actions.extend(
             plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, "app:codex:skills"),
+                old_paths=load_state_paths(managed_paths, skill_scope),
                 desired_paths=desired_skill_paths,
                 remove_detail="remove stale managed skill file",
                 conflict_detail="stale managed path is not a file",
                 noop_detail="stale managed file already absent",
                 app=AppId.CODEX.value,
-                scope="app:codex:skills",
+                scope=skill_scope,
                 skipped=skipped,
                 skipped_message="Stale file cleanup skipped (not file): {path}",
             )
         )
         actions.extend(
             plan_stale_group(
-                old_links=load_state_links(managed_links, "app:codex:agents"),
+                old_links=load_state_links(managed_links, agent_scope),
                 desired_links=desired_agent_paths,
                 remove_detail="remove stale managed agent symlink",
                 conflict_detail="stale managed path is not a symlink",
                 noop_detail="stale symlink already absent",
                 app=AppId.CODEX.value,
-                scope="app:codex:agents",
+                scope=agent_scope,
                 skipped=skipped,
                 skipped_message="Stale link cleanup skipped (not symlink): {path}",
             )
         )
         actions.extend(
             plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, "app:codex:agents"),
+                old_paths=load_state_paths(managed_paths, agent_scope),
                 desired_paths=desired_agent_paths,
                 remove_detail="remove stale managed agent file",
                 conflict_detail="stale managed path is not a file",
                 noop_detail="stale managed file already absent",
                 app=AppId.CODEX.value,
-                scope="app:codex:agents",
+                scope=agent_scope,
                 skipped=skipped,
                 skipped_message="Stale file cleanup skipped (not file): {path}",
             )

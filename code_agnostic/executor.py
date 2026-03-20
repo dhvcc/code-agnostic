@@ -8,6 +8,11 @@ from typing import Any
 from typing import Protocol
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
+from code_agnostic.constants import (
+    SYNC_REVISIONS_DIRNAME,
+    SYNC_STAGING_DIRNAME,
+    SYNC_STATE_FILENAME,
+)
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.utils import write_json
@@ -305,7 +310,7 @@ class SyncExecutor:
     def _build_revision_record(
         self, *, root: Path, workspace: str | None, revision_id: str
     ) -> RevisionRecord:
-        revisions_root = root / ".sync-revisions"
+        revisions_root = root / SYNC_REVISIONS_DIRNAME
         return RevisionRecord(
             root=root,
             workspace=workspace,
@@ -408,7 +413,7 @@ class SyncExecutor:
                 for target in stored.targets:
                     self._restore_manifest_file(target)
             self._clear_pending_revisions([record])
-            sync_staging_root = record.root / ".sync-staging"
+            sync_staging_root = record.root / SYNC_STAGING_DIRNAME
             if sync_staging_root.exists():
                 self._remove_tree(sync_staging_root)
 
@@ -503,15 +508,15 @@ class SyncExecutor:
     ) -> Path:
         for record in revision_records:
             if record.workspace == action.workspace:
-                return record.root / ".sync-staging" / record.revision_id
+                return record.root / SYNC_STAGING_DIRNAME / record.revision_id
 
         if action.workspace is not None:
             return (
                 self.context.core.workspace_config_dir(action.workspace)
-                / ".sync-staging"
+                / SYNC_STAGING_DIRNAME
                 / staging_id
             )
-        return self.context.core.root / ".sync-staging" / staging_id
+        return self.context.core.root / SYNC_STAGING_DIRNAME / staging_id
 
     def _apply_staged_action(
         self, staged_action: StagedAction
@@ -543,7 +548,10 @@ class SyncExecutor:
                 self._remove_tree(staging_root)
 
             sync_staging_root = staging_root.parent
-            if sync_staging_root.name == ".sync-staging" and sync_staging_root.exists():
+            if (
+                sync_staging_root.name == SYNC_STAGING_DIRNAME
+                and sync_staging_root.exists()
+            ):
                 try:
                     sync_staging_root.rmdir()
                 except OSError:
@@ -572,7 +580,7 @@ class SyncExecutor:
 
         if persist_state:
             core = self.context.core
-            core_state_path = core.root / ".sync-state.json"
+            core_state_path = core.root / SYNC_STATE_FILENAME
             paths[core_state_path] = self._snapshot_path(core_state_path)
             for workspace_name in {
                 action.workspace
@@ -694,9 +702,9 @@ class SyncExecutor:
             "skipped": plan.skipped,
         }
         self._place_json_via_staging(
-            target=core.root / ".sync-state.json",
+            target=core.root / SYNC_STATE_FILENAME,
             payload=global_state,
-            staging_root=core.root / ".sync-staging" / staging_id / "metadata",
+            staging_root=core.root / SYNC_STAGING_DIRNAME / staging_id / "metadata",
             staging_dirs=staging_dirs,
             stage_name="global-state.json",
         )
@@ -721,7 +729,10 @@ class SyncExecutor:
             self._place_json_via_staging(
                 target=ws_repo.state_json,
                 payload=ws_state,
-                staging_root=ws_repo.root / ".sync-staging" / staging_id / "metadata",
+                staging_root=ws_repo.root
+                / SYNC_STAGING_DIRNAME
+                / staging_id
+                / "metadata",
                 staging_dirs=staging_dirs,
                 stage_name="workspace-state.json",
             )
@@ -759,7 +770,7 @@ class SyncExecutor:
                 "root": str(record.root),
                 "workspace": record.workspace,
                 "state": self._serialize_manifest_file(
-                    path=record.root / ".sync-state.json",
+                    path=record.root / SYNC_STATE_FILENAME,
                     artifact_path=record.artifacts_root / "state.bin",
                 ),
                 "sources": self._serialize_manifest_sources(record.root),
@@ -772,7 +783,7 @@ class SyncExecutor:
                 target=record.manifest_path,
                 payload=manifest,
                 staging_root=record.root
-                / ".sync-staging"
+                / SYNC_STAGING_DIRNAME
                 / record.revision_id
                 / "metadata",
                 staging_dirs=staging_dirs,
@@ -785,7 +796,7 @@ class SyncExecutor:
                     "manifest_path": str(record.manifest_path),
                 },
                 staging_root=record.root
-                / ".sync-staging"
+                / SYNC_STAGING_DIRNAME
                 / record.revision_id
                 / "metadata",
                 staging_dirs=staging_dirs,

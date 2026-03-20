@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
+from code_agnostic.constants import AGENTS_DIRNAME, SKILLS_DIRNAME, SYNC_STATE_FILENAME
 from code_agnostic.apps.common.utils import dto_to_common_mcp
 from code_agnostic.errors import (
     InvalidConfigSchemaError,
@@ -37,15 +38,15 @@ class BaseSourceRepository(ISourceRepository):
 
     @property
     def skills_dir(self) -> Path:
-        return self.root / "skills"
+        return self.root / SKILLS_DIRNAME
 
     @property
     def agents_dir(self) -> Path:
-        return self.root / "agents"
+        return self.root / AGENTS_DIRNAME
 
     @property
     def state_json(self) -> Path:
-        return self.root / ".sync-state.json"
+        return self.root / SYNC_STATE_FILENAME
 
     def load_mcp_base(self) -> dict[str, Any]:
         if self.mcp_base_path.exists():

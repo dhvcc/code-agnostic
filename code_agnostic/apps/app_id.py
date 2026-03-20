@@ -1,6 +1,15 @@
 from enum import Enum
 from dataclasses import dataclass
 
+from code_agnostic.constants import (
+    CODEX_CONFIG_FILENAME,
+    CODEX_PROJECT_DIRNAME,
+    CURSOR_CONFIG_FILENAME,
+    CURSOR_PROJECT_DIRNAME,
+    OPENCODE_CONFIG_FILENAME,
+    OPENCODE_PROJECT_DIRNAME,
+)
+
 
 class AppId(str, Enum):
     CORE = "core"
@@ -19,6 +28,7 @@ class AppMetadata:
     supports_import_agents: bool
     supports_workspace_propagation: bool
     project_dir_name: str | None = None
+    config_filename: str | None = None
 
 
 APP_CATALOG: dict[AppId, AppMetadata] = {
@@ -40,7 +50,8 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         importable=True,
         supports_import_agents=True,
         supports_workspace_propagation=True,
-        project_dir_name=".opencode",
+        project_dir_name=OPENCODE_PROJECT_DIRNAME,
+        config_filename=OPENCODE_CONFIG_FILENAME,
     ),
     AppId.CURSOR: AppMetadata(
         app_id=AppId.CURSOR,
@@ -50,7 +61,8 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         importable=True,
         supports_import_agents=True,
         supports_workspace_propagation=False,
-        project_dir_name=".cursor",
+        project_dir_name=CURSOR_PROJECT_DIRNAME,
+        config_filename=CURSOR_CONFIG_FILENAME,
     ),
     AppId.CODEX: AppMetadata(
         app_id=AppId.CODEX,
@@ -60,7 +72,8 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         importable=True,
         supports_import_agents=True,
         supports_workspace_propagation=True,
-        project_dir_name=".codex",
+        project_dir_name=CODEX_PROJECT_DIRNAME,
+        config_filename=CODEX_CONFIG_FILENAME,
     ),
 }
 
@@ -72,6 +85,11 @@ def app_metadata(app: AppId | str) -> AppMetadata:
 
 def app_label(app: AppId | str) -> str:
     return app_metadata(app).label
+
+
+def app_scope(app: AppId | str, resource: str) -> str:
+    app_id = app if isinstance(app, AppId) else AppId(app)
+    return f"app:{app_id.value}:{resource}"
 
 
 def app_ids_by_capability(

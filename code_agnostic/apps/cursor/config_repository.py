@@ -2,13 +2,19 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.constants import (
+    AGENTS_DIRNAME,
+    CURSOR_CONFIG_FILENAME,
+    CURSOR_PROJECT_DIRNAME,
+    SKILLS_DIRNAME,
+)
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from code_agnostic.utils import read_json_safe, write_json
 
 
 class CursorConfigRepository(IAppConfigRepository):
     def __init__(self, root: Path | None = None) -> None:
-        self._root = root or (Path.home() / ".cursor")
+        self._root = root or (Path.home() / CURSOR_PROJECT_DIRNAME)
 
     @property
     def root(self) -> Path:
@@ -16,15 +22,15 @@ class CursorConfigRepository(IAppConfigRepository):
 
     @property
     def config_path(self) -> Path:
-        return self.root / "mcp.json"
+        return self.root / CURSOR_CONFIG_FILENAME
 
     @property
     def skills_dir(self) -> Path:
-        return self.root / "skills"
+        return self.root / SKILLS_DIRNAME
 
     @property
     def agents_dir(self) -> Path:
-        return self.root / "agents"
+        return self.root / AGENTS_DIRNAME
 
     def load_config(self) -> dict[str, Any]:
         payload, error = read_json_safe(self.config_path)

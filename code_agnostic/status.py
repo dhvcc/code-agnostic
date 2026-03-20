@@ -99,17 +99,11 @@ class StatusService:
     ) -> WorkspaceRepoStatusRow:
         issues: list[str] = []
 
-        config_filenames: dict[AppId, str] = {
-            AppId.CURSOR: "mcp.json",
-            AppId.OPENCODE: "opencode.json",
-            AppId.CODEX: "config.toml",
-        }
-
         # Check workspace-managed links into repo project dirs.
         # Workspace rendering happens in ws_source.root/<project_dir_name>/..., then repos symlink to those.
 
         for meta in app_metas or []:
-            filename = config_filenames.get(meta.app_id)
+            filename = meta.config_filename
             if filename is None or meta.project_dir_name is None:
                 continue
 

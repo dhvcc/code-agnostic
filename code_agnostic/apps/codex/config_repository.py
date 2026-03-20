@@ -9,12 +9,18 @@ except ModuleNotFoundError:  # pragma: no cover
 import tomlkit
 
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.constants import (
+    AGENTS_DIRNAME,
+    CODEX_CONFIG_FILENAME,
+    CODEX_PROJECT_DIRNAME,
+    SKILLS_DIRNAME,
+)
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 
 
 class CodexConfigRepository(IAppConfigRepository):
     def __init__(self, root: Path | None = None) -> None:
-        self._root = root or (Path.home() / ".codex")
+        self._root = root or (Path.home() / CODEX_PROJECT_DIRNAME)
 
     @property
     def root(self) -> Path:
@@ -22,15 +28,15 @@ class CodexConfigRepository(IAppConfigRepository):
 
     @property
     def config_path(self) -> Path:
-        return self.root / "config.toml"
+        return self.root / CODEX_CONFIG_FILENAME
 
     @property
     def skills_dir(self) -> Path:
-        return self.root / "skills"
+        return self.root / SKILLS_DIRNAME
 
     @property
     def agents_dir(self) -> Path:
-        return self.root / "agents"
+        return self.root / AGENTS_DIRNAME
 
     def load_config(self) -> dict[str, Any]:
         if not self.config_path.exists() or self.config_path.stat().st_size == 0:

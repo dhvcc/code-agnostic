@@ -3,6 +3,11 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.constants import (
+    AGENTS_DIRNAME,
+    OPENCODE_CONFIG_FILENAME,
+    SKILLS_DIRNAME,
+)
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from code_agnostic.utils import read_json_safe, write_json
 
@@ -17,15 +22,15 @@ class OpenCodeConfigRepository(IAppConfigRepository):
 
     @property
     def config_path(self) -> Path:
-        return self.root / "opencode.json"
+        return self.root / OPENCODE_CONFIG_FILENAME
 
     @property
     def skills_dir(self) -> Path:
-        return self.root / "skills"
+        return self.root / SKILLS_DIRNAME
 
     @property
     def agents_dir(self) -> Path:
-        plural = self.root / "agents"
+        plural = self.root / AGENTS_DIRNAME
         singular = self.root / "agent"
         if plural.exists():
             return plural

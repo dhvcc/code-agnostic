@@ -3,7 +3,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from code_agnostic.apps.app_id import AppId, app_label
+from code_agnostic.apps.app_id import AppId, app_label, app_scope
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -117,6 +117,8 @@ class CursorConfigService(RegisteredAppConfigService):
         config_action = self.build_action(common_servers)
         actions: list[Action] = [config_action]
         skipped: list[str] = []
+        skill_scope = app_scope(self.app_id, "skills")
+        agent_scope = app_scope(self.app_id, "agents")
         state = source_repository.load_state()
         managed_links = state.get("managed_links", {})
         if not isinstance(managed_links, dict):
@@ -131,23 +133,23 @@ class CursorConfigService(RegisteredAppConfigService):
             self.plan_skill_actions(
                 skill_sources,
                 self._cursor_repo.skills_dir,
-                scope="app:cursor:skills",
+                scope=skill_scope,
                 app=AppId.CURSOR.value,
-                managed_paths=load_state_paths(managed_paths, "app:cursor:skills"),
-                removable_links=load_state_links(managed_links, "app:cursor:skills"),
+                managed_paths=load_state_paths(managed_paths, skill_scope),
+                removable_links=load_state_links(managed_links, skill_scope),
             )
         )
         actions.extend(compiled_skill_actions)
         skipped.extend(compiled_skill_skipped)
 
         skill_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, "app:cursor:skills"),
+            old_links=load_state_links(managed_links, skill_scope),
             desired_links=desired_skill_paths,
             remove_detail="remove stale managed skill symlink",
             conflict_detail="stale managed path is not a symlink",
             noop_detail="stale symlink already absent",
             app=AppId.CURSOR.value,
-            scope="app:cursor:skills",
+            scope=skill_scope,
             skipped=skipped,
             skipped_message="Stale link cleanup skipped (not symlink): {path}",
         )
@@ -159,23 +161,23 @@ class CursorConfigService(RegisteredAppConfigService):
             self.plan_agent_actions(
                 agent_sources,
                 self._cursor_repo.agents_dir,
-                scope="app:cursor:agents",
+                scope=agent_scope,
                 app=AppId.CURSOR.value,
-                managed_paths=load_state_paths(managed_paths, "app:cursor:agents"),
-                removable_links=load_state_links(managed_links, "app:cursor:agents"),
+                managed_paths=load_state_paths(managed_paths, agent_scope),
+                removable_links=load_state_links(managed_links, agent_scope),
             )
         )
         actions.extend(compiled_agent_actions)
         skipped.extend(compiled_agent_skipped)
 
         agent_link_actions = plan_stale_group(
-            old_links=load_state_links(managed_links, "app:cursor:agents"),
+            old_links=load_state_links(managed_links, agent_scope),
             desired_links=desired_agent_paths,
             remove_detail="remove stale managed agent symlink",
             conflict_detail="stale managed path is not a symlink",
             noop_detail="stale symlink already absent",
             app=AppId.CURSOR.value,
-            scope="app:cursor:agents",
+            scope=agent_scope,
             skipped=skipped,
             skipped_message="Stale link cleanup skipped (not symlink): {path}",
         )
@@ -183,26 +185,26 @@ class CursorConfigService(RegisteredAppConfigService):
 
         actions.extend(
             plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, "app:cursor:skills"),
+                old_paths=load_state_paths(managed_paths, skill_scope),
                 desired_paths=desired_skill_paths,
                 remove_detail="remove stale managed skill file",
                 conflict_detail="stale managed path is not a file",
                 noop_detail="stale managed file already absent",
                 app=AppId.CURSOR.value,
-                scope="app:cursor:skills",
+                scope=skill_scope,
                 skipped=skipped,
                 skipped_message="Stale file cleanup skipped (not file): {path}",
             )
         )
         actions.extend(
             plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, "app:cursor:agents"),
+                old_paths=load_state_paths(managed_paths, agent_scope),
                 desired_paths=desired_agent_paths,
                 remove_detail="remove stale managed agent file",
                 conflict_detail="stale managed path is not a file",
                 noop_detail="stale managed file already absent",
                 app=AppId.CURSOR.value,
-                scope="app:cursor:agents",
+                scope=agent_scope,
                 skipped=skipped,
                 skipped_message="Stale file cleanup skipped (not file): {path}",
             )
