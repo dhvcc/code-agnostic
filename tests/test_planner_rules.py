@@ -47,7 +47,11 @@ def test_plan_workspace_with_rules_dir(setup_workspace, enable_app) -> None:
     apps = AppsService(core)
     plan = apps.plan_for_target("all")
 
-    rule_actions = [a for a in plan.actions if a.kind == ActionKind.WRITE_RULE]
+    rule_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "rules"
+    ]
     assert len(rule_actions) >= 1
     assert any("rule" in a.detail.lower() for a in rule_actions)
 
@@ -59,7 +63,11 @@ def test_plan_workspace_no_rules(setup_workspace, enable_app) -> None:
     apps = AppsService(core)
     plan = apps.plan_for_target("all")
 
-    rule_actions = [a for a in plan.actions if a.kind == ActionKind.WRITE_RULE]
+    rule_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "rules"
+    ]
     assert len(rule_actions) == 0
 
 
@@ -80,11 +88,15 @@ def test_plan_rules_compiled_only_for_workspace_propagation_apps(
     apps = AppsService(core)
     plan = apps.plan_for_target("all")
 
-    rule_actions = [a for a in plan.actions if a.kind == ActionKind.WRITE_RULE]
+    rule_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "rules"
+    ]
     # Cursor workspace propagation is intentionally disabled.
     assert len(rule_actions) == 1
 
-    assert any("AGENTS.md" in a.detail for a in rule_actions)
+    assert any("workspace rules file" in a.detail for a in rule_actions)
 
     # Cursor should not compile workspace rules.
     cursor_rules = [a for a in rule_actions if "cursor" in a.detail]

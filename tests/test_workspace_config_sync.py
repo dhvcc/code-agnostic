@@ -136,10 +136,10 @@ def test_workspace_config_repository_state_roundtrip(tmp_path: Path) -> None:
     assert loaded["managed_links"]["rules"] == ["/path/to/link"]
 
 
-# --- Workspace rules symlinks ---
+# --- Workspace rules files ---
 
 
-def test_workspace_rules_symlink_planned_for_workspace_root_only(
+def test_workspace_rules_file_planned_for_workspace_root_only(
     minimal_shared_config: Path,
     core_root: Path,
     opencode_root: Path,
@@ -161,15 +161,10 @@ def test_workspace_rules_symlink_planned_for_workspace_root_only(
         core=core, app_services=[_opencode_service(core, opencode_root)]
     ).build()
 
-    workspace_rule_actions = [
+    rules_actions = [
         a
         for a in plan.actions
-        if a.kind == ActionKind.WRITE_RULE and a.path == ws_config / AGENTS_FILENAME
-    ]
-    assert len(workspace_rule_actions) == 1
-
-    rules_actions = [
-        a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope == "rules"
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "rules"
     ]
     assert len(rules_actions) == 1
     assert all(a.workspace == "myws" for a in rules_actions)
@@ -177,7 +172,7 @@ def test_workspace_rules_symlink_planned_for_workspace_root_only(
     assert rules_actions[0].path == workspace_root / AGENTS_FILENAME
 
 
-def test_workspace_rules_symlinks_planned_for_cursor(
+def test_workspace_rules_file_planned_for_cursor(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -197,7 +192,9 @@ def test_workspace_rules_symlinks_planned_for_cursor(
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
     rules_actions = [
-        a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope == "rules"
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "rules"
     ]
     assert len(rules_actions) == 1
     assert rules_actions[0].path == workspace_root / AGENTS_FILENAME
@@ -260,13 +257,20 @@ def test_workspace_opencode_config_includes_workspace_agents_file(
     config_actions = [
         a
         for a in plan.actions
-        if a.app == "workspace" and a.kind == ActionKind.WRITE_JSON
+        if a.app == "workspace"
+        and a.kind == ActionKind.WRITE_JSON
+        and a.scope in {"ws:opencode:workspace_root_mcp", "ws:opencode:repo_mcp"}
     ]
-    assert len(config_actions) == 1
-    assert config_actions[0].path == ws_config / ".opencode" / "opencode.json"
-    assert config_actions[0].payload["instructions"] == [
-        str(workspace_root / AGENTS_FILENAME)
-    ]
+    assert len(config_actions) == 2
+    assert {action.path for action in config_actions} == {
+        workspace_root / ".opencode" / "opencode.json",
+        workspace_root / "repo-a" / ".opencode" / "opencode.json",
+    }
+    assert all(
+        isinstance(action.payload, dict)
+        and action.payload["instructions"] == [str(workspace_root / AGENTS_FILENAME)]
+        for action in config_actions
+    )
 
 
 def test_workspace_mcp_sync_to_codex_project_dirs(
@@ -291,34 +295,20 @@ def test_workspace_mcp_sync_to_codex_project_dirs(
     codex_root = tmp_path / ".codex"
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
-    mcp_actions = [
-        a
-        for a in plan.actions
-        if a.app == "workspace" and a.kind == ActionKind.WRITE_TEXT
-    ]
-    assert len(mcp_actions) == 1
-    expected_path = ws_config / ".codex" / "config.toml"
-    assert mcp_actions[0].path == expected_path
-
-    workspace_root_link_actions = [
-        a
-        for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:codex:workspace_root_mcp"
-    ]
-    assert len(workspace_root_link_actions) == 1
-    assert (
-        workspace_root_link_actions[0].path == workspace_root / ".codex" / "config.toml"
+    mcp_actions = sorted(
+        [
+            a
+            for a in plan.actions
+            if a.app == "workspace"
+            and a.kind == ActionKind.WRITE_TEXT
+            and a.scope in {"ws:codex:workspace_root_mcp", "ws:codex:repo_mcp"}
+        ],
+        key=lambda action: str(action.path),
     )
-    assert workspace_root_link_actions[0].source == expected_path
-
-    link_actions = [
-        a
-        for a in plan.actions
-        if a.kind == ActionKind.SYMLINK and a.scope == "ws:codex:repo_mcp"
+    assert [action.path for action in mcp_actions] == [
+        workspace_root / ".codex" / "config.toml",
+        workspace_root / "repo-a" / ".codex" / "config.toml",
     ]
-    assert len(link_actions) == 1
-    assert link_actions[0].path == workspace_root / "repo-a" / ".codex" / "config.toml"
-    assert link_actions[0].source == expected_path
 
 
 def test_workspace_targeted_plan_does_not_cleanup_other_app_scopes(
@@ -453,11 +443,15 @@ def test_workspace_agents_synced_to_codex(
     assert len(render_actions) == 1
     assert render_actions[0].path == ws_config / ".codex" / "agents" / "planner.toml"
 
-    link_actions = [a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope]
-    assert any(
-        a.scope == "ws:codex:repo_agents_dir"
-        and a.path == workspace_root / "repo-a" / ".codex" / "agents"
-        for a in link_actions
+    repo_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:codex:repo_agents_dir"
+    ]
+    assert len(repo_actions) == 1
+    assert (
+        repo_actions[0].path
+        == workspace_root / "repo-a" / ".codex" / "agents" / "planner.toml"
     )
 
 
@@ -499,11 +493,15 @@ def test_workspace_agents_synced_to_opencode(
     assert render_actions[0].path == ws_config / ".opencode" / "agents" / "planner.md"
     assert "reasoningEffort: high" in render_actions[0].payload
 
-    link_actions = [a for a in plan.actions if a.kind == ActionKind.SYMLINK and a.scope]
-    assert any(
-        a.scope == "ws:opencode:repo_agents_dir"
-        and a.path == workspace_root / "repo-a" / ".opencode" / "agents"
-        for a in link_actions
+    repo_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:opencode:repo_agents_dir"
+    ]
+    assert len(repo_actions) == 1
+    assert (
+        repo_actions[0].path
+        == workspace_root / "repo-a" / ".opencode" / "agents" / "planner.md"
     )
 
 
@@ -535,7 +533,7 @@ def test_executor_persists_workspace_state_separately(
     # Workspace state persisted to workspace state file.
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     ws_state = ws_repo.load_state()
-    managed = ws_state["managed_links"]
+    managed = ws_state["managed_paths"]
     assert "rules" in managed
     assert len(managed["rules"]) == 1
 
@@ -588,10 +586,12 @@ def test_full_workspace_config_roundtrip(
     assert failures == []
     assert applied > 0
 
-    workspace_agents = ws_config / AGENTS_FILENAME
     workspace_link = workspace_root / AGENTS_FILENAME
-    assert workspace_link.is_symlink()
-    assert workspace_link.resolve() == workspace_agents.resolve()
+    assert workspace_link.is_file()
+    assert not workspace_link.is_symlink()
+    assert (
+        workspace_link.read_text(encoding="utf-8") == "## shared\n\nworkspace rules\n"
+    )
 
     for repo_name in ["repo-a", "repo-b"]:
         link = workspace_root / repo_name / AGENTS_FILENAME
@@ -651,14 +651,15 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_codex(
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
     SyncExecutor(core=core).execute(plan)
-    skill_dir_link = workspace_root / "repo-a" / ".codex" / "skills"
-    assert skill_dir_link.is_symlink()
+    skill_file = (
+        workspace_root / "repo-a" / ".codex" / "skills" / "my-skill" / "SKILL.md"
+    )
+    assert skill_file.is_file()
 
     # Verify state was persisted with workspace scopes
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     state = ws_repo.load_state()
-    assert "ws:codex:skills_entries" in state["managed_links"]
-    assert "ws:codex:repo_skills_dir" in state["managed_links"]
+    assert "ws:codex:repo_skills_dir" in state["managed_paths"]
 
     # Remove all skills from workspace config
     import shutil
@@ -667,17 +668,16 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_codex(
 
     plan2 = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
-    # Should have remove actions for stale workspace entry and repo dir link
+    # Should have remove actions for stale generated repo skill files
     remove_actions = [
         a
         for a in plan2.actions
-        if a.kind == ActionKind.REMOVE_SYMLINK
-        and a.scope in ("ws:codex:skills_entries", "ws:codex:repo_skills_dir")
+        if a.kind == ActionKind.REMOVE_FILE and a.scope == "ws:codex:repo_skills_dir"
     ]
-    assert len(remove_actions) == 2
+    assert len(remove_actions) == 1
 
     SyncExecutor(core=core).execute(plan2)
-    assert not skill_dir_link.is_symlink()
+    assert not skill_file.exists()
 
 
 # --- plan_resource_symlinks utility ---

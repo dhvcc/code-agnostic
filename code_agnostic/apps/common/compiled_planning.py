@@ -3,6 +3,19 @@ from pathlib import Path
 from code_agnostic.models import Action, ActionKind, ActionStatus
 
 
+def _symlink_ancestor_state(
+    target: Path, removable_link_paths: set[Path]
+) -> tuple[bool, bool]:
+    current = target
+    while True:
+        if current.is_symlink():
+            current_key = current.resolve(strict=False)
+            return True, current_key in removable_link_paths
+        if current.parent == current:
+            return False, False
+        current = current.parent
+
+
 def plan_compiled_text_action(
     *,
     target: Path,
@@ -18,9 +31,11 @@ def plan_compiled_text_action(
 ) -> Action:
     target_key = target.resolve(strict=False)
     removable = removable_link_paths or set()
-    parent_key = target.parent.resolve(strict=False)
+    has_symlink_ancestor, is_removable_ancestor = _symlink_ancestor_state(
+        target, removable
+    )
 
-    if target.parent.is_symlink() and parent_key not in removable:
+    if has_symlink_ancestor and not is_removable_ancestor:
         return Action(
             kind=ActionKind.WRITE_TEXT,
             path=target,
@@ -31,18 +46,7 @@ def plan_compiled_text_action(
             scope=scope,
         )
 
-    if target.is_symlink() and target_key in removable:
-        return Action(
-            kind=ActionKind.WRITE_TEXT,
-            path=target,
-            status=ActionStatus.CREATE,
-            detail=create_detail,
-            payload=payload,
-            app=app,
-            scope=scope,
-        )
-
-    if target.parent.is_symlink() and parent_key in removable:
+    if has_symlink_ancestor and is_removable_ancestor:
         return Action(
             kind=ActionKind.WRITE_TEXT,
             path=target,

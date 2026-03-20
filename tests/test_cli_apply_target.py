@@ -19,7 +19,7 @@ def _load_opencode_schema() -> dict:
     return json.loads(payload)
 
 
-def test_apply_opencode_links_workspace_root_and_config_includes_it(
+def test_apply_opencode_generates_workspace_root_and_repo_config_files(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
     enable_app("opencode")
@@ -51,21 +51,23 @@ def test_apply_opencode_links_workspace_root_and_config_includes_it(
     opencode_config = tmp_path / ".config" / "opencode" / "opencode.json"
     assert opencode_config.exists()
 
-    workspace_agents = ws_config_dir / AGENTS_FILENAME
     workspace_root_link = workspace_root / AGENTS_FILENAME
-    assert workspace_root_link.is_symlink()
-    assert workspace_root_link.resolve() == workspace_agents.resolve()
+    assert workspace_root_link.is_file()
+    assert not workspace_root_link.is_symlink()
 
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert not workspace_link.exists()
 
-    workspace_opencode_config = ws_config_dir / ".opencode" / "opencode.json"
+    workspace_opencode_config = workspace_root / ".opencode" / "opencode.json"
     opencode_payload = json.loads(workspace_opencode_config.read_text(encoding="utf-8"))
     assert opencode_payload["instructions"] == [str(workspace_root / AGENTS_FILENAME)]
 
     repo_opencode_config = workspace_root / "service-a" / ".opencode" / "opencode.json"
-    assert repo_opencode_config.is_symlink()
-    assert repo_opencode_config.resolve() == workspace_opencode_config.resolve()
+    assert repo_opencode_config.is_file()
+    assert not repo_opencode_config.is_symlink()
+    assert (
+        json.loads(repo_opencode_config.read_text(encoding="utf-8")) == opencode_payload
+    )
 
 
 def test_apply_default_syncs_everything(
@@ -97,10 +99,9 @@ def test_apply_default_syncs_everything(
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
-    workspace_agents = ws_config_dir / AGENTS_FILENAME
     workspace_root_link = workspace_root / AGENTS_FILENAME
-    assert workspace_root_link.is_symlink()
-    assert workspace_root_link.resolve() == workspace_agents.resolve()
+    assert workspace_root_link.is_file()
+    assert not workspace_root_link.is_symlink()
 
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert not workspace_link.exists()
@@ -218,7 +219,8 @@ def test_apply_opencode_stale_workspace_links_cleaned(
     assert apply1.exit_code == 0
 
     workspace_link = workspace_root / AGENTS_FILENAME
-    assert workspace_link.is_symlink()
+    assert workspace_link.is_file()
+    assert not workspace_link.is_symlink()
     repo_link = workspace_root / "repo-a" / AGENTS_FILENAME
     assert not repo_link.exists()
 
@@ -228,10 +230,10 @@ def test_apply_opencode_stale_workspace_links_cleaned(
     apply2 = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply2.exit_code == 0
 
-    assert not workspace_link.is_symlink()
+    assert not workspace_link.exists()
 
 
-def test_targeted_apply_preserves_other_app_workspace_links(
+def test_targeted_apply_preserves_other_app_workspace_outputs(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
     enable_app("codex")
@@ -259,15 +261,15 @@ def test_targeted_apply_preserves_other_app_workspace_links(
 
     codex_repo_link = workspace_root / "repo-a" / ".codex" / "config.toml"
     codex_root_link = workspace_root / ".codex" / "config.toml"
-    assert codex_repo_link.is_symlink()
-    assert codex_root_link.is_symlink()
+    assert codex_repo_link.is_file()
+    assert codex_root_link.is_file()
 
     apply_opencode = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply_opencode.exit_code == 0
 
     opencode_repo_link = workspace_root / "repo-a" / ".opencode" / "opencode.json"
     opencode_root_link = workspace_root / ".opencode" / "opencode.json"
-    assert opencode_repo_link.is_symlink()
-    assert opencode_root_link.is_symlink()
-    assert codex_repo_link.is_symlink()
-    assert codex_root_link.is_symlink()
+    assert opencode_repo_link.is_file()
+    assert opencode_root_link.is_file()
+    assert codex_repo_link.is_file()
+    assert codex_root_link.is_file()

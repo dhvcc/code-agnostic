@@ -24,7 +24,7 @@ Current progress inside Phase 3:
 
 - [x] Global app sync now generates skill files for legacy and bundle sources
 - [x] Cursor global app sync now generates agent files for legacy and bundle sources
-- [ ] Remove remaining workspace and legacy symlink-era paths from default sync
+- [x] Default sync now generates workspace/root/repo artifacts instead of planning symlink actions
 
 Current progress inside Phase 5:
 
@@ -35,15 +35,15 @@ Current progress inside Phase 5:
 
 Latest completed slice:
 
-- added `code-agnostic explain-lossiness`
-- kept it read-only and deterministic for documented rule/agent lossy fields
+- removed remaining default workspace sync symlink actions in favor of generated files
+- added regression coverage for workspace/root/repo generated outputs and stale cleanup
 - full test suite was green after that slice: `uv run pytest`
 
 Next slice I was about to implement:
 
-- remove remaining workspace and legacy symlink-era paths from default sync
-- add regression coverage that locks in regular-file planning for default flows
-- keep any symlink behavior, if retained at all, behind an explicit non-default debug path
+- start Phase 4 transactional apply work with failing rollback tests first
+- add staging/manifest primitives around the current executor path
+- keep rollback focused on restoring the last successful revision, not backup files
 
 Why I did not start import/migration changes:
 

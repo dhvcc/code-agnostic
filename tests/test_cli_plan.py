@@ -18,7 +18,7 @@ def test_plan_shows_invalid_json_error_for_mcp_base(
     assert "Invalid JSON format" in result.output
 
 
-def test_plan_target_cursor_skips_cursor_workspace_dirs_but_keeps_agents_links(
+def test_plan_target_cursor_skips_cursor_workspace_dirs_but_keeps_workspace_rules_files(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -43,7 +43,7 @@ def test_plan_target_cursor_skips_cursor_workspace_dirs_but_keeps_agents_links(
     core = CoreRepository(core_root)
     plan = AppsService(core).plan_for_target("cursor")
     assert any(
-        a.kind == ActionKind.SYMLINK and a.scope == "rules" for a in plan.actions
+        a.kind == ActionKind.WRITE_TEXT and a.scope == "rules" for a in plan.actions
     )
     assert not any(
         a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions

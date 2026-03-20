@@ -285,9 +285,13 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         scope: str,
         app: str,
         managed_paths: list[Path],
+        removable_links: list[Path] | None = None,
     ) -> tuple[list[Action], list[Path], list[str]]:
         compiler = OpenCodeAgentCompiler()
         managed_path_set = {path.resolve(strict=False) for path in managed_paths}
+        removable_link_set = {
+            path.resolve(strict=False) for path in (removable_links or [])
+        }
         actions: list[Action] = []
         desired_paths: list[Path] = []
         skipped: list[str] = []
@@ -302,6 +306,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
                 target=target,
                 payload=payload,
                 managed_paths=managed_path_set,
+                removable_links=removable_link_set,
                 scope=scope,
                 app=app,
             )
@@ -317,6 +322,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         target: Path,
         payload: str,
         managed_paths: set[Path],
+        removable_links: set[Path],
         scope: str,
         app: str,
     ) -> Action:
@@ -324,6 +330,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
             target=target,
             payload=payload,
             managed_paths=managed_paths,
+            removable_link_paths=removable_links,
             scope=scope,
             app=app,
             create_detail="create compiled opencode agent",

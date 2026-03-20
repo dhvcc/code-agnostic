@@ -1,16 +1,15 @@
 from pathlib import Path
 
 from code_agnostic.apps.app_id import AppId, app_metadata
+from code_agnostic.apps.common.compiled_planning import plan_compiled_text_action
 from code_agnostic.apps.common.framework import create_registered_app_service
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
     load_state_paths,
-    plan_resource_symlinks,
     plan_stale_files_group,
     plan_stale_group,
-    plan_symlink,
 )
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
@@ -20,25 +19,67 @@ from code_agnostic.apps.common.utils import common_mcp_to_dto
 from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import SyncAppError
-from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.models import Action, ActionStatus, SyncPlan
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
 from code_agnostic.rules.repository import RulesRepository
 from code_agnostic.workspaces import WorkspaceService
-
-
-def _write_rule_status(path: Path, content: str) -> ActionStatus:
-    if not path.exists():
-        return ActionStatus.CREATE
-    existing = path.read_text(encoding="utf-8")
-    if existing == content:
-        return ActionStatus.NOOP
-    return ActionStatus.UPDATE
 
 
 def _compile_workspace_agents(rules) -> str:
     compiler = OpenCodeRuleCompiler()
     sections = [compiler.compile(rule)[1] for rule in rules]
     return "\n\n".join(sections) + "\n"
+
+
+def _create_workspace_project_service(
+    app_id: AppId,
+    target_root: Path,
+    ws_source: WorkspaceConfigRepository,
+) -> IAppConfigService:
+    if app_id == AppId.CODEX:
+        return CodexConfigService(
+            repository=CodexConfigRepository(root=target_root),
+            mapper=CodexMCPMapper(),
+            schema_repository=CodexSchemaRepository(),
+            base_config_path=(
+                ws_source.codex_base_path
+                if ws_source.codex_base_path.exists()
+                else None
+            ),
+        )
+    return create_registered_app_service(app_id, root=target_root)
+
+
+def _workspace_symlink_override_status(
+    target: Path, removable_links: list[Path]
+) -> ActionStatus | None:
+    removable = {path.resolve(strict=False) for path in removable_links}
+    current = target
+    while True:
+        if current.is_symlink():
+            current_key = current.resolve(strict=False)
+            if current_key in removable:
+                return ActionStatus.CREATE
+            return ActionStatus.CONFLICT
+        if current.parent == current:
+            return None
+        current = current.parent
+
+
+def _prepare_workspace_action(
+    action: Action,
+    *,
+    workspace_name: str,
+    scope: str,
+    removable_links: list[Path],
+) -> Action:
+    override_status = _workspace_symlink_override_status(action.path, removable_links)
+    if override_status is not None:
+        action.status = override_status
+    action.app = "workspace"
+    action.workspace = workspace_name
+    action.scope = scope
+    return action
 
 
 def _set_workspace_opencode_instructions(
@@ -62,7 +103,9 @@ def _set_workspace_opencode_instructions(
     existing = service.repository.load_config()
     derive_status = getattr(service, "derive_status", None)
     if callable(derive_status):
-        action.status = derive_status(existing, payload)
+        derived_status = derive_status(existing, payload)
+        if isinstance(derived_status, ActionStatus):
+            action.status = derived_status
     action.payload = payload
 
 
@@ -156,36 +199,70 @@ class SyncPlanner:
         actions: list[Action] = []
         skipped: list[str] = []
 
-        def _mark_workspace(action: Action) -> None:
-            action.app = "workspace"
-            action.workspace = workspace_name
-
         # --- Rules compilation ---
-        desired_rules_links: list[Path] = []
+        desired_paths_by_scope: dict[str, list[Path]] = {}
         rules_repo = RulesRepository(ws_source.root)
         rules = rules_repo.list_rules()
-        workspace_agents_source: Path | None = None
+        workspace_agents_target: Path | None = None
         if rules:
             content = _compile_workspace_agents(rules)
-            status = _write_rule_status(ws_source.rules_file, content)
-            rule_action = Action(
-                kind=ActionKind.WRITE_RULE,
-                path=ws_source.rules_file,
-                status=status,
-                detail=f"compile rules to {AGENTS_FILENAME} for workspace",
+            target = workspace_path / AGENTS_FILENAME
+            rule_action = plan_compiled_text_action(
+                target=target,
                 payload=content,
+                managed_paths={
+                    path.resolve(strict=False)
+                    for path in load_state_paths(managed_paths, "rules")
+                },
+                removable_link_paths={
+                    path.resolve(strict=False)
+                    for path in load_state_links(managed_links, "rules")
+                },
+                scope="rules",
                 app="workspace",
-                workspace=workspace_name,
+                create_detail="create workspace rules file",
+                noop_detail="workspace rules file already up to date",
+                update_detail="update workspace rules file",
             )
-            _mark_workspace(rule_action)
+            _prepare_workspace_action(
+                rule_action,
+                workspace_name=workspace_name,
+                scope="rules",
+                removable_links=load_state_links(managed_links, "rules"),
+            )
             actions.append(rule_action)
-            workspace_agents_source = ws_source.rules_file
+            desired_paths_by_scope.setdefault("rules", []).append(target)
+            workspace_agents_target = target
         elif not rules_repo.rules_dir.exists() and ws_source.rules_file.exists():
-            workspace_agents_source = ws_source.rules_file
+            target = workspace_path / AGENTS_FILENAME
+            rule_action = plan_compiled_text_action(
+                target=target,
+                payload=ws_source.rules_file.read_text(encoding="utf-8"),
+                managed_paths={
+                    path.resolve(strict=False)
+                    for path in load_state_paths(managed_paths, "rules")
+                },
+                removable_link_paths={
+                    path.resolve(strict=False)
+                    for path in load_state_links(managed_links, "rules")
+                },
+                scope="rules",
+                app="workspace",
+                create_detail="create workspace rules file",
+                noop_detail="workspace rules file already up to date",
+                update_detail="update workspace rules file",
+            )
+            _prepare_workspace_action(
+                rule_action,
+                workspace_name=workspace_name,
+                scope="rules",
+                removable_links=load_state_links(managed_links, "rules"),
+            )
+            actions.append(rule_action)
+            desired_paths_by_scope.setdefault("rules", []).append(target)
+            workspace_agents_target = target
 
-        # --- Workspace-level app config rendering + repo symlinks ---
-        desired_links_by_scope: dict[str, list[Path]] = {}
-        desired_paths_by_scope: dict[str, list[Path]] = {}
+        # --- Workspace-level app config rendering + direct target writes ---
 
         # Workspace sources are intentionally isolated from global sources.
         # Global app configs still apply naturally; workspace config only adds workspace-specific config.
@@ -206,21 +283,11 @@ class SyncPlanner:
                 continue
 
             ws_project_root = ws_source.root / meta.project_dir_name
-            if svc.app_id == AppId.CODEX:
-                project_svc = CodexConfigService(
-                    repository=CodexConfigRepository(root=ws_project_root),
-                    mapper=CodexMCPMapper(),
-                    schema_repository=CodexSchemaRepository(),
-                    base_config_path=(
-                        ws_source.codex_base_path
-                        if ws_source.codex_base_path.exists()
-                        else None
-                    ),
-                )
-            else:
-                project_svc = create_registered_app_service(
-                    svc.app_id, root=ws_project_root
-                )
+            project_svc = _create_workspace_project_service(
+                svc.app_id,
+                ws_project_root,
+                ws_source,
+            )
 
             # Note: skills_dir/agents_dir are implemented by concrete repositories,
             # but are not part of the IAppConfigRepository interface.
@@ -233,7 +300,7 @@ class SyncPlanner:
 
             # Render workspace config once into workspace project dir
             should_render_workspace_config = common_servers is not None or (
-                workspace_agents_source is not None and svc.app_id == AppId.OPENCODE
+                workspace_agents_target is not None and svc.app_id == AppId.OPENCODE
             )
             if svc.app_id == AppId.CODEX and ws_source.codex_base_path.exists():
                 should_render_workspace_config = True
@@ -243,148 +310,202 @@ class SyncPlanner:
                     _set_workspace_opencode_instructions(
                         project_svc,
                         mcp_action,
-                        workspace_path / AGENTS_FILENAME
-                        if workspace_agents_source is not None
-                        else None,
+                        workspace_agents_target,
                     )
-                    _mark_workspace(mcp_action)
+                    mcp_action.app = "workspace"
+                    mcp_action.workspace = workspace_name
                     actions.append(mcp_action)
                 except SyncAppError as exc:
                     skipped.append(
                         f"MCP sync error for workspace {workspace_name}/{svc.app_id.value}: {exc}"
                     )
 
-            # Workspace skill entries symlinked into workspace project dir
+            # Workspace skill entries compiled into workspace project dir
             if skill_sources:
                 scope = f"ws:{svc.app_id.value}:skills_entries"
-                skill_actions, desired, skill_skipped = plan_resource_symlinks(
+                plan_skill_actions = getattr(project_svc, "plan_skill_actions")
+                skill_actions, desired_paths, skill_skipped = plan_skill_actions(
                     skill_sources,
                     project_skills_dir,
-                    scope=scope,
-                    app="workspace",
+                    scope,
+                    "workspace",
+                    load_state_paths(managed_paths, scope),
+                    load_state_links(managed_links, scope),
                 )
                 for a in skill_actions:
-                    _mark_workspace(a)
+                    _prepare_workspace_action(
+                        a,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
                 actions.extend(skill_actions)
-                desired_links_by_scope.setdefault(scope, []).extend(desired)
+                desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
                 skipped.extend(skill_skipped)
 
-            # Workspace agent entries symlinked into workspace project dir
+            # Workspace agent entries compiled into workspace project dir
             if agent_sources and meta.supports_import_agents:
                 scope = f"ws:{svc.app_id.value}:agents_entries"
-                plan_agent_actions = getattr(project_svc, "plan_agent_actions", None)
-                if callable(plan_agent_actions):
-                    agent_actions, desired_paths, agent_skipped = plan_agent_actions(
-                        agent_sources,
-                        project_agents_dir or ws_project_root / "agents",
-                        scope,
-                        "workspace",
-                        load_state_paths(managed_paths, scope),
-                    )
-                    desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
-                else:
-                    agent_actions, desired, agent_skipped = plan_resource_symlinks(
-                        agent_sources,
-                        project_agents_dir or ws_project_root / "agents",
-                        scope=scope,
-                        app="workspace",
-                    )
-                    desired_links_by_scope.setdefault(scope, []).extend(desired)
+                plan_agent_actions = getattr(project_svc, "plan_agent_actions")
+                agent_actions, desired_paths, agent_skipped = plan_agent_actions(
+                    agent_sources,
+                    project_agents_dir or ws_project_root / "agents",
+                    scope,
+                    "workspace",
+                    load_state_paths(managed_paths, scope),
+                    load_state_links(managed_links, scope),
+                )
+                desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
                 for a in agent_actions:
-                    _mark_workspace(a)
+                    _prepare_workspace_action(
+                        a,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
                 actions.extend(agent_actions)
                 skipped.extend(agent_skipped)
 
-            # --- Repo symlinks for managed workspace config paths ---
-            # Also symlink into the workspace root itself so opening the whole workspace
-            # in an editor picks up the shared config.
-            def _plan_target_link(
-                *,
-                target: Path,
-                source: Path,
-                scope: str,
-                conflict_message: str,
-            ) -> None:
-                link_action = plan_symlink(
-                    target,
-                    source,
-                    scope=scope,
-                    app="workspace",
-                )
-                _mark_workspace(link_action)
-                actions.append(link_action)
-                desired_links_by_scope.setdefault(scope, []).append(target)
-                if link_action.status == ActionStatus.CONFLICT:
-                    skipped.append(conflict_message.format(path=target))
-
-            # Workspace root links
+            # Workspace root outputs
+            workspace_target_service = _create_workspace_project_service(
+                svc.app_id,
+                workspace_path / meta.project_dir_name,
+                ws_source,
+            )
             if should_render_workspace_config:
-                _plan_target_link(
-                    target=workspace_path
-                    / meta.project_dir_name
-                    / project_svc.repository.config_path.name,
-                    source=project_svc.repository.config_path,
-                    scope=f"ws:{svc.app_id.value}:workspace_root_mcp",
-                    conflict_message="Workspace root MCP link skipped (conflict): {path}",
+                scope = f"ws:{svc.app_id.value}:workspace_root_mcp"
+                mcp_action = workspace_target_service.build_action(common_servers or {})
+                _set_workspace_opencode_instructions(
+                    workspace_target_service,
+                    mcp_action,
+                    workspace_agents_target,
                 )
+                _prepare_workspace_action(
+                    mcp_action,
+                    workspace_name=workspace_name,
+                    scope=scope,
+                    removable_links=load_state_links(managed_links, scope),
+                )
+                actions.append(mcp_action)
+                desired_paths_by_scope.setdefault(scope, []).append(mcp_action.path)
             if skill_sources:
-                _plan_target_link(
-                    target=workspace_path / meta.project_dir_name / "skills",
-                    source=project_skills_dir,
-                    scope=f"ws:{svc.app_id.value}:workspace_root_skills_dir",
-                    conflict_message="Workspace root skills dir link skipped (conflict): {path}",
+                scope = f"ws:{svc.app_id.value}:workspace_root_skills_dir"
+                plan_skill_actions = getattr(
+                    workspace_target_service, "plan_skill_actions"
                 )
+                skill_actions, desired_paths, skill_skipped = plan_skill_actions(
+                    skill_sources,
+                    getattr(workspace_target_service.repository, "skills_dir"),
+                    scope,
+                    "workspace",
+                    load_state_paths(managed_paths, scope),
+                    load_state_links(managed_links, scope),
+                )
+                for a in skill_actions:
+                    _prepare_workspace_action(
+                        a,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
+                actions.extend(skill_actions)
+                desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
+                skipped.extend(skill_skipped)
             if agent_sources and meta.supports_import_agents:
-                _plan_target_link(
-                    target=workspace_path / meta.project_dir_name / "agents",
-                    source=project_agents_dir or ws_project_root / "agents",
-                    scope=f"ws:{svc.app_id.value}:workspace_root_agents_dir",
-                    conflict_message="Workspace root agents dir link skipped (conflict): {path}",
+                scope = f"ws:{svc.app_id.value}:workspace_root_agents_dir"
+                plan_agent_actions = getattr(
+                    workspace_target_service, "plan_agent_actions"
                 )
+                agent_actions, desired_paths, agent_skipped = plan_agent_actions(
+                    agent_sources,
+                    getattr(workspace_target_service.repository, "agents_dir"),
+                    scope,
+                    "workspace",
+                    load_state_paths(managed_paths, scope),
+                    load_state_links(managed_links, scope),
+                )
+                for a in agent_actions:
+                    _prepare_workspace_action(
+                        a,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
+                actions.extend(agent_actions)
+                desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
+                skipped.extend(agent_skipped)
 
             for repo in repos:
-                # MCP config file link
+                repo_target_service = _create_workspace_project_service(
+                    svc.app_id,
+                    repo / meta.project_dir_name,
+                    ws_source,
+                )
+
                 if should_render_workspace_config:
-                    _plan_target_link(
-                        target=repo
-                        / meta.project_dir_name
-                        / project_svc.repository.config_path.name,
-                        source=project_svc.repository.config_path,
-                        scope=f"ws:{svc.app_id.value}:repo_mcp",
-                        conflict_message="Workspace MCP link skipped (conflict): {path}",
+                    scope = f"ws:{svc.app_id.value}:repo_mcp"
+                    mcp_action = repo_target_service.build_action(common_servers or {})
+                    _set_workspace_opencode_instructions(
+                        repo_target_service,
+                        mcp_action,
+                        workspace_agents_target,
                     )
+                    _prepare_workspace_action(
+                        mcp_action,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
+                    actions.append(mcp_action)
+                    desired_paths_by_scope.setdefault(scope, []).append(mcp_action.path)
 
-                # Skills dir link
                 if skill_sources:
-                    _plan_target_link(
-                        target=repo / meta.project_dir_name / "skills",
-                        source=project_skills_dir,
-                        scope=f"ws:{svc.app_id.value}:repo_skills_dir",
-                        conflict_message="Workspace skills dir link skipped (conflict): {path}",
+                    scope = f"ws:{svc.app_id.value}:repo_skills_dir"
+                    plan_skill_actions = getattr(
+                        repo_target_service, "plan_skill_actions"
                     )
+                    skill_actions, desired_paths, skill_skipped = plan_skill_actions(
+                        skill_sources,
+                        getattr(repo_target_service.repository, "skills_dir"),
+                        scope,
+                        "workspace",
+                        load_state_paths(managed_paths, scope),
+                        load_state_links(managed_links, scope),
+                    )
+                    for a in skill_actions:
+                        _prepare_workspace_action(
+                            a,
+                            workspace_name=workspace_name,
+                            scope=scope,
+                            removable_links=load_state_links(managed_links, scope),
+                        )
+                    actions.extend(skill_actions)
+                    desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
+                    skipped.extend(skill_skipped)
 
-                # Agents dir link
                 if agent_sources and meta.supports_import_agents:
-                    _plan_target_link(
-                        target=repo / meta.project_dir_name / "agents",
-                        source=project_agents_dir or ws_project_root / "agents",
-                        scope=f"ws:{svc.app_id.value}:repo_agents_dir",
-                        conflict_message="Workspace agents dir link skipped (conflict): {path}",
+                    scope = f"ws:{svc.app_id.value}:repo_agents_dir"
+                    plan_agent_actions = getattr(
+                        repo_target_service, "plan_agent_actions"
                     )
-
-        if workspace_agents_source is not None:
-            target = workspace_path / AGENTS_FILENAME
-            action = plan_symlink(
-                target,
-                workspace_agents_source,
-                scope="rules",
-                app="workspace",
-            )
-            _mark_workspace(action)
-            actions.append(action)
-            desired_rules_links.append(target)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(f"Workspace rules link skipped (conflict): {target}")
+                    agent_actions, desired_paths, agent_skipped = plan_agent_actions(
+                        agent_sources,
+                        getattr(repo_target_service.repository, "agents_dir"),
+                        scope,
+                        "workspace",
+                        load_state_paths(managed_paths, scope),
+                        load_state_links(managed_links, scope),
+                    )
+                    for a in agent_actions:
+                        _prepare_workspace_action(
+                            a,
+                            workspace_name=workspace_name,
+                            scope=scope,
+                            removable_links=load_state_links(managed_links, scope),
+                        )
+                    actions.extend(agent_actions)
+                    desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
+                    skipped.extend(agent_skipped)
 
         # --- Stale cleanup ---
         active_workspace_apps = {
@@ -395,7 +516,7 @@ class SyncPlanner:
 
         stale_rules = plan_stale_group(
             old_links=load_state_links(managed_links, "rules"),
-            desired_links=desired_rules_links,
+            desired_links=[],
             remove_detail="remove stale workspace rules symlink",
             conflict_detail="stale workspace rules path is not a symlink",
             noop_detail="stale workspace rules symlink already absent",
@@ -405,14 +526,20 @@ class SyncPlanner:
             skipped_message="Stale workspace rules cleanup skipped (not symlink): {path}",
         )
         for a in stale_rules:
-            _mark_workspace(a)
+            _prepare_workspace_action(
+                a,
+                workspace_name=workspace_name,
+                scope="rules",
+                removable_links=[],
+            )
         actions.extend(stale_rules)
 
-        # Per-scope stale cleanup for skills/agents
-        for scope, desired in desired_links_by_scope.items():
+        for scope, desired in desired_paths_by_scope.items():
+            if scope == "rules":
+                continue
             stale_actions = plan_stale_group(
                 old_links=load_state_links(managed_links, scope),
-                desired_links=desired,
+                desired_links=[],
                 remove_detail=f"remove stale workspace {scope} symlink",
                 conflict_detail=f"stale workspace {scope} path is not a symlink",
                 noop_detail=f"stale workspace {scope} symlink already absent",
@@ -422,10 +549,13 @@ class SyncPlanner:
                 skipped_message="Stale workspace cleanup skipped (not symlink): {path}",
             )
             for a in stale_actions:
-                _mark_workspace(a)
+                _prepare_workspace_action(
+                    a,
+                    workspace_name=workspace_name,
+                    scope=scope,
+                    removable_links=[],
+                )
             actions.extend(stale_actions)
-
-        for scope, desired in desired_paths_by_scope.items():
             stale_actions = plan_stale_files_group(
                 old_paths=load_state_paths(managed_paths, scope),
                 desired_paths=desired,
@@ -438,16 +568,22 @@ class SyncPlanner:
                 skipped_message="Stale workspace cleanup skipped (not file): {path}",
             )
             for a in stale_actions:
-                _mark_workspace(a)
+                _prepare_workspace_action(
+                    a,
+                    workspace_name=workspace_name,
+                    scope=scope,
+                    removable_links=[],
+                )
             actions.extend(stale_actions)
 
-        # Clean scopes in state that no longer have any desired links
         all_stale_scopes = {
             scope
             for scope in managed_links.keys()
-            if scope != "rules"
-            and scope not in desired_links_by_scope
-            and _workspace_scope_matches_app(scope, active_workspace_apps)
+            if scope not in desired_paths_by_scope
+            and (
+                scope == "rules"
+                or _workspace_scope_matches_app(scope, active_workspace_apps)
+            )
         }
         for scope in sorted(all_stale_scopes):
             stale_actions = plan_stale_group(
@@ -462,15 +598,22 @@ class SyncPlanner:
                 skipped_message="Stale workspace cleanup skipped (not symlink): {path}",
             )
             for a in stale_actions:
-                _mark_workspace(a)
+                _prepare_workspace_action(
+                    a,
+                    workspace_name=workspace_name,
+                    scope=scope,
+                    removable_links=[],
+                )
             actions.extend(stale_actions)
 
         all_stale_path_scopes = {
             scope
             for scope in managed_paths.keys()
-            if scope != "rules"
-            and scope not in desired_paths_by_scope
-            and _workspace_scope_matches_app(scope, active_workspace_apps)
+            if scope not in desired_paths_by_scope
+            and (
+                scope == "rules"
+                or _workspace_scope_matches_app(scope, active_workspace_apps)
+            )
         }
         for scope in sorted(all_stale_path_scopes):
             stale_actions = plan_stale_files_group(
@@ -485,7 +628,12 @@ class SyncPlanner:
                 skipped_message="Stale workspace cleanup skipped (not file): {path}",
             )
             for a in stale_actions:
-                _mark_workspace(a)
+                _prepare_workspace_action(
+                    a,
+                    workspace_name=workspace_name,
+                    scope=scope,
+                    removable_links=[],
+                )
             actions.extend(stale_actions)
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)

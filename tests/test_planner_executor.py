@@ -110,7 +110,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
     planned_workspace_targets = {
         str(action.path)
         for action in plan.actions
-        if action.kind == ActionKind.SYMLINK
+        if action.kind == ActionKind.WRITE_TEXT
         and action.path.name == AGENTS_FILENAME
         and "example-workspace" in str(action.path)
     }
@@ -134,10 +134,9 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         "enabled": True,
     }
 
-    workspace_agents = ws_config_dir / AGENTS_FILENAME
     workspace_root_link = workspace_root / AGENTS_FILENAME
-    assert workspace_root_link.is_symlink()
-    assert workspace_root_link.resolve() == workspace_agents.resolve()
+    assert workspace_root_link.is_file()
+    assert not workspace_root_link.is_symlink()
 
     for repo_name in ["shop-api", "shop-web"]:
         link_path = workspace_root / repo_name / AGENTS_FILENAME
@@ -148,7 +147,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
 
     ws_repo = WorkspaceConfigRepository(root=ws_config_dir)
     ws_state = ws_repo.load_state()
-    assert len(ws_state["managed_links"]["rules"]) == 1
+    assert len(ws_state["managed_paths"]["rules"]) == 1
 
 
 def test_plan_marks_config_create_when_missing(
@@ -281,13 +280,13 @@ def test_targeted_execute_preserves_workspace_state_for_other_apps(
     assert failures == []
     assert applied > 0
 
-    managed_links = WorkspaceConfigRepository(root=ws_config).load_state()[
-        "managed_links"
+    managed_paths = WorkspaceConfigRepository(root=ws_config).load_state()[
+        "managed_paths"
     ]
-    assert "ws:codex:workspace_root_mcp" in managed_links
-    assert "ws:codex:repo_mcp" in managed_links
-    assert "ws:opencode:workspace_root_mcp" in managed_links
-    assert "ws:opencode:repo_mcp" in managed_links
+    assert "ws:codex:workspace_root_mcp" in managed_paths
+    assert "ws:codex:repo_mcp" in managed_paths
+    assert "ws:opencode:workspace_root_mcp" in managed_paths
+    assert "ws:opencode:repo_mcp" in managed_paths
 
 
 def test_plan_treats_empty_opencode_config_as_update(
@@ -365,12 +364,7 @@ def test_opencode_build_plan_includes_compiled_agent_files(
 ) -> None:
     (core_root / "agents").mkdir(parents=True)
     (core_root / "agents" / "planner.md").write_text(
-        "---\n"
-        "model: openai/gpt-5\n"
-        "model_reasoning_effort: high\n"
-        "---\n"
-        "\n"
-        "Agent body.\n",
+        "---\nmodel: openai/gpt-5\nmodel_reasoning_effort: high\n---\n\nAgent body.\n",
         encoding="utf-8",
     )
 
@@ -426,10 +420,7 @@ def test_opencode_build_plan_includes_compiled_skill_files_for_bundle(
     bundle_dir = core_root / "skills" / "my-skill"
     bundle_dir.mkdir(parents=True)
     (bundle_dir / "meta.yaml").write_text(
-        "spec_version: v1\n"
-        "kind: skill\n"
-        "name: my-skill\n"
-        "description: Review skill\n",
+        "spec_version: v1\nkind: skill\nname: my-skill\ndescription: Review skill\n",
         encoding="utf-8",
     )
     (bundle_dir / "prompt.md").write_text("Skill body.\n", encoding="utf-8")
@@ -530,10 +521,7 @@ def test_cursor_build_plan_includes_compiled_agent_files_for_bundle(
     bundle_dir = core_root / "agents" / "planner"
     bundle_dir.mkdir(parents=True)
     (bundle_dir / "meta.yaml").write_text(
-        "spec_version: v1\n"
-        "kind: agent\n"
-        "name: planner\n"
-        "description: Reviewer\n",
+        "spec_version: v1\nkind: agent\nname: planner\ndescription: Reviewer\n",
         encoding="utf-8",
     )
     (bundle_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")

@@ -156,14 +156,15 @@ def test_stale_workspace_cleanup_e2e(
     assert apply1.exit_code == 0
 
     link = workspace_root / AGENTS_FILENAME
-    assert link.is_symlink()
+    assert link.is_file()
+    assert not link.is_symlink()
 
     # Remove workspace config rules (simulates removing config)
     (ws_config_dir / "rules" / "shared.md").unlink()
 
     apply2 = cli_runner.invoke(cli, ["apply"])
     assert apply2.exit_code == 0
-    assert not link.is_symlink()
+    assert not link.exists()
 
 
 def test_cross_app_isolation(
@@ -410,10 +411,7 @@ def test_bundle_skills_and_agents_apply_all_apps(
     agent_dir = core_root / "agents" / "planner"
     agent_dir.mkdir(parents=True)
     (agent_dir / "meta.yaml").write_text(
-        "spec_version: v1\n"
-        "kind: agent\n"
-        "name: planner\n"
-        "description: Shared planner\n",
+        "spec_version: v1\nkind: agent\nname: planner\ndescription: Shared planner\n",
         encoding="utf-8",
     )
     (agent_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
