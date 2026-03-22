@@ -99,8 +99,9 @@ class StatusService:
     ) -> WorkspaceRepoStatusRow:
         issues: list[str] = []
 
-        # Check workspace-managed links into repo project dirs.
-        # Workspace rendering happens in ws_source.root/<project_dir_name>/..., then repos symlink to those.
+        # Check workspace-managed config files in repo project dirs.
+        # Workspace rendering creates regular files (not symlinks) in
+        # ws_source.root/<project_dir_name>/..., and repos get the same.
 
         for meta in app_metas or []:
             filename = meta.config_filename
@@ -114,8 +115,7 @@ class StatusService:
                 continue
 
             target = repo_path / meta.project_dir_name / filename
-            desired = str((ws_source.root / meta.project_dir_name / filename).resolve())
-            if not (target.is_symlink() and str(target.resolve()) == desired):
+            if not target.exists():
                 issues.append(f"missing or mismatched {meta.app_id.value} mcp link")
 
         if ws_source.has_skills():
@@ -123,10 +123,7 @@ class StatusService:
                 if meta.project_dir_name is None:
                     continue
                 target = repo_path / meta.project_dir_name / "skills"
-                desired = str(
-                    (ws_source.root / meta.project_dir_name / "skills").resolve()
-                )
-                if not (target.is_symlink() and str(target.resolve()) == desired):
+                if not target.exists():
                     issues.append(
                         f"missing or mismatched {meta.app_id.value} skills link"
                     )
@@ -138,10 +135,7 @@ class StatusService:
                 if meta.project_dir_name is None:
                     continue
                 target = repo_path / meta.project_dir_name / "agents"
-                desired = str(
-                    (ws_source.root / meta.project_dir_name / "agents").resolve()
-                )
-                if not (target.is_symlink() and str(target.resolve()) == desired):
+                if not target.exists():
                     issues.append(
                         f"missing or mismatched {meta.app_id.value} agents link"
                     )
