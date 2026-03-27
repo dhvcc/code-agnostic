@@ -2,6 +2,11 @@
 
 from pathlib import Path
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover
+    import tomli as tomllib  # type: ignore
+
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
@@ -563,6 +568,35 @@ def test_workspace_agents_synced_to_codex(
         repo_actions[0].path
         == workspace_root / "repo-a" / ".codex" / "agents" / "planner.toml"
     )
+
+    workspace_config_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:codex:workspace_root_mcp"
+    ]
+    assert len(workspace_config_actions) == 1
+    workspace_config_payload = tomllib.loads(workspace_config_actions[0].payload)
+    assert workspace_config_actions[0].path == workspace_root / ".codex" / "config.toml"
+    assert workspace_config_payload["agents"]["planner"] == {
+        "description": "planner",
+        "config_file": "agents/planner.toml",
+    }
+
+    repo_config_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:codex:repo_mcp"
+    ]
+    assert len(repo_config_actions) == 1
+    repo_config_payload = tomllib.loads(repo_config_actions[0].payload)
+    assert (
+        repo_config_actions[0].path
+        == workspace_root / "repo-a" / ".codex" / "config.toml"
+    )
+    assert repo_config_payload["agents"]["planner"] == {
+        "description": "planner",
+        "config_file": "agents/planner.toml",
+    }
 
 
 def test_workspace_agents_synced_to_opencode(

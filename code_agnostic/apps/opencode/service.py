@@ -106,7 +106,11 @@ class OpenCodeConfigService(RegisteredAppConfigService):
             )
         return payload
 
-    def build_action(self, common_servers: dict[str, MCPServerDTO]) -> Action:
+    def build_action(
+        self,
+        common_servers: dict[str, MCPServerDTO],
+        agent_sources: list[Path] | None = None,
+    ) -> Action:
         existing = self._opencode_repo.load_config()
         if existing or self._opencode_repo.config_path.exists():
             self.validate_config(existing)

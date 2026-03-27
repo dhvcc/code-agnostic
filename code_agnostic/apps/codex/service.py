@@ -114,7 +114,11 @@ class CodexConfigService(RegisteredAppConfigService):
             return ActionStatus.NOOP
         return ActionStatus.UPDATE
 
-    def build_action(self, common_servers: dict[str, MCPServerDTO]) -> Action:
+    def build_action(
+        self,
+        common_servers: dict[str, MCPServerDTO],
+        agent_sources: list[Path] | None = None,
+    ) -> Action:
         existing = self._codex_repo.load_config()
         if existing or self._codex_repo.config_path.exists():
             self.validate_config(existing)
@@ -125,8 +129,18 @@ class CodexConfigService(RegisteredAppConfigService):
         for key, value in base.items():
             if key == "mcp_servers":
                 continue
+            if key == "agents" and isinstance(value, dict):
+                merged["agents"] = self._merge_agents_payload(
+                    merged.get("agents"), value
+                )
+                continue
             merged[key] = deepcopy(value)
         self.set_mcp_payload(merged, desired_mcp)
+        if agent_sources:
+            merged["agents"] = self._merge_agents_payload(
+                merged.get("agents"),
+                self._build_agent_registry(agent_sources),
+            )
         self.validate_config(merged)
 
         return Action(
@@ -137,6 +151,38 @@ class CodexConfigService(RegisteredAppConfigService):
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
         )
+
+    def _merge_agents_payload(
+        self, existing: Any, overlay: dict[str, Any]
+    ) -> dict[str, Any]:
+        merged = dict(existing) if isinstance(existing, dict) else {}
+        for key, value in overlay.items():
+            merged[key] = deepcopy(value)
+        return merged
+
+    def _build_agent_registry(self, sources: list[Path]) -> dict[str, dict[str, Any]]:
+        registry: dict[str, dict[str, Any]] = {}
+        for source in sources:
+            try:
+                agent = parse_agent(source)
+            except InvalidConfigSchemaError:
+                raise
+            except Exception as exc:
+                raise InvalidConfigSchemaError(source, str(exc)) from exc
+
+            agent_name = agent.metadata.name or agent.name
+            target_name = (
+                normalize_codex_agent_filename(agent.metadata.name, agent.name)
+                + ".toml"
+            )
+            entry: dict[str, Any] = {
+                "description": agent.metadata.description or agent_name,
+                "config_file": (Path("agents") / target_name).as_posix(),
+            }
+            if agent.metadata.nickname_candidates:
+                entry["nickname_candidates"] = list(agent.metadata.nickname_candidates)
+            registry[agent_name] = entry
+        return registry
 
     def plan_skill_actions(
         self,

@@ -320,9 +320,14 @@ class SyncPlanner:
             )
             if svc.app_id == AppId.CODEX and ws_source.codex_base_path.exists():
                 should_render_workspace_config = True
+            if svc.app_id == AppId.CODEX and agent_sources:
+                should_render_workspace_config = True
             if should_render_workspace_config:
                 try:
-                    mcp_action = project_svc.build_action(mcp_payload)
+                    mcp_action = project_svc.build_action(
+                        mcp_payload,
+                        agent_sources=agent_sources,
+                    )
                     _set_workspace_opencode_instructions(
                         project_svc,
                         mcp_action,
@@ -390,7 +395,10 @@ class SyncPlanner:
             )
             if should_render_workspace_config:
                 scope = f"ws:{svc.app_id.value}:workspace_root_mcp"
-                mcp_action = workspace_target_service.build_action(mcp_payload)
+                mcp_action = workspace_target_service.build_action(
+                    mcp_payload,
+                    agent_sources=agent_sources,
+                )
                 _set_workspace_opencode_instructions(
                     workspace_target_service,
                     mcp_action,
@@ -460,7 +468,10 @@ class SyncPlanner:
 
                 if should_render_workspace_config:
                     scope = f"ws:{svc.app_id.value}:repo_mcp"
-                    mcp_action = repo_target_service.build_action(mcp_payload)
+                    mcp_action = repo_target_service.build_action(
+                        mcp_payload,
+                        agent_sources=agent_sources,
+                    )
                     _set_workspace_opencode_instructions(
                         repo_target_service,
                         mcp_action,

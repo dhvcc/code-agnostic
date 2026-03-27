@@ -193,7 +193,11 @@ class IAppConfigService(ABC):
         )
         return actions, skipped
 
-    def build_action(self, common_servers: dict[str, MCPServerDTO]) -> Action:
+    def build_action(
+        self,
+        common_servers: dict[str, MCPServerDTO],
+        agent_sources: list[Path] | None = None,
+    ) -> Action:
         existing = self.repository.load_config()
         if existing or self.repository.config_path.exists():
             self.validate_config(existing)
@@ -246,7 +250,10 @@ class IAppConfigService(ABC):
         )
         return SyncPlan(
             actions=[
-                self.build_action(common_servers),
+                self.build_action(
+                    common_servers,
+                    agent_sources=source_repository.list_agent_sources(),
+                ),
                 *skill_actions,
                 *agent_actions,
             ],

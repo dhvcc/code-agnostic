@@ -106,6 +106,11 @@ def test_apply_codex_renders_agents_and_global_agents_config(
         json.dumps({"agents": {"max_threads": 6, "max_depth": 1}}),
         encoding="utf-8",
     )
+    (tmp_path / ".codex").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".codex" / "config.toml").write_text(
+        "[agents.1]\n" 'description = "1"\n' 'config_file = "agents/1.toml"\n',
+        encoding="utf-8",
+    )
     (core_root / "agents").mkdir(parents=True, exist_ok=True)
     (core_root / "agents" / "planner.md").write_text(
         "---\n"
@@ -137,6 +142,15 @@ def test_apply_codex_renders_agents_and_global_agents_config(
     )
     assert config_payload["agents"]["max_threads"] == 6
     assert config_payload["agents"]["max_depth"] == 1
+    assert config_payload["agents"]["1"] == {
+        "description": "1",
+        "config_file": "agents/1.toml",
+    }
+    assert config_payload["agents"]["planner"] == {
+        "description": "Planning specialist",
+        "nickname_candidates": ["Atlas"],
+        "config_file": "agents/planner.toml",
+    }
 
     agent_payload = tomllib.loads(
         (tmp_path / ".codex" / "agents" / "planner.toml").read_text(encoding="utf-8")
