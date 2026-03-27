@@ -265,8 +265,9 @@ class SyncPlanner:
 
         # --- Workspace-level app config rendering + direct target writes ---
 
-        # Workspace sources are intentionally isolated from global sources.
-        # Global app configs still apply naturally; workspace config only adds workspace-specific config.
+        # Workspace `mcp.base.json` overlays the core (global) MCP base. Other apps use
+        # workspace-only MCP here. Cursor additionally falls back to the global base so
+        # project `.cursor/mcp.json` matches `~/.cursor/mcp.json` when no workspace MCP file exists.
         skill_sources = ws_source.list_skill_sources()
         agent_sources = ws_source.list_agent_sources()
 
@@ -277,6 +278,13 @@ class SyncPlanner:
                 common_servers = common_mcp_to_dto(mcp_base.get("mcpServers", {}))
             except SyncAppError as exc:
                 return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
+
+        try:
+            global_servers = common_mcp_to_dto(
+                self.core.load_mcp_base().get("mcpServers", {})
+            )
+        except SyncAppError as exc:
+            return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
 
         for svc in self.app_services:
             meta = app_metadata(svc.app_id)
@@ -299,15 +307,22 @@ class SyncPlanner:
                 else None
             )
 
+            if svc.app_id == AppId.CURSOR:
+                mcp_payload = {**global_servers, **(common_servers or {})}
+                has_workspace_mcp_render = bool(mcp_payload)
+            else:
+                mcp_payload = common_servers or {}
+                has_workspace_mcp_render = common_servers is not None
+
             # Render workspace config once into workspace project dir
-            should_render_workspace_config = common_servers is not None or (
+            should_render_workspace_config = has_workspace_mcp_render or (
                 workspace_agents_target is not None and svc.app_id == AppId.OPENCODE
             )
             if svc.app_id == AppId.CODEX and ws_source.codex_base_path.exists():
                 should_render_workspace_config = True
             if should_render_workspace_config:
                 try:
-                    mcp_action = project_svc.build_action(common_servers or {})
+                    mcp_action = project_svc.build_action(mcp_payload)
                     _set_workspace_opencode_instructions(
                         project_svc,
                         mcp_action,
@@ -375,7 +390,7 @@ class SyncPlanner:
             )
             if should_render_workspace_config:
                 scope = f"ws:{svc.app_id.value}:workspace_root_mcp"
-                mcp_action = workspace_target_service.build_action(common_servers or {})
+                mcp_action = workspace_target_service.build_action(mcp_payload)
                 _set_workspace_opencode_instructions(
                     workspace_target_service,
                     mcp_action,
@@ -445,7 +460,7 @@ class SyncPlanner:
 
                 if should_render_workspace_config:
                     scope = f"ws:{svc.app_id.value}:repo_mcp"
-                    mcp_action = repo_target_service.build_action(common_servers or {})
+                    mcp_action = repo_target_service.build_action(mcp_payload)
                     _set_workspace_opencode_instructions(
                         repo_target_service,
                         mcp_action,

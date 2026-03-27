@@ -60,7 +60,7 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         toggleable=True,
         importable=True,
         supports_import_agents=True,
-        supports_workspace_propagation=False,
+        supports_workspace_propagation=True,
         project_dir_name=CURSOR_PROJECT_DIRNAME,
         config_filename=CURSOR_CONFIG_FILENAME,
     ),

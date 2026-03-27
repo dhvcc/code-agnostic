@@ -93,11 +93,10 @@ def test_plan_rules_compiled_only_for_workspace_propagation_apps(
         for a in plan.actions
         if a.kind == ActionKind.WRITE_TEXT and a.scope == "rules"
     ]
-    # Cursor workspace propagation is intentionally disabled.
     assert len(rule_actions) == 1
 
     assert any("workspace rules file" in a.detail for a in rule_actions)
 
-    # Cursor should not compile workspace rules.
+    # Cursor does not duplicate compiled workspace rules (single AGENTS.md target).
     cursor_rules = [a for a in rule_actions if "cursor" in a.detail]
     assert cursor_rules == []

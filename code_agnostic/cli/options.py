@@ -81,3 +81,15 @@ def workspace_option(required: bool = False) -> Callable:
 
 def verbose_option() -> Callable:
     return click.option("-v", "--verbose", is_flag=True, default=False)
+
+
+def experimental_option() -> Callable:
+    return click.option(
+        "--experimental",
+        is_flag=True,
+        default=False,
+        help=(
+            "Enable experimental behavior: propagate Cursor workspace config into "
+            "each git sub-repository (.cursor/), not only the workspace root."
+        ),
+    )

@@ -107,6 +107,10 @@ class StatusService:
             filename = meta.config_filename
             if filename is None or meta.project_dir_name is None:
                 continue
+            # Cursor workspace MCP targets the workspace root by default; per-repo
+            # propagation is optional (--experimental) and not validated here.
+            if meta.app_id == AppId.CURSOR:
+                continue
 
             needs_config_link = ws_source.has_mcp() or (
                 ws_source.has_rules() and meta.app_id == AppId.OPENCODE
@@ -122,6 +126,8 @@ class StatusService:
             for meta in app_metas or []:
                 if meta.project_dir_name is None:
                     continue
+                if meta.app_id == AppId.CURSOR:
+                    continue
                 target = repo_path / meta.project_dir_name / "skills"
                 if not target.exists():
                     issues.append(
@@ -133,6 +139,8 @@ class StatusService:
                 if not meta.supports_import_agents:
                     continue
                 if meta.project_dir_name is None:
+                    continue
+                if meta.app_id == AppId.CURSOR:
                     continue
                 target = repo_path / meta.project_dir_name / "agents"
                 if not target.exists():

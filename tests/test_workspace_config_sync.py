@@ -206,7 +206,7 @@ def test_workspace_rules_file_planned_for_cursor(
 # --- Workspace MCP config sync ---
 
 
-def test_workspace_mcp_sync_skips_cursor_workspace_propagation(
+def test_workspace_mcp_sync_writes_cursor_workspace_root_and_subrepos(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -228,9 +228,13 @@ def test_workspace_mcp_sync_skips_cursor_workspace_propagation(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    workspace_actions = [a for a in plan.actions if a.app == "workspace"]
-    assert workspace_actions == []
-    assert not (ws_config / ".cursor").exists()
+    root_mcp = [a for a in plan.actions if a.scope == "ws:cursor:workspace_root_mcp"]
+    assert len(root_mcp) == 1
+    assert root_mcp[0].path == workspace_root / ".cursor" / "mcp.json"
+    repo_mcp = [a for a in plan.actions if a.scope == "ws:cursor:repo_mcp"]
+    assert len(repo_mcp) == 1
+    assert repo_mcp[0].path == workspace_root / "repo-a" / ".cursor" / "mcp.json"
+    assert (ws_config / ".cursor" / "mcp.json") in {a.path for a in plan.actions}
 
 
 def test_workspace_opencode_config_includes_workspace_agents_file(
@@ -404,7 +408,7 @@ def test_workspace_plan_skips_legacy_link_cleanup_when_same_path_is_now_generate
 # --- Workspace skill symlinks ---
 
 
-def test_workspace_skills_skip_cursor_workspace_propagation(
+def test_workspace_skills_sync_cursor_workspace_root_and_subrepos(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -423,19 +427,19 @@ def test_workspace_skills_skip_cursor_workspace_propagation(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    cursor_workspace_actions = [
-        a
-        for a in plan.actions
-        if a.scope is not None and a.scope.startswith("ws:cursor:")
-    ]
-    assert cursor_workspace_actions == []
-    assert not (workspace_root / "repo-a" / ".cursor").exists()
+    assert [a for a in plan.actions if a.scope == "ws:cursor:workspace_root_skills_dir"]
+    repo_skills = [a for a in plan.actions if a.scope == "ws:cursor:repo_skills_dir"]
+    assert len(repo_skills) == 1
+    assert (
+        repo_skills[0].path
+        == workspace_root / "repo-a" / ".cursor" / "skills" / "my-skill" / "SKILL.md"
+    )
 
 
 # --- Workspace agent symlinks ---
 
 
-def test_workspace_agents_skip_cursor_workspace_propagation(
+def test_workspace_agents_sync_cursor_workspace_root_and_subrepos(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -454,13 +458,72 @@ def test_workspace_agents_skip_cursor_workspace_propagation(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    cursor_workspace_actions = [
-        a
-        for a in plan.actions
-        if a.scope is not None and a.scope.startswith("ws:cursor:")
-    ]
-    assert cursor_workspace_actions == []
-    assert not (workspace_root / "repo-a" / ".cursor").exists()
+    assert [a for a in plan.actions if a.scope == "ws:cursor:workspace_root_agents_dir"]
+    repo_agents = [a for a in plan.actions if a.scope == "ws:cursor:repo_agents_dir"]
+    assert len(repo_agents) == 1
+    assert (
+        repo_agents[0].path
+        == workspace_root / "repo-a" / ".cursor" / "agents" / "planner.md"
+    )
+
+
+def test_workspace_cursor_mcp_merges_global_when_workspace_has_no_mcp_file(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    """Project `.cursor/mcp.json` should mirror global MCP even without workspaces/.../mcp.base.json."""
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    write_json(
+        core_root / "config" / "mcp.base.json",
+        {
+            "mcpServers": {
+                "global": {"command": "npx", "args": ["-y", "global-server"]},
+            }
+        },
+    )
+
+    cursor_root = tmp_path / ".cursor"
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+
+    root_mcp = [a for a in plan.actions if a.scope == "ws:cursor:workspace_root_mcp"]
+    assert len(root_mcp) == 1
+    payload = root_mcp[0].payload
+    assert isinstance(payload, dict)
+    assert payload["mcpServers"]["global"]["command"] == "npx"
+
+
+def test_workspace_cursor_subrepo_propagation_enabled_by_default(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"test-server": {"url": "https://test.example.com/mcp"}}},
+    )
+
+    cursor_root = tmp_path / ".cursor"
+    plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
+    repo_mcp = [a for a in plan.actions if a.scope == "ws:cursor:repo_mcp"]
+    assert len(repo_mcp) == 1
+    assert repo_mcp[0].path == workspace_root / "repo-a" / ".cursor" / "mcp.json"
 
 
 def test_workspace_agents_synced_to_codex(
@@ -644,7 +707,7 @@ def test_full_workspace_config_roundtrip(
         link = workspace_root / repo_name / AGENTS_FILENAME
         assert not link.exists()
 
-    # Cursor workspace propagation is intentionally disabled.
+    # This plan omits Cursor; no workspace .cursor outputs.
     assert not (ws_config / ".cursor").exists()
     assert not (workspace_root / ".cursor").exists()
     for repo_name in ["repo-a", "repo-b"]:

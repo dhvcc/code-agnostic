@@ -168,6 +168,108 @@ def test_apply_cursor_target_does_not_apply_workspace_links(
     assert not repo_rules_link.exists()
 
 
+def test_apply_cursor_writes_workspace_root_mcp_json(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("cursor")
+
+    workspace_root = tmp_path / "microservice-workspace"
+    workspace_root.mkdir()
+    (workspace_root / "service-a" / ".git").mkdir(parents=True)
+
+    assert (
+        cli_runner.invoke(
+            cli,
+            [
+                "workspaces",
+                "add",
+                "--name",
+                "workspace-example",
+                "--path",
+                str(workspace_root),
+            ],
+        ).exit_code
+        == 0
+    )
+
+    ws_config_dir = core_root / "workspaces" / "workspace-example"
+    (ws_config_dir / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "ws-only": {"url": "https://ws.example.com/mcp"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
+    assert apply_result.exit_code == 0
+
+    mcp_path = workspace_root / ".cursor" / "mcp.json"
+    assert mcp_path.is_file()
+    payload = json.loads(mcp_path.read_text(encoding="utf-8"))
+    assert payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
+    sub_mcp = workspace_root / "service-a" / ".cursor" / "mcp.json"
+    assert sub_mcp.is_file()
+    sub_payload = json.loads(sub_mcp.read_text(encoding="utf-8"))
+    assert sub_payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
+
+
+def test_apply_cursor_writes_subrepo_mcp_json(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("cursor")
+
+    workspace_root = tmp_path / "microservice-workspace"
+    workspace_root.mkdir()
+    (workspace_root / "service-a" / ".git").mkdir(parents=True)
+
+    assert (
+        cli_runner.invoke(
+            cli,
+            [
+                "workspaces",
+                "add",
+                "--name",
+                "workspace-example",
+                "--path",
+                str(workspace_root),
+            ],
+        ).exit_code
+        == 0
+    )
+
+    ws_config_dir = core_root / "workspaces" / "workspace-example"
+    (ws_config_dir / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "ws-only": {"url": "https://ws.example.com/mcp"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
+    assert apply_result.exit_code == 0
+
+    sub_mcp = workspace_root / "service-a" / ".cursor" / "mcp.json"
+    assert sub_mcp.is_file()
+    payload = json.loads(sub_mcp.read_text(encoding="utf-8"))
+    assert payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
+
+
 def test_apply_cursor_aborts_on_invalid_cursor_json(
     minimal_shared_config: Path,
     tmp_path: Path,

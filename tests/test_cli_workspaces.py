@@ -194,7 +194,7 @@ def test_workspaces_git_exclude_can_target_single_workspace(
     exclude_a = ws_a / "repo-a" / ".git" / "info" / "exclude"
     exclude_b = ws_b / "repo-b" / ".git" / "info" / "exclude"
 
-    assert ".cursor" not in exclude_a.read_text(encoding="utf-8")
+    assert ".cursor" in exclude_a.read_text(encoding="utf-8")
     assert not exclude_b.exists()
 
 
