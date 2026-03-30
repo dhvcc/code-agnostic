@@ -18,6 +18,10 @@
     "AbsolutePathBuf": {
       "type": "string"
     },
+    "AppToolApproval": {
+      "enum": ["auto", "prompt", "approve"],
+      "type": "string"
+    },
     "AgentRoleToml": {
       "type": "object",
       "additionalProperties": false,
@@ -41,6 +45,17 @@
         "$ref": "#/definitions/AgentRoleToml"
       }
     },
+    "McpServerToolConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approval_mode": {
+          "allOf": [{ "$ref": "#/definitions/AppToolApproval" }],
+          "description": "Approval mode for this tool."
+        }
+      },
+      "description": "Per-tool approval settings for a single MCP server tool."
+    },
     "RawMcpServerConfig": {
       "type": "object",
       "additionalProperties": false,
@@ -57,12 +72,24 @@
         "env_http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
         "env_vars": { "type": "array", "items": { "type": "string" } },
         "http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
+        "name": {
+          "type": "string",
+          "default": null,
+          "description": "Legacy display-name field accepted for backward compatibility."
+        },
         "oauth_resource": { "type": "string", "default": null },
         "required": { "type": "boolean" },
         "scopes": { "type": "array", "items": { "type": "string" } },
         "startup_timeout_ms": { "type": "integer", "minimum": 0 },
         "startup_timeout_sec": { "type": "number" },
         "tool_timeout_sec": { "type": "number" },
+        "tools": {
+          "type": "object",
+          "default": null,
+          "additionalProperties": {
+            "$ref": "#/definitions/McpServerToolConfig"
+          }
+        },
         "url": { "type": "string" }
       }
     }
