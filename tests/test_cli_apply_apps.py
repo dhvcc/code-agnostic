@@ -270,6 +270,53 @@ def test_apply_cursor_writes_subrepo_mcp_json(
     assert payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
 
 
+def test_apply_cursor_does_not_write_workspace_mcp_from_global_config_only(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("cursor")
+
+    workspace_root = tmp_path / "microservice-workspace"
+    workspace_root.mkdir()
+    (workspace_root / "service-a" / ".git").mkdir(parents=True)
+
+    assert (
+        cli_runner.invoke(
+            cli,
+            [
+                "workspaces",
+                "add",
+                "--name",
+                "workspace-example",
+                "--path",
+                str(workspace_root),
+            ],
+        ).exit_code
+        == 0
+    )
+
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "global-only": {"command": "npx", "args": ["-y", "global-server"]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
+    assert apply_result.exit_code == 0
+
+    assert (tmp_path / ".cursor" / "mcp.json").is_file()
+    assert not (workspace_root / ".cursor" / "mcp.json").exists()
+    assert not (workspace_root / "service-a" / ".cursor" / "mcp.json").exists()
+
+
 def test_apply_cursor_aborts_on_invalid_cursor_json(
     minimal_shared_config: Path,
     tmp_path: Path,

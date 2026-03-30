@@ -472,13 +472,13 @@ def test_workspace_agents_sync_cursor_workspace_root_and_subrepos(
     )
 
 
-def test_workspace_cursor_mcp_merges_global_when_workspace_has_no_mcp_file(
+def test_workspace_cursor_does_not_render_global_mcp_when_workspace_has_no_mcp_file(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
     write_json,
 ) -> None:
-    """Project `.cursor/mcp.json` should mirror global MCP even without workspaces/.../mcp.base.json."""
+    """Workspace Cursor config should not mirror global MCP into project config."""
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
     (workspace_root / "repo-a" / ".git").mkdir(parents=True)
@@ -499,10 +499,9 @@ def test_workspace_cursor_mcp_merges_global_when_workspace_has_no_mcp_file(
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
     root_mcp = [a for a in plan.actions if a.scope == "ws:cursor:workspace_root_mcp"]
-    assert len(root_mcp) == 1
-    payload = root_mcp[0].payload
-    assert isinstance(payload, dict)
-    assert payload["mcpServers"]["global"]["command"] == "npx"
+    repo_mcp = [a for a in plan.actions if a.scope == "ws:cursor:repo_mcp"]
+    assert root_mcp == []
+    assert repo_mcp == []
 
 
 def test_workspace_cursor_subrepo_propagation_enabled_by_default(

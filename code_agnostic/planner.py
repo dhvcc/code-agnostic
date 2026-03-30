@@ -265,9 +265,9 @@ class SyncPlanner:
 
         # --- Workspace-level app config rendering + direct target writes ---
 
-        # Workspace `mcp.base.json` overlays the core (global) MCP base. Other apps use
-        # workspace-only MCP here. Cursor additionally falls back to the global base so
-        # project `.cursor/mcp.json` matches `~/.cursor/mcp.json` when no workspace MCP file exists.
+        # Workspace app config renders workspace-local MCP only. Global MCP remains in the
+        # app-level config (`~/.cursor/mcp.json`, `~/.config/opencode/opencode.json`, etc.)
+        # and is not duplicated into workspace-generated project config.
         skill_sources = ws_source.list_skill_sources()
         agent_sources = ws_source.list_agent_sources()
 
@@ -278,13 +278,6 @@ class SyncPlanner:
                 common_servers = common_mcp_to_dto(mcp_base.get("mcpServers", {}))
             except SyncAppError as exc:
                 return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
-
-        try:
-            global_servers = common_mcp_to_dto(
-                self.core.load_mcp_base().get("mcpServers", {})
-            )
-        except SyncAppError as exc:
-            return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
 
         for svc in self.app_services:
             meta = app_metadata(svc.app_id)
@@ -307,12 +300,8 @@ class SyncPlanner:
                 else None
             )
 
-            if svc.app_id == AppId.CURSOR:
-                mcp_payload = {**global_servers, **(common_servers or {})}
-                has_workspace_mcp_render = bool(mcp_payload)
-            else:
-                mcp_payload = common_servers or {}
-                has_workspace_mcp_render = common_servers is not None
+            mcp_payload = common_servers or {}
+            has_workspace_mcp_render = common_servers is not None
 
             # Render workspace config once into workspace project dir
             should_render_workspace_config = has_workspace_mcp_render or (
