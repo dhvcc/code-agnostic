@@ -9,7 +9,7 @@ from code_agnostic.constants import (
     SKILLS_DIRNAME,
 )
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
-from code_agnostic.utils import read_json_safe, write_json
+from code_agnostic.utils import merge_dict_overlay, read_json_safe, write_json
 
 
 class OpenCodeConfigRepository(IAppConfigRepository):
@@ -69,6 +69,10 @@ class OpenCodeConfigRepository(IAppConfigRepository):
         for key, value in base.items():
             if key == "permission" and isinstance(value, list):
                 continue
+            current = merged.get(key)
+            if isinstance(current, dict) and isinstance(value, dict):
+                merged[key] = merge_dict_overlay(current, value)
+                continue
             merged[key] = deepcopy(value)
         merged["mcp"] = deepcopy(mapped_mcp)
         return merged
@@ -101,5 +105,3 @@ class OpenCodeConfigRepository(IAppConfigRepository):
 
         if tools:
             merged["tools"] = tools
-
-        merged.pop("permission", None)

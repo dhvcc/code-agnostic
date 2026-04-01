@@ -70,6 +70,52 @@ def test_apply_codex_preserves_project_trust_settings(
     assert payload["projects"][project_b]["trust_level"] == "trusted"
 
 
+def test_apply_codex_deep_merges_custom_config_tables(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("codex")
+    codex_path = tmp_path / ".codex" / "config.toml"
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    project_a = str(tmp_path / "repo-a")
+    project_b = str(tmp_path / "repo-b")
+    escaped_project_a = _escape_toml_basic_string(project_a)
+    escaped_project_b = _escape_toml_basic_string(project_b)
+    codex_path.write_text(
+        "\n".join(
+            [
+                f'[projects."{escaped_project_a}"]',
+                'trust_level = "untrusted"',
+                "",
+                f'[projects."{escaped_project_b}"]',
+                'trust_level = "trusted"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (core_root / "config" / "codex.base.json").write_text(
+        json.dumps(
+            {
+                "projects": {
+                    project_a: {"trust_level": "trusted"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    payload = tomllib.loads(codex_path.read_text(encoding="utf-8"))
+    assert payload["projects"][project_a]["trust_level"] == "trusted"
+    assert payload["projects"][project_b]["trust_level"] == "trusted"
+
+
 def test_apply_all_with_cursor_and_codex_writes_both(
     minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
 ) -> None:
@@ -350,6 +396,86 @@ def test_apply_codex_aborts_on_invalid_toml(
 
     assert result.exit_code != 0
     assert "Apply aborted" in result.output
+
+
+def test_apply_opencode_deep_merges_permission_config(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+    opencode_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    opencode_path.parent.mkdir(parents=True, exist_ok=True)
+    opencode_path.write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "permission": {
+                    "read": "allow",
+                    "glob": {"**/*.secret": "deny"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (core_root / "config" / "opencode.base.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "permission": {"edit": "deny"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+
+    assert result.exit_code == 0
+    payload = json.loads(opencode_path.read_text(encoding="utf-8"))
+    assert payload["permission"]["read"] == "allow"
+    assert payload["permission"]["edit"] == "deny"
+    assert payload["permission"]["glob"] == {"**/*.secret": "deny"}
+
+
+def test_apply_opencode_legacy_permission_migration_preserves_existing_permission(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+    opencode_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    opencode_path.parent.mkdir(parents=True, exist_ok=True)
+    opencode_path.write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "permission": {"*": "allow"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (core_root / "config" / "opencode.base.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "permission": [
+                    {"permission": "bash", "action": "allow"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+
+    assert result.exit_code == 0
+    payload = json.loads(opencode_path.read_text(encoding="utf-8"))
+    assert payload["permission"] == {"*": "allow"}
+    assert payload["tools"]["bash"] is True
 
 
 def test_apply_cursor_aborts_on_invalid_schema_key(

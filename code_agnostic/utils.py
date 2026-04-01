@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,19 @@ def write_json(path: Path, payload: Any) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=False)
         handle.write("\n")
+
+
+def merge_dict_overlay(
+    existing: dict[str, Any], overlay: dict[str, Any]
+) -> dict[str, Any]:
+    merged = deepcopy(existing)
+    for key, value in overlay.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = merge_dict_overlay(current, value)
+            continue
+        merged[key] = deepcopy(value)
+    return merged
 
 
 def is_under(path: Path, root: Path) -> bool:

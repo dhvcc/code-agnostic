@@ -26,7 +26,7 @@ from code_agnostic.errors import (
     InvalidJsonFormatError,
 )
 from code_agnostic.models import Action, ActionKind, ActionStatus
-from code_agnostic.utils import read_json_safe
+from code_agnostic.utils import merge_dict_overlay, read_json_safe
 from code_agnostic.skills.compilers import CodexSkillCompiler
 from code_agnostic.skills.parser import parse_skill
 
@@ -133,6 +133,10 @@ class CodexConfigService(RegisteredAppConfigService):
                 merged["agents"] = self._merge_agents_payload(
                     merged.get("agents"), value
                 )
+                continue
+            current = merged.get(key)
+            if isinstance(current, dict) and isinstance(value, dict):
+                merged[key] = merge_dict_overlay(current, value)
                 continue
             merged[key] = deepcopy(value)
         self.set_mcp_payload(merged, desired_mcp)
