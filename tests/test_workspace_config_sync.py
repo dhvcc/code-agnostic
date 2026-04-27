@@ -441,6 +441,58 @@ def test_workspace_skills_sync_cursor_workspace_root_and_subrepos(
     )
 
 
+def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
+
+    legacy_target = tmp_path / "legacy-skills"
+    legacy_target.mkdir()
+    legacy_link = workspace_root / ".codex" / "skills"
+    legacy_link.parent.mkdir(parents=True, exist_ok=True)
+    legacy_link.symlink_to(legacy_target)
+
+    codex_root = tmp_path / ".codex-global"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    remove_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_link
+    ]
+    assert len(remove_actions) == 1
+    assert remove_actions[0].status == ActionStatus.REMOVE
+
+    skill_actions = [
+        action
+        for action in plan.actions
+        if action.scope == "ws:codex:workspace_root_skills_dir"
+        and action.kind == ActionKind.WRITE_TEXT
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].status == ActionStatus.CREATE
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+    assert legacy_link.is_dir()
+    assert not legacy_link.is_symlink()
+    assert (legacy_link / "my-skill" / "SKILL.md").is_file()
+
+
 # --- Workspace agent symlinks ---
 
 

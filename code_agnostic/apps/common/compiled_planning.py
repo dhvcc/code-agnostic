@@ -3,6 +3,18 @@ from pathlib import Path
 from code_agnostic.models import Action, ActionKind, ActionStatus
 
 
+def find_replaceable_symlink_ancestor(target: Path, managed_root: Path) -> Path | None:
+    current = target
+    while True:
+        if current.is_symlink() and (
+            current == managed_root or current.is_relative_to(managed_root)
+        ):
+            return current
+        if current.parent == current:
+            return None
+        current = current.parent
+
+
 def _symlink_ancestor_state(
     target: Path, removable_link_paths: set[Path]
 ) -> tuple[bool, bool]:

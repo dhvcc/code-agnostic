@@ -159,6 +159,57 @@ def test_execute_restores_symlink_snapshot_after_directory_is_recreated(
     assert legacy_link.resolve() == symlink_target.resolve()
 
 
+def test_execute_replaces_symlinked_skill_dir_with_compiled_file(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    source_skill_dir = tmp_path / "source-skill"
+    source_skill_dir.mkdir()
+    source_skill_file = source_skill_dir / "SKILL.md"
+    source_skill_file.write_text("legacy\n", encoding="utf-8")
+
+    legacy_link = tmp_path / "skills" / "backend-coder-standards"
+    legacy_link.parent.mkdir()
+    legacy_link.symlink_to(source_skill_dir)
+
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.REMOVE_SYMLINK,
+                path=legacy_link,
+                status=ActionStatus.REMOVE,
+                detail="replace legacy symlink",
+                scope="app:codex:skills",
+                app="codex",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=legacy_link / "SKILL.md",
+                status=ActionStatus.UPDATE,
+                detail="write compiled skill",
+                payload="compiled\n",
+                scope="app:codex:skills",
+                app="codex",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+    assert legacy_link.is_dir()
+    assert not legacy_link.is_symlink()
+    assert (legacy_link / "SKILL.md").read_text(encoding="utf-8") == "compiled\n"
+    assert source_skill_file.read_text(encoding="utf-8") == "legacy\n"
+
+
 def test_execute_persists_global_revision_manifest_on_success(
     minimal_shared_config: Path,
     core_root: Path,

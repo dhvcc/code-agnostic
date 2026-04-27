@@ -200,6 +200,7 @@ class CodexConfigService(RegisteredAppConfigService):
         compiler = CodexSkillCompiler()
         return self._plan_compiled_text_actions(
             sources=sources,
+            target_dir=target_dir,
             scope=scope,
             app=app,
             managed_paths=managed_paths,
@@ -248,6 +249,7 @@ class CodexConfigService(RegisteredAppConfigService):
 
         return self._plan_compiled_text_actions(
             sources=sources,
+            target_dir=target_dir,
             scope=scope,
             app=app,
             managed_paths=managed_paths,

@@ -4,7 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.app_id import AppId, app_scope
-from code_agnostic.apps.common.compiled_planning import plan_compiled_text_action
+from code_agnostic.apps.common.compiled_planning import (
+    find_replaceable_symlink_ancestor,
+    plan_compiled_text_action,
+)
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
@@ -99,6 +102,7 @@ class IAppConfigService(ABC):
         self,
         *,
         sources: list[Path],
+        target_dir: Path,
         scope: str,
         app: str,
         managed_paths: list[Path],
@@ -114,10 +118,28 @@ class IAppConfigService(ABC):
         actions: list[Action] = []
         desired_paths: list[Path] = []
         skipped: list[str] = []
+        scheduled_removals: set[Path] = set()
 
         for source in sources:
             target, payload = compile_source(source)
             desired_paths.append(target)
+            replaceable_symlink = find_replaceable_symlink_ancestor(target, target_dir)
+            if (
+                replaceable_symlink is not None
+                and replaceable_symlink not in scheduled_removals
+            ):
+                scheduled_removals.add(replaceable_symlink)
+                removable_link_set.add(replaceable_symlink.resolve(strict=False))
+                actions.append(
+                    Action(
+                        kind=ActionKind.REMOVE_SYMLINK,
+                        path=replaceable_symlink,
+                        status=ActionStatus.REMOVE,
+                        detail=f"replace compiled {scope} symlink",
+                        app=app,
+                        scope=scope,
+                    )
+                )
             action = plan_compiled_text_action(
                 target=target,
                 payload=payload,

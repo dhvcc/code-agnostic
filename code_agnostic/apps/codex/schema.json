@@ -61,16 +61,20 @@
       "additionalProperties": false,
       "properties": {
         "args": { "type": "array", "items": { "type": "string" } },
-        "bearer_token": { "type": "string" },
         "bearer_token_env_var": { "type": "string" },
         "command": { "type": "string" },
         "cwd": { "type": "string" },
+        "default_tools_approval_mode": {
+          "allOf": [{ "$ref": "#/definitions/AppToolApproval" }],
+          "default": null
+        },
         "disabled_tools": { "type": "array", "items": { "type": "string" } },
         "enabled": { "type": "boolean" },
         "enabled_tools": { "type": "array", "items": { "type": "string" } },
         "env": { "type": "object", "additionalProperties": { "type": "string" } },
         "env_http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
         "env_vars": { "type": "array", "items": { "type": "string" } },
+        "experimental_environment": { "type": "string" },
         "http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
         "name": {
           "type": "string",
@@ -82,6 +86,7 @@
         "scopes": { "type": "array", "items": { "type": "string" } },
         "startup_timeout_ms": { "type": "integer", "minimum": 0 },
         "startup_timeout_sec": { "type": "number" },
+        "supports_parallel_tool_calls": { "type": "boolean" },
         "tool_timeout_sec": { "type": "number" },
         "tools": {
           "type": "object",

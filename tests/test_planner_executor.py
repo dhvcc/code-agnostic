@@ -628,6 +628,46 @@ def test_cursor_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
     assert skill_actions[0].status == ActionStatus.UPDATE
 
 
+def test_codex_build_plan_replaces_unmanaged_skill_symlink(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    (core_root / "skills" / "my-skill").mkdir(parents=True)
+    (core_root / "skills" / "my-skill" / "SKILL.md").write_text(
+        "compiled", encoding="utf-8"
+    )
+
+    legacy_target = tmp_path / "legacy-skill"
+    legacy_target.mkdir()
+    (legacy_target / "SKILL.md").write_text("legacy", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    codex_root = tmp_path / ".codex"
+    legacy_dir = codex_root / "skills" / "my-skill"
+    legacy_dir.parent.mkdir(parents=True, exist_ok=True)
+    legacy_dir.symlink_to(legacy_target)
+
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    remove_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_dir
+    ]
+    assert len(remove_actions) == 1
+
+    skill_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT and action.scope == "app:codex:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].path == legacy_dir / "SKILL.md"
+    assert skill_actions[0].status == ActionStatus.UPDATE
+    assert not any("Codex skill sync skipped (conflict)" in msg for msg in plan.skipped)
+
+
 def test_workspace_symlink_override_uses_removable_parent_symlink(
     tmp_path: Path,
 ) -> None:

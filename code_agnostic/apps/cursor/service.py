@@ -115,6 +115,7 @@ class CursorConfigService(RegisteredAppConfigService):
         compiler = CursorSkillCompiler()
         return self._plan_compiled_text_actions(
             sources=sources,
+            target_dir=target_dir,
             scope=scope,
             app=app,
             managed_paths=managed_paths,
@@ -147,6 +148,7 @@ class CursorConfigService(RegisteredAppConfigService):
         compiler = CursorAgentCompiler()
         return self._plan_compiled_text_actions(
             sources=sources,
+            target_dir=target_dir,
             scope=scope,
             app=app,
             managed_paths=managed_paths,

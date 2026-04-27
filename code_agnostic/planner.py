@@ -19,7 +19,7 @@ from code_agnostic.apps.common.utils import common_mcp_to_dto
 from code_agnostic.constants import AGENTS_FILENAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import SyncAppError
-from code_agnostic.models import Action, ActionStatus, SyncPlan
+from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
 from code_agnostic.rules.repository import RulesRepository
 from code_agnostic.workspaces import WorkspaceService
@@ -74,9 +74,14 @@ def _prepare_workspace_action(
     scope: str,
     removable_links: list[Path],
 ) -> Action:
-    override_status = _workspace_symlink_override_status(action.path, removable_links)
-    if override_status is not None:
-        action.status = override_status
+    if action.kind in {ActionKind.WRITE_JSON, ActionKind.WRITE_TEXT} and scope.endswith(
+        "_mcp"
+    ):
+        override_status = _workspace_symlink_override_status(
+            action.path, removable_links
+        )
+        if override_status is not None:
+            action.status = override_status
     action.app = "workspace"
     action.workspace = workspace_name
     action.scope = scope

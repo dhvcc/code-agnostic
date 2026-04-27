@@ -17,7 +17,7 @@ from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.core.repository import CoreRepository
-from code_agnostic.models import ActionStatus
+from code_agnostic.models import ActionKind, ActionStatus
 
 
 ServiceFactory = Callable[[CoreRepository, Path], object]
@@ -83,11 +83,11 @@ def test_app_services_build_skill_and_agent_scopes(
 
 
 @pytest.mark.parametrize(
-    ("app_id", "service_factory", "target_root_name", "expected_status"),
+    ("app_id", "service_factory", "target_root_name"),
     [
-        (AppId.OPENCODE, _build_opencode_service, "opencode", ActionStatus.CONFLICT),
-        (AppId.CURSOR, _build_cursor_service, ".cursor", ActionStatus.CREATE),
-        (AppId.CODEX, _build_codex_service, ".codex", ActionStatus.CONFLICT),
+        (AppId.OPENCODE, _build_opencode_service, "opencode"),
+        (AppId.CURSOR, _build_cursor_service, ".cursor"),
+        (AppId.CODEX, _build_codex_service, ".codex"),
     ],
 )
 def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
@@ -97,7 +97,6 @@ def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
     app_id: AppId,
     service_factory: ServiceFactory,
     target_root_name: str,
-    expected_status: ActionStatus,
 ) -> None:
     core = CoreRepository(core_root)
     core.agents_dir.mkdir(parents=True)
@@ -125,5 +124,10 @@ def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
         action for action in plan.actions if action.scope == app_scope(app_id, "agents")
     ]
 
-    assert len(agent_actions) == 1
-    assert agent_actions[0].status == expected_status
+    assert len(agent_actions) == 2
+    assert any(action.kind == ActionKind.REMOVE_SYMLINK for action in agent_actions)
+    write_actions = [
+        action for action in agent_actions if action.kind != ActionKind.REMOVE_SYMLINK
+    ]
+    assert len(write_actions) == 1
+    assert write_actions[0].status == ActionStatus.CREATE

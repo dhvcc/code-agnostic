@@ -26,6 +26,29 @@ from code_agnostic.skills.compilers import OpenCodeSkillCompiler
 from code_agnostic.skills.parser import parse_skill
 
 
+def _is_unknown_provider_model_enum_error(error: Any) -> bool:
+    if error.validator != "enum":
+        return False
+    model = error.instance
+    if not isinstance(model, str) or "/" not in model:
+        return False
+
+    known_models = error.validator_value
+    if not isinstance(known_models, list):
+        return False
+
+    known_providers = {
+        item.split("/", 1)[0]
+        for item in known_models
+        if isinstance(item, str) and "/" in item
+    }
+    if not known_providers:
+        return False
+
+    provider = model.split("/", 1)[0]
+    return provider not in known_providers
+
+
 class OpenCodeConfigService(RegisteredAppConfigService):
     APP_ID = AppId.OPENCODE
     APP_LABEL = app_label(APP_ID)
@@ -82,8 +105,9 @@ class OpenCodeConfigService(RegisteredAppConfigService):
             raise InvalidConfigSchemaError(
                 self.repository.config_path, "must be a JSON object"
             )
-        error = next(iter(self._validator.iter_errors(payload)), None)
-        if error is not None:
+        for error in self._validator.iter_errors(payload):
+            if _is_unknown_provider_model_enum_error(error):
+                continue
             raise InvalidConfigSchemaError(
                 self.repository.config_path, format_schema_error(error)
             )
@@ -149,6 +173,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         compiler = OpenCodeSkillCompiler()
         return self._plan_compiled_text_actions(
             sources=sources,
+            target_dir=target_dir,
             scope=scope,
             app=app,
             managed_paths=managed_paths,
@@ -181,6 +206,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         compiler = OpenCodeAgentCompiler()
         return self._plan_compiled_text_actions(
             sources=sources,
+            target_dir=target_dir,
             scope=scope,
             app=app,
             managed_paths=managed_paths,

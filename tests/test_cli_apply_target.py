@@ -160,6 +160,57 @@ def test_apply_aborts_on_invalid_opencode_schema(
     assert "Invalid config schema" in result.output
 
 
+def test_apply_opencode_allows_unknown_provider_model(
+    minimal_shared_config: Path,
+    opencode_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "model": "codexlb/gpt-5.4",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+
+    assert result.exit_code == 0
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert payload["model"] == "codexlb/gpt-5.4"
+
+
+def test_apply_opencode_rejects_known_provider_unknown_model(
+    minimal_shared_config: Path,
+    opencode_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+    config_path = opencode_root / "opencode.json"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "$schema": "https://opencode.ai/config.json",
+                "model": "opencode/non-existing",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+
+    assert result.exit_code != 0
+    assert "Invalid config schema" in result.output
+
+
 def test_apply_aborts_when_opencode_base_breaks_schema(
     minimal_shared_config: Path,
     core_root: Path,
