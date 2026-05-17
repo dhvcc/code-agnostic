@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from code_agnostic.constants import AGENTS_FILENAME, CLAUDE_FILENAME
+from code_agnostic.constants import (
+    AGENTS_FILENAME,
+    CLAUDE_FILENAME,
+    CODEX_AGENTS_OVERRIDE_FILENAME,
+)
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.git_exclude_service import GitExcludeService
 
@@ -24,6 +28,7 @@ def test_defaults_only(service_with_workspace) -> None:
     assert ".cursor" in entries
     assert ".codex" in entries
     assert AGENTS_FILENAME in entries
+    assert CODEX_AGENTS_OVERRIDE_FILENAME in entries
     assert CLAUDE_FILENAME in entries
 
 

@@ -19,7 +19,7 @@ from code_agnostic.apps.opencode.config_repository import OpenCodeConfigReposito
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
-from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.constants import AGENTS_FILENAME, CODEX_AGENTS_OVERRIDE_FILENAME
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.executor import SyncExecutor
@@ -239,7 +239,53 @@ def test_workspace_mcp_sync_writes_cursor_workspace_root_and_subrepos(
     repo_mcp = [a for a in plan.actions if a.scope == "ws:cursor:repo_mcp"]
     assert len(repo_mcp) == 1
     assert repo_mcp[0].path == workspace_root / "repo-a" / ".cursor" / "mcp.json"
-    assert (ws_config / ".cursor" / "mcp.json") in {a.path for a in plan.actions}
+    assert not any(ws_config in action.path.parents for action in plan.actions)
+
+
+def test_workspace_plan_never_writes_generated_app_dirs_to_source_of_truth(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"test-server": {"command": "npx", "args": ["test"]}}},
+    )
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text("a", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[
+            _codex_service(tmp_path / ".codex"),
+            _cursor_service(tmp_path / ".cursor"),
+            _opencode_service(core, tmp_path / ".config" / "opencode"),
+        ],
+    ).build()
+
+    generated_source_paths = [
+        action.path
+        for action in plan.actions
+        if action.path == ws_config or ws_config in action.path.parents
+    ]
+    assert generated_source_paths == []
+
+    result = SyncExecutor(core=core).execute(plan)
+    assert result[1] == 0
+    assert not (ws_config / ".codex").exists()
+    assert not (ws_config / ".cursor").exists()
+    assert not (ws_config / ".opencode").exists()
 
 
 def test_workspace_opencode_config_includes_workspace_agents_file(
@@ -318,6 +364,102 @@ def test_workspace_mcp_sync_to_codex_project_dirs(
         workspace_root / ".codex" / "config.toml",
         workspace_root / "repo-a" / ".codex" / "config.toml",
     ]
+
+
+def test_workspace_mcp_sync_respects_targeted_server_keys(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {
+            "mcpServers": {
+                "@opencode-playwright": {"command": "npx", "args": ["playwright"]},
+                "!codex-shared": {"url": "https://example.com/mcp"},
+                "all-apps": {"command": "uvx", "args": ["demo"]},
+            }
+        },
+    )
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[
+            _codex_service(tmp_path / ".codex"),
+            _cursor_service(tmp_path / ".cursor"),
+            _opencode_service(core, tmp_path / ".config" / "opencode"),
+        ],
+    ).build()
+
+    root_mcp = {
+        action.scope: action
+        for action in plan.actions
+        if action.scope
+        in {
+            "ws:codex:workspace_root_mcp",
+            "ws:cursor:workspace_root_mcp",
+            "ws:opencode:workspace_root_mcp",
+        }
+    }
+
+    cursor_payload = root_mcp["ws:cursor:workspace_root_mcp"].payload
+    opencode_payload = root_mcp["ws:opencode:workspace_root_mcp"].payload
+    codex_payload = tomllib.loads(root_mcp["ws:codex:workspace_root_mcp"].payload)
+    assert set(cursor_payload["mcpServers"]) == {"shared", "all-apps"}
+    assert set(opencode_payload["mcp"]) == {"playwright", "shared", "all-apps"}
+    assert set(codex_payload["mcp_servers"]) == {"all-apps"}
+
+
+def test_workspace_rules_sync_to_codex_repo_override_and_git_exclude(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git" / "info").mkdir(parents=True)
+    (repo / AGENTS_FILENAME).write_text("repo rules\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
+
+    codex_root = tmp_path / ".codex"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    override_actions = [
+        a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT
+        and a.scope == "ws:codex:repo_agents_override"
+    ]
+    assert len(override_actions) == 1
+    assert override_actions[0].path == repo / CODEX_AGENTS_OVERRIDE_FILENAME
+    assert override_actions[0].payload == "workspace rules\n"
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+    assert (repo / AGENTS_FILENAME).read_text(encoding="utf-8") == "repo rules\n"
+    assert (
+        repo / CODEX_AGENTS_OVERRIDE_FILENAME
+    ).read_text(encoding="utf-8") == "workspace rules\n"
+    exclude = repo / ".git" / "info" / "exclude"
+    assert CODEX_AGENTS_OVERRIDE_FILENAME in exclude.read_text(encoding="utf-8")
 
 
 def test_workspace_targeted_plan_does_not_cleanup_other_app_scopes(
@@ -601,13 +743,12 @@ def test_workspace_agents_synced_to_codex(
     codex_root = tmp_path / ".codex"
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
-    render_actions = [
+    source_render_actions = [
         a
         for a in plan.actions
         if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:codex:agents_entries"
     ]
-    assert len(render_actions) == 1
-    assert render_actions[0].path == ws_config / ".codex" / "agents" / "planner.toml"
+    assert source_render_actions == []
 
     repo_actions = [
         a
@@ -679,14 +820,12 @@ def test_workspace_agents_synced_to_opencode(
         core=core, app_services=[_opencode_service(core, opencode_root)]
     ).build()
 
-    render_actions = [
+    source_render_actions = [
         a
         for a in plan.actions
         if a.kind == ActionKind.WRITE_TEXT and a.scope == "ws:opencode:agents_entries"
     ]
-    assert len(render_actions) == 1
-    assert render_actions[0].path == ws_config / ".opencode" / "agents" / "planner.md"
-    assert "reasoningEffort: high" in render_actions[0].payload
+    assert source_render_actions == []
 
     repo_actions = [
         a
@@ -698,6 +837,7 @@ def test_workspace_agents_synced_to_opencode(
         repo_actions[0].path
         == workspace_root / "repo-a" / ".opencode" / "agents" / "planner.md"
     )
+    assert "reasoningEffort: high" in repo_actions[0].payload
 
 
 # --- Executor workspace state persistence ---

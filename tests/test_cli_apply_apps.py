@@ -176,6 +176,49 @@ def test_apply_all_preserves_mcp_timeout_for_generated_app_configs(
     assert codex_payload["mcp_servers"]["demo"]["tool_timeout_sec"] == 900.0
 
 
+def test_apply_all_respects_targeted_mcp_server_keys(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("cursor")
+    enable_app("codex")
+    enable_app("opencode")
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "@opencode-playwright": {"command": "npx", "args": ["playwright"]},
+                    "!codex-shared": {"url": "https://example.com/mcp"},
+                    "all-apps": {"command": "uvx", "args": ["demo"]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "all"])
+
+    assert result.exit_code == 0
+    cursor_payload = json.loads(
+        (tmp_path / ".cursor" / "mcp.json").read_text(encoding="utf-8")
+    )
+    opencode_payload = json.loads(
+        (tmp_path / ".config" / "opencode" / "opencode.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    codex_payload = tomllib.loads(
+        (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
+    )
+
+    assert set(cursor_payload["mcpServers"]) == {"shared", "all-apps"}
+    assert set(opencode_payload["mcp"]) == {"playwright", "shared", "all-apps"}
+    assert set(codex_payload["mcp_servers"]) == {"all-apps"}
+
+
 def test_apply_cursor_target_does_not_apply_workspace_links(
     minimal_shared_config: Path,
     tmp_path: Path,

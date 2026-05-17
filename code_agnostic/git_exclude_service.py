@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.app_id import app_metadata
-from code_agnostic.constants import AGENTS_FILENAME, CLAUDE_FILENAME
+from code_agnostic.constants import (
+    AGENTS_FILENAME,
+    CLAUDE_FILENAME,
+    CODEX_AGENTS_OVERRIDE_FILENAME,
+)
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.utils import read_json_safe, write_json
 
@@ -58,6 +62,7 @@ class GitExcludeService:
 
         defaults = [f".{app_name}" for app_name in workspace_apps] + [
             AGENTS_FILENAME,
+            CODEX_AGENTS_OVERRIDE_FILENAME,
             CLAUDE_FILENAME,
         ]
         return defaults + extras

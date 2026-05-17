@@ -15,8 +15,12 @@ from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.codex.service import CodexConfigService
-from code_agnostic.apps.common.utils import common_mcp_to_dto
-from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.apps.common.utils import common_mcp_to_dto, mcp_servers_for_app
+from code_agnostic.constants import (
+    AGENTS_FILENAME,
+    CODEX_AGENTS_OVERRIDE_FILENAME,
+    MCP_SERVERS_KEY,
+)
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import SyncAppError
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
@@ -115,6 +119,57 @@ def _set_workspace_opencode_instructions(
     action.payload = payload
 
 
+def _plan_git_exclude_entry(
+    *,
+    exclude_path: Path,
+    entry: str,
+    workspace_name: str,
+) -> Action:
+    existing_lines: list[str] = []
+    if exclude_path.exists() and not exclude_path.is_file():
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=exclude_path,
+            status=ActionStatus.CONFLICT,
+            detail="git exclude path is not a file",
+            payload="",
+            app="workspace",
+            workspace=workspace_name,
+        )
+    if exclude_path.exists():
+        existing_lines = exclude_path.read_text(encoding="utf-8").splitlines()
+
+    seen = {
+        line.strip()
+        for line in existing_lines
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+    if entry in seen:
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=exclude_path,
+            status=ActionStatus.NOOP,
+            detail="codex override already excluded from git",
+            payload="\n".join(existing_lines) + ("\n" if existing_lines else ""),
+            app="workspace",
+            workspace=workspace_name,
+        )
+
+    merged = list(existing_lines)
+    if merged and merged[-1] != "":
+        merged.append("")
+    merged.append(entry)
+    return Action(
+        kind=ActionKind.WRITE_TEXT,
+        path=exclude_path,
+        status=ActionStatus.UPDATE if exclude_path.exists() else ActionStatus.CREATE,
+        detail="exclude codex workspace override from git",
+        payload="\n".join(merged) + "\n",
+        app="workspace",
+        workspace=workspace_name,
+    )
+
+
 def _merge_plans(*plans: SyncPlan) -> SyncPlan:
     actions: list[Action] = []
     errors: list[Exception] = []
@@ -159,10 +214,13 @@ class SyncPlanner:
         except SyncAppError as exc:
             return SyncPlan(actions=[], errors=[exc], skipped=[])
 
-        desired_common = common_mcp_to_dto(mcp_base.get("mcpServers", {}))
         plans: list[SyncPlan] = []
         for service in self.app_services:
             try:
+                target_servers = mcp_servers_for_app(
+                    mcp_base.get(MCP_SERVERS_KEY, {}), service.app_id
+                )
+                desired_common = common_mcp_to_dto(target_servers)
                 plans.append(service.build_plan(desired_common, self.core))
             except SyncAppError as exc:
                 plans.append(SyncPlan(actions=[], errors=[exc], skipped=[]))
@@ -210,8 +268,10 @@ class SyncPlanner:
         rules_repo = RulesRepository(ws_source.root)
         rules = rules_repo.list_rules()
         workspace_agents_target: Path | None = None
+        workspace_agents_content: str | None = None
         if rules:
             content = _compile_workspace_agents(rules)
+            workspace_agents_content = content
             target = workspace_path / AGENTS_FILENAME
             rule_action = plan_compiled_text_action(
                 target=target,
@@ -240,10 +300,12 @@ class SyncPlanner:
             desired_paths_by_scope.setdefault("rules", []).append(target)
             workspace_agents_target = target
         elif not rules_repo.rules_dir.exists() and ws_source.rules_file.exists():
+            content = ws_source.rules_file.read_text(encoding="utf-8")
+            workspace_agents_content = content
             target = workspace_path / AGENTS_FILENAME
             rule_action = plan_compiled_text_action(
                 target=target,
-                payload=ws_source.rules_file.read_text(encoding="utf-8"),
+                payload=content,
                 managed_paths={
                     path.resolve(strict=False)
                     for path in load_state_paths(managed_paths, "rules")
@@ -280,7 +342,7 @@ class SyncPlanner:
         if ws_source.has_mcp():
             try:
                 mcp_base = ws_source.load_mcp_base()
-                common_servers = common_mcp_to_dto(mcp_base.get("mcpServers", {}))
+                common_servers = mcp_base.get(MCP_SERVERS_KEY, {})
             except SyncAppError as exc:
                 return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
 
@@ -289,26 +351,13 @@ class SyncPlanner:
             if meta.project_dir_name is None or not meta.supports_workspace_propagation:
                 continue
 
-            ws_project_root = ws_source.root / meta.project_dir_name
-            project_svc = _create_workspace_project_service(
-                svc.app_id,
-                ws_project_root,
-                ws_source,
+            mcp_payload = (
+                common_mcp_to_dto(mcp_servers_for_app(common_servers, svc.app_id))
+                if common_servers is not None
+                else {}
             )
-
-            # Note: skills_dir/agents_dir are implemented by concrete repositories,
-            # but are not part of the IAppConfigRepository interface.
-            project_skills_dir: Path = getattr(project_svc.repository, "skills_dir")
-            project_agents_dir: Path | None = (
-                getattr(project_svc.repository, "agents_dir")
-                if meta.supports_import_agents
-                else None
-            )
-
-            mcp_payload = common_servers or {}
             has_workspace_mcp_render = common_servers is not None
 
-            # Render workspace config once into workspace project dir
             should_render_workspace_config = has_workspace_mcp_render or (
                 workspace_agents_target is not None and svc.app_id == AppId.OPENCODE
             )
@@ -316,70 +365,6 @@ class SyncPlanner:
                 should_render_workspace_config = True
             if svc.app_id == AppId.CODEX and agent_sources:
                 should_render_workspace_config = True
-            if should_render_workspace_config:
-                try:
-                    mcp_action = project_svc.build_action(
-                        mcp_payload,
-                        agent_sources=agent_sources,
-                    )
-                    _set_workspace_opencode_instructions(
-                        project_svc,
-                        mcp_action,
-                        workspace_agents_target,
-                    )
-                    mcp_action.app = "workspace"
-                    mcp_action.workspace = workspace_name
-                    actions.append(mcp_action)
-                except SyncAppError as exc:
-                    skipped.append(
-                        f"MCP sync error for workspace {workspace_name}/{svc.app_id.value}: {exc}"
-                    )
-
-            # Workspace skill entries compiled into workspace project dir
-            if skill_sources:
-                scope = f"ws:{svc.app_id.value}:skills_entries"
-                plan_skill_actions = getattr(project_svc, "plan_skill_actions")
-                skill_actions, desired_paths, skill_skipped = plan_skill_actions(
-                    skill_sources,
-                    project_skills_dir,
-                    scope,
-                    "workspace",
-                    load_state_paths(managed_paths, scope),
-                    load_state_links(managed_links, scope),
-                )
-                for a in skill_actions:
-                    _prepare_workspace_action(
-                        a,
-                        workspace_name=workspace_name,
-                        scope=scope,
-                        removable_links=load_state_links(managed_links, scope),
-                    )
-                actions.extend(skill_actions)
-                desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
-                skipped.extend(skill_skipped)
-
-            # Workspace agent entries compiled into workspace project dir
-            if agent_sources and meta.supports_import_agents:
-                scope = f"ws:{svc.app_id.value}:agents_entries"
-                plan_agent_actions = getattr(project_svc, "plan_agent_actions")
-                agent_actions, desired_paths, agent_skipped = plan_agent_actions(
-                    agent_sources,
-                    project_agents_dir or ws_project_root / "agents",
-                    scope,
-                    "workspace",
-                    load_state_paths(managed_paths, scope),
-                    load_state_links(managed_links, scope),
-                )
-                desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
-                for a in agent_actions:
-                    _prepare_workspace_action(
-                        a,
-                        workspace_name=workspace_name,
-                        scope=scope,
-                        removable_links=load_state_links(managed_links, scope),
-                    )
-                actions.extend(agent_actions)
-                skipped.extend(agent_skipped)
 
             # Workspace root outputs
             workspace_target_service = _create_workspace_project_service(
@@ -459,6 +444,50 @@ class SyncPlanner:
                     repo / meta.project_dir_name,
                     ws_source,
                 )
+
+                if (
+                    svc.app_id == AppId.CODEX
+                    and workspace_agents_content is not None
+                ):
+                    scope = "ws:codex:repo_agents_override"
+                    override_target = repo / CODEX_AGENTS_OVERRIDE_FILENAME
+                    override_action = plan_compiled_text_action(
+                        target=override_target,
+                        payload=workspace_agents_content,
+                        managed_paths={
+                            path.resolve(strict=False)
+                            for path in load_state_paths(managed_paths, scope)
+                        },
+                        removable_link_paths={
+                            path.resolve(strict=False)
+                            for path in load_state_links(managed_links, scope)
+                        },
+                        scope=scope,
+                        app="workspace",
+                        create_detail="create codex workspace override",
+                        noop_detail="codex workspace override already up to date",
+                        update_detail="update codex workspace override",
+                    )
+                    _prepare_workspace_action(
+                        override_action,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
+                    actions.append(override_action)
+                    desired_paths_by_scope.setdefault(scope, []).append(
+                        override_target
+                    )
+
+                    git_dir = self.workspace_service.resolve_git_dir(repo)
+                    if git_dir is not None:
+                        actions.append(
+                            _plan_git_exclude_entry(
+                                exclude_path=git_dir / "info" / "exclude",
+                                entry=CODEX_AGENTS_OVERRIDE_FILENAME,
+                                workspace_name=workspace_name,
+                            )
+                        )
 
                 if should_render_workspace_config:
                     scope = f"ws:{svc.app_id.value}:repo_mcp"

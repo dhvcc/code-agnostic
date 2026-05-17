@@ -1,6 +1,52 @@
 from typing import Any
 
+from code_agnostic.apps.app_id import AppId, app_ids_by_capability
 from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
+from code_agnostic.constants import (
+    MCP_APP_EXCLUDE_PREFIX,
+    MCP_APP_INCLUDE_PREFIX,
+    MCP_APP_TARGET_SEPARATOR,
+)
+
+
+_TARGETABLE_APP_NAMES = {
+    app_id.value for app_id in app_ids_by_capability(targetable=True)
+}
+
+
+def _split_app_targeted_key(key: str) -> tuple[str, str, str] | None:
+    if not key or key[0] not in (MCP_APP_INCLUDE_PREFIX, MCP_APP_EXCLUDE_PREFIX):
+        return None
+
+    marker = key[0]
+    remainder = key[1:]
+    app_name, separator, server_name = remainder.partition(MCP_APP_TARGET_SEPARATOR)
+    if (
+        separator != MCP_APP_TARGET_SEPARATOR
+        or not server_name
+        or app_name not in _TARGETABLE_APP_NAMES
+    ):
+        return None
+    return marker, app_name, server_name
+
+
+def mcp_servers_for_app(
+    mcp_servers: dict[str, Any], app_id: AppId | str
+) -> dict[str, Any]:
+    target = app_id.value if isinstance(app_id, AppId) else app_id
+    filtered: dict[str, Any] = {}
+    for name, raw in mcp_servers.items():
+        targeted = _split_app_targeted_key(name)
+        if targeted is None:
+            filtered[name] = raw
+            continue
+
+        marker, app_name, server_name = targeted
+        if marker == MCP_APP_INCLUDE_PREFIX and app_name == target:
+            filtered[server_name] = raw
+        elif marker == MCP_APP_EXCLUDE_PREFIX and app_name != target:
+            filtered[server_name] = raw
+    return filtered
 
 
 def _coerce_timeout_ms(value: Any) -> int | None:

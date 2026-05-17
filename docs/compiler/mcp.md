@@ -30,6 +30,14 @@ Per-server fields for v1:
 
 Unknown keys fail validation.
 
+Legacy/common `mcp.base.json` server keys can target app compilation:
+
+- `@opencode-playwright` compiles only for OpenCode as `playwright`
+- `!codex-playwright` compiles for every target except Codex as `playwright`
+- unprefixed server keys compile for every target
+
+Target markers are recognized only for known targetable app ids.
+
 ## Capability matrix
 
 | Property | Compiler | Cursor | Codex | OpenCode |

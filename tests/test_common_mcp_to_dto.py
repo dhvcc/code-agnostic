@@ -1,5 +1,5 @@
 from code_agnostic.apps.common.models import MCPServerType
-from code_agnostic.apps.common.utils import common_mcp_to_dto
+from code_agnostic.apps.common.utils import common_mcp_to_dto, mcp_servers_for_app
 
 
 def test_stdio_server() -> None:
@@ -185,3 +185,66 @@ def test_entry_without_command_or_url_skipped() -> None:
     result = common_mcp_to_dto({"demo": {"env": {"A": "1"}}})
 
     assert result == {}
+
+
+def test_app_only_mcp_server_key_is_renamed_for_matching_app() -> None:
+    result = mcp_servers_for_app(
+        {
+            "@opencode-playwright": {"command": "npx"},
+            "shared": {"url": "https://example.com/mcp"},
+        },
+        "opencode",
+    )
+
+    assert result == {
+        "playwright": {"command": "npx"},
+        "shared": {"url": "https://example.com/mcp"},
+    }
+
+
+def test_app_only_mcp_server_key_is_skipped_for_other_apps() -> None:
+    result = mcp_servers_for_app(
+        {
+            "@opencode-playwright": {"command": "npx"},
+            "shared": {"url": "https://example.com/mcp"},
+        },
+        "codex",
+    )
+
+    assert result == {"shared": {"url": "https://example.com/mcp"}}
+
+
+def test_app_excluded_mcp_server_key_is_skipped_for_matching_app() -> None:
+    result = mcp_servers_for_app(
+        {
+            "!codex-playwright": {"command": "npx"},
+            "shared": {"url": "https://example.com/mcp"},
+        },
+        "codex",
+    )
+
+    assert result == {"shared": {"url": "https://example.com/mcp"}}
+
+
+def test_app_excluded_mcp_server_key_is_renamed_for_other_apps() -> None:
+    result = mcp_servers_for_app(
+        {
+            "!codex-playwright": {"command": "npx"},
+            "shared": {"url": "https://example.com/mcp"},
+        },
+        "opencode",
+    )
+
+    assert result == {
+        "playwright": {"command": "npx"},
+        "shared": {"url": "https://example.com/mcp"},
+    }
+
+
+def test_unknown_app_prefixed_mcp_key_is_left_unchanged() -> None:
+    result = mcp_servers_for_app(
+        {"@future-playwright": {"command": "npx"}},
+        "opencode",
+    )
+
+    assert result == {"@future-playwright": {"command": "npx"}}
