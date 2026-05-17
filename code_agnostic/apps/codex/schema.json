@@ -56,6 +56,14 @@
       },
       "description": "Per-tool approval settings for a single MCP server tool."
     },
+    "McpServerOAuthConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "client_id": { "type": "string" }
+      },
+      "description": "OAuth client settings used when Codex launches an MCP OAuth flow."
+    },
     "RawMcpServerConfig": {
       "type": "object",
       "additionalProperties": false,
@@ -80,6 +88,10 @@
           "type": "string",
           "default": null,
           "description": "Legacy display-name field accepted for backward compatibility."
+        },
+        "oauth": {
+          "allOf": [{ "$ref": "#/definitions/McpServerOAuthConfig" }],
+          "default": null
         },
         "oauth_resource": { "type": "string", "default": null },
         "required": { "type": "boolean" },
