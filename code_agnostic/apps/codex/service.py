@@ -97,7 +97,14 @@ class CodexConfigService(RegisteredAppConfigService):
     def set_mcp_payload(
         self, merged: dict[str, Any], desired_mcp: dict[str, Any]
     ) -> None:
-        merged["mcp_servers"] = desired_mcp
+        existing_mcp = merged.get("mcp_servers")
+        preserved = dict(existing_mcp) if isinstance(existing_mcp, dict) else {}
+        for name, config in desired_mcp.items():
+            preserved[name] = deepcopy(config)
+        if preserved:
+            merged["mcp_servers"] = preserved
+        else:
+            merged.pop("mcp_servers", None)
 
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]

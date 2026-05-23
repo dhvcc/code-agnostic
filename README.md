@@ -139,12 +139,29 @@ code-agnostic rules remove --name python-style
 
 ### Skills and agents
 
-Canonical YAML frontmatter format, cross-compiled per editor.
+Canonical YAML frontmatter format, cross-compiled per editor. Install or edit skills in the `code-agnostic` source of truth, then run `plan` / `apply`; do not hand-copy generated skills into `.codex`, `.cursor`, or OpenCode directories.
 
 ```bash
 code-agnostic skills list
 code-agnostic agents list
 ```
+
+Manual skill install today:
+
+```bash
+mkdir -p ~/.config/code-agnostic/skills
+cp -R ./my-skill ~/.config/code-agnostic/skills/my-skill
+code-agnostic plan
+code-agnostic apply
+```
+
+Planned convenience command:
+
+```bash
+code-agnostic skills install ./my-skill --apply
+```
+
+That command should copy the skill into the source of truth and then run the normal compiler/apply flow.
 
 ### Workspaces
 

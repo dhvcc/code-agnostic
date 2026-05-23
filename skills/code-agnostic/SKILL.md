@@ -13,6 +13,8 @@ Do not treat it as an AI agent, prompt runner, editor plugin, or MCP server. It 
 
 - Source config lives under `~/.config/code-agnostic/`.
 - Target app files under `~/.codex/`, `~/.cursor/`, and `~/.config/opencode/` are generated or managed outputs.
+- To change app config, edit the code-agnostic source of truth, run `code-agnostic plan`, then run `code-agnostic apply`.
+- Do not manually update generated target app directories when the same change can be represented in code-agnostic source.
 - The CLI workflow is `plan` first, then `apply`.
 - `status` checks drift between source and targets.
 - `import plan` and `import apply` migrate existing app config into the central source.
@@ -68,6 +70,7 @@ Legacy single-file rules, `skills/<name>/SKILL.md`, and markdown agents still ex
 - Add or update tests before changing behavior.
 - Reuse parser, repository, planner, and app service code instead of manually transforming strings.
 - Treat generated target files as outputs. Fix the source model, compiler, planner, or executor instead.
+- If a correct source change plus `apply` would generate the target file, do not edit `.codex/`, `.cursor/`, `.config/opencode/`, or repo-local generated app directories by hand.
 - Run tests with `uv run pytest`; for narrow changes, run the smallest relevant test first.
 
 ## Common Mistakes

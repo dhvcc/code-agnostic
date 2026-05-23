@@ -82,7 +82,7 @@
         "env": { "type": "object", "additionalProperties": { "type": "string" } },
         "env_http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
         "env_vars": { "type": "array", "items": { "type": "string" } },
-        "experimental_environment": { "type": "string" },
+        "environment_id": { "type": "string" },
         "http_headers": { "type": "object", "additionalProperties": { "type": "string" } },
         "name": {
           "type": "string",

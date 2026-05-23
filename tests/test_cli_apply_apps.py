@@ -2,6 +2,12 @@ import json
 from pathlib import Path
 
 from code_agnostic.__main__ import cli
+from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
+from code_agnostic.apps.codex.config_repository import CodexConfigRepository
+from code_agnostic.apps.codex.mapper import CodexMCPMapper
+from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
+from code_agnostic.apps.codex.service import CodexConfigService
+from code_agnostic.models import ActionStatus
 
 try:
     import tomllib
@@ -165,6 +171,166 @@ def test_apply_codex_deep_merges_custom_config_tables(
     payload = tomllib.loads(codex_path.read_text(encoding="utf-8"))
     assert payload["projects"][project_a]["trust_level"] == "trusted"
     assert payload["projects"][project_b]["trust_level"] == "trusted"
+
+
+def test_apply_codex_preserves_unmanaged_mcp_servers_when_syncing_managed_mcp(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("codex")
+    codex_path = tmp_path / ".codex" / "config.toml"
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    codex_path.write_text(
+        "\n".join(
+            [
+                "[mcp_servers.personal]",
+                'command = "uvx"',
+                'args = ["personal-tool"]',
+                "",
+                "[mcp_servers.managed]",
+                'command = "uvx"',
+                'args = ["old-managed-tool"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "managed": {"command": "uvx", "args": ["new-managed-tool"]}
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    payload = tomllib.loads(codex_path.read_text(encoding="utf-8"))
+    assert payload["mcp_servers"]["personal"] == {
+        "command": "uvx",
+        "args": ["personal-tool"],
+    }
+    assert payload["mcp_servers"]["managed"] == {
+        "command": "uvx",
+        "args": ["new-managed-tool"],
+    }
+
+
+def test_apply_codex_preserves_unmanaged_mcp_servers_when_no_mcp_is_synced(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("codex")
+    codex_path = tmp_path / ".codex" / "config.toml"
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    codex_path.write_text(
+        "\n".join(
+            [
+                "[mcp_servers.personal]",
+                'command = "uvx"',
+                'args = ["personal-tool"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    payload = tomllib.loads(codex_path.read_text(encoding="utf-8"))
+    assert payload["mcp_servers"]["personal"] == {
+        "command": "uvx",
+        "args": ["personal-tool"],
+    }
+
+
+def test_codex_mcp_plan_ignores_unmanaged_mcp_drift(tmp_path: Path) -> None:
+    codex_path = tmp_path / ".codex" / "config.toml"
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    codex_path.write_text(
+        "\n".join(
+            [
+                "[mcp_servers.personal]",
+                'command = "uvx"',
+                'args = ["personal-tool"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    service = CodexConfigService(
+        repository=CodexConfigRepository(root=tmp_path / ".codex"),
+        mapper=CodexMCPMapper(),
+        schema_repository=CodexSchemaRepository(),
+    )
+
+    action = service.build_action(common_servers={})
+
+    assert action.status == ActionStatus.NOOP
+    payload = tomllib.loads(action.payload)
+    assert payload["mcp_servers"]["personal"] == {
+        "command": "uvx",
+        "args": ["personal-tool"],
+    }
+
+
+def test_codex_mcp_plan_updates_only_same_named_managed_mcp(
+    tmp_path: Path,
+) -> None:
+    codex_path = tmp_path / ".codex" / "config.toml"
+    codex_path.parent.mkdir(parents=True, exist_ok=True)
+    codex_path.write_text(
+        "\n".join(
+            [
+                "[mcp_servers.personal]",
+                'command = "uvx"',
+                'args = ["personal-tool"]',
+                "",
+                "[mcp_servers.managed]",
+                'command = "uvx"',
+                'args = ["old-managed-tool"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    service = CodexConfigService(
+        repository=CodexConfigRepository(root=tmp_path / ".codex"),
+        mapper=CodexMCPMapper(),
+        schema_repository=CodexSchemaRepository(),
+    )
+
+    action = service.build_action(
+        common_servers={
+            "managed": MCPServerDTO(
+                name="managed",
+                type=MCPServerType.STDIO,
+                command="uvx",
+                args=["new-managed-tool"],
+            )
+        }
+    )
+
+    assert action.status == ActionStatus.UPDATE
+    payload = tomllib.loads(action.payload)
+    assert payload["mcp_servers"]["personal"] == {
+        "command": "uvx",
+        "args": ["personal-tool"],
+    }
+    assert payload["mcp_servers"]["managed"] == {
+        "command": "uvx",
+        "args": ["new-managed-tool"],
+    }
 
 
 def test_apply_all_with_cursor_and_codex_writes_both(
