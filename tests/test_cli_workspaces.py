@@ -245,10 +245,11 @@ def test_workspaces_git_exclude_does_not_duplicate_existing_entries(
 
     result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
     assert result.exit_code == 0
-    assert "lines_added=2" in result.output
+    assert "lines_added=3" in result.output
 
     content = exclude.read_text(encoding="utf-8")
     assert content.count(".codex") == 1
+    assert content.count(".agents") == 1
     assert content.count("AGENTS.md") == 1
     assert content.count(CODEX_AGENTS_OVERRIDE_FILENAME) == 1
     assert content.count("CLAUDE.md") == 1

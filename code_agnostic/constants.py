@@ -12,6 +12,7 @@ SYNC_STAGING_DIRNAME: Final[str] = ".sync-staging"
 RULES_DIRNAME: Final[str] = "rules"
 SKILLS_DIRNAME: Final[str] = "skills"
 AGENTS_DIRNAME: Final[str] = "agents"
+AGENTS_PROJECT_DIRNAME: Final[str] = ".agents"
 
 OPENCODE_PROJECT_DIRNAME: Final[str] = ".opencode"
 CURSOR_PROJECT_DIRNAME: Final[str] = ".cursor"

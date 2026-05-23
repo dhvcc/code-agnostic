@@ -7,6 +7,7 @@ from typing import Any
 
 from code_agnostic.apps.app_id import app_metadata
 from code_agnostic.constants import (
+    AGENTS_PROJECT_DIRNAME,
     AGENTS_FILENAME,
     CLAUDE_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
@@ -60,7 +61,10 @@ class GitExcludeService:
             if metadata.supports_workspace_propagation:
                 workspace_apps.append(app_name)
 
-        defaults = [f".{app_name}" for app_name in workspace_apps] + [
+        defaults = [f".{app_name}" for app_name in workspace_apps]
+        if "codex" in workspace_apps:
+            defaults.append(AGENTS_PROJECT_DIRNAME)
+        defaults += [
             AGENTS_FILENAME,
             CODEX_AGENTS_OVERRIDE_FILENAME,
             CLAUDE_FILENAME,

@@ -455,9 +455,9 @@ def test_workspace_rules_sync_to_codex_repo_override_and_git_exclude(
     assert failures == []
     assert applied > 0
     assert (repo / AGENTS_FILENAME).read_text(encoding="utf-8") == "repo rules\n"
-    assert (
-        repo / CODEX_AGENTS_OVERRIDE_FILENAME
-    ).read_text(encoding="utf-8") == "workspace rules\n"
+    assert (repo / CODEX_AGENTS_OVERRIDE_FILENAME).read_text(
+        encoding="utf-8"
+    ) == "workspace rules\n"
     exclude = repo / ".git" / "info" / "exclude"
     assert CODEX_AGENTS_OVERRIDE_FILENAME in exclude.read_text(encoding="utf-8")
 
@@ -583,6 +583,42 @@ def test_workspace_skills_sync_cursor_workspace_root_and_subrepos(
     )
 
 
+def test_workspace_skills_sync_codex_to_agents_skills(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
+
+    codex_root = tmp_path / ".codex-global"
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    workspace_skills = [
+        a for a in plan.actions if a.scope == "ws:codex:workspace_root_skills_dir"
+    ]
+    repo_skills = [a for a in plan.actions if a.scope == "ws:codex:repo_skills_dir"]
+
+    assert len(workspace_skills) == 1
+    assert (
+        workspace_skills[0].path
+        == workspace_root / ".agents" / "skills" / "my-skill" / "SKILL.md"
+    )
+    assert len(repo_skills) == 1
+    assert (
+        repo_skills[0].path
+        == workspace_root / "repo-a" / ".agents" / "skills" / "my-skill" / "SKILL.md"
+    )
+
+
 def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
     minimal_shared_config: Path,
     core_root: Path,
@@ -601,7 +637,7 @@ def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
 
     legacy_target = tmp_path / "legacy-skills"
     legacy_target.mkdir()
-    legacy_link = workspace_root / ".codex" / "skills"
+    legacy_link = workspace_root / ".agents" / "skills"
     legacy_link.parent.mkdir(parents=True, exist_ok=True)
     legacy_link.symlink_to(legacy_target)
 
@@ -987,7 +1023,7 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_codex(
 
     SyncExecutor(core=core).execute(plan)
     skill_file = (
-        workspace_root / "repo-a" / ".codex" / "skills" / "my-skill" / "SKILL.md"
+        workspace_root / "repo-a" / ".agents" / "skills" / "my-skill" / "SKILL.md"
     )
     assert skill_file.is_file()
 

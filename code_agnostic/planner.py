@@ -18,11 +18,14 @@ from code_agnostic.apps.codex.service import CodexConfigService
 from code_agnostic.apps.common.utils import common_mcp_to_dto, mcp_servers_for_app
 from code_agnostic.constants import (
     AGENTS_FILENAME,
+    AGENTS_PROJECT_DIRNAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
     MCP_SERVERS_KEY,
+    SKILLS_DIRNAME,
 )
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import SyncAppError
+from code_agnostic.git_exclude_service import GitExcludeService
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
 from code_agnostic.rules.repository import RulesRepository
@@ -52,6 +55,12 @@ def _create_workspace_project_service(
             ),
         )
     return create_registered_app_service(app_id, root=target_root)
+
+
+def _workspace_skills_dir(app_id: AppId, project_root: Path) -> Path:
+    if app_id == AppId.CODEX:
+        return project_root.parent / AGENTS_PROJECT_DIRNAME / SKILLS_DIRNAME
+    return project_root / SKILLS_DIRNAME
 
 
 def _workspace_symlink_override_status(
@@ -119,10 +128,10 @@ def _set_workspace_opencode_instructions(
     action.payload = payload
 
 
-def _plan_git_exclude_entry(
+def _plan_git_exclude_entries(
     *,
     exclude_path: Path,
-    entry: str,
+    entries: list[str],
     workspace_name: str,
 ) -> Action:
     existing_lines: list[str] = []
@@ -144,12 +153,13 @@ def _plan_git_exclude_entry(
         for line in existing_lines
         if line.strip() and not line.lstrip().startswith("#")
     }
-    if entry in seen:
+    missing = [entry for entry in entries if entry not in seen]
+    if not missing:
         return Action(
             kind=ActionKind.WRITE_TEXT,
             path=exclude_path,
             status=ActionStatus.NOOP,
-            detail="codex override already excluded from git",
+            detail="workspace sync paths already excluded from git",
             payload="\n".join(existing_lines) + ("\n" if existing_lines else ""),
             app="workspace",
             workspace=workspace_name,
@@ -158,12 +168,12 @@ def _plan_git_exclude_entry(
     merged = list(existing_lines)
     if merged and merged[-1] != "":
         merged.append("")
-    merged.append(entry)
+    merged.extend(missing)
     return Action(
         kind=ActionKind.WRITE_TEXT,
         path=exclude_path,
         status=ActionStatus.UPDATE if exclude_path.exists() else ActionStatus.CREATE,
-        detail="exclude codex workspace override from git",
+        detail="exclude workspace sync paths from git",
         payload="\n".join(merged) + "\n",
         app="workspace",
         workspace=workspace_name,
@@ -398,7 +408,9 @@ class SyncPlanner:
                 )
                 skill_actions, desired_paths, skill_skipped = plan_skill_actions(
                     skill_sources,
-                    getattr(workspace_target_service.repository, "skills_dir"),
+                    _workspace_skills_dir(
+                        svc.app_id, workspace_target_service.repository.root
+                    ),
                     scope,
                     "workspace",
                     load_state_paths(managed_paths, scope),
@@ -445,10 +457,7 @@ class SyncPlanner:
                     ws_source,
                 )
 
-                if (
-                    svc.app_id == AppId.CODEX
-                    and workspace_agents_content is not None
-                ):
+                if svc.app_id == AppId.CODEX and workspace_agents_content is not None:
                     scope = "ws:codex:repo_agents_override"
                     override_target = repo / CODEX_AGENTS_OVERRIDE_FILENAME
                     override_action = plan_compiled_text_action(
@@ -475,19 +484,7 @@ class SyncPlanner:
                         removable_links=load_state_links(managed_links, scope),
                     )
                     actions.append(override_action)
-                    desired_paths_by_scope.setdefault(scope, []).append(
-                        override_target
-                    )
-
-                    git_dir = self.workspace_service.resolve_git_dir(repo)
-                    if git_dir is not None:
-                        actions.append(
-                            _plan_git_exclude_entry(
-                                exclude_path=git_dir / "info" / "exclude",
-                                entry=CODEX_AGENTS_OVERRIDE_FILENAME,
-                                workspace_name=workspace_name,
-                            )
-                        )
+                    desired_paths_by_scope.setdefault(scope, []).append(override_target)
 
                 if should_render_workspace_config:
                     scope = f"ws:{svc.app_id.value}:repo_mcp"
@@ -516,7 +513,9 @@ class SyncPlanner:
                     )
                     skill_actions, desired_paths, skill_skipped = plan_skill_actions(
                         skill_sources,
-                        getattr(repo_target_service.repository, "skills_dir"),
+                        _workspace_skills_dir(
+                            svc.app_id, repo_target_service.repository.root
+                        ),
                         scope,
                         "workspace",
                         load_state_paths(managed_paths, scope),
@@ -556,6 +555,26 @@ class SyncPlanner:
                     actions.extend(agent_actions)
                     desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
                     skipped.extend(agent_skipped)
+
+        exclude_entries = GitExcludeService(self.core).compute_entries(
+            workspace_name,
+            [
+                svc.app_id.value
+                for svc in self.app_services
+                if app_metadata(svc.app_id).supports_workspace_propagation
+            ],
+        )
+        for repo in repos:
+            git_dir = self.workspace_service.resolve_git_dir(repo)
+            if git_dir is None:
+                continue
+            actions.append(
+                _plan_git_exclude_entries(
+                    exclude_path=git_dir / "info" / "exclude",
+                    entries=exclude_entries,
+                    workspace_name=workspace_name,
+                )
+            )
 
         # --- Stale cleanup ---
         active_workspace_apps = {

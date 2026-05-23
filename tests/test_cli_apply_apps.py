@@ -25,6 +25,57 @@ def test_apply_cursor_target_writes_only_cursor_config(
     assert not (tmp_path / ".config" / "opencode" / "opencode.json").exists()
 
 
+def test_apply_opencode_does_not_require_base_config(
+    minimal_shared_config: Path, core_root: Path, tmp_path: Path, cli_runner, enable_app
+) -> None:
+    enable_app("opencode")
+    (core_root / "config" / "opencode.base.json").unlink()
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
+
+    assert result.exit_code == 0
+    assert (tmp_path / ".config" / "opencode" / "opencode.json").exists()
+
+
+def test_apply_syncs_git_excludes_for_target_workspace_app(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git" / "info").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    write_json(
+        core_root / "workspaces" / "myws" / "git-exclude.json",
+        {"include_defaults": True, "extra_patterns": ["*.generated"]},
+    )
+    enable_app("codex")
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    content = (workspace_root / "repo-a" / ".git" / "info" / "exclude").read_text(
+        encoding="utf-8"
+    )
+    assert ".codex" in content
+    assert ".agents" in content
+    assert "AGENTS.md" in content
+    assert "AGENTS.override.md" in content
+    assert "CLAUDE.md" in content
+    assert "*.generated" in content
+    assert ".cursor" not in content
+
+
 def test_apply_codex_target_writes_toml_config(
     minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
 ) -> None:

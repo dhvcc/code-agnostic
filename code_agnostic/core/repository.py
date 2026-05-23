@@ -167,7 +167,7 @@ class CoreRepository(BaseSourceRepository):
 
     def load_opencode_base(self) -> dict[str, Any]:
         if not self.opencode_base_path.exists():
-            raise MissingConfigFileError(self.opencode_base_path)
+            return {}
         payload, error = read_json_safe(self.opencode_base_path)
         if error is not None:
             raise InvalidJsonFormatError(self.opencode_base_path, error)

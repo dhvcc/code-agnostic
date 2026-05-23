@@ -265,11 +265,10 @@ def test_list_agent_sources_when_dir_missing(core_repo: CoreRepository) -> None:
     assert core_repo.list_agent_sources() == []
 
 
-def test_load_opencode_base_missing_file(core_repo: CoreRepository) -> None:
-    from code_agnostic.errors import MissingConfigFileError
-
-    with pytest.raises(MissingConfigFileError):
-        core_repo.load_opencode_base()
+def test_load_opencode_base_missing_file_returns_empty_config(
+    core_repo: CoreRepository,
+) -> None:
+    assert core_repo.load_opencode_base() == {}
 
 
 def test_load_opencode_base_invalid_json(core_repo: CoreRepository) -> None:

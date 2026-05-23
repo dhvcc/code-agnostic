@@ -116,11 +116,11 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         return payload
 
     def _load_base_config(self) -> dict[str, Any]:
-        from code_agnostic.errors import MissingConfigFileError, InvalidJsonFormatError
+        from code_agnostic.errors import InvalidJsonFormatError
         from code_agnostic.utils import read_json_safe
 
         if not self._base_config_path.exists():
-            raise MissingConfigFileError(self._base_config_path)
+            return {}
         payload, error = read_json_safe(self._base_config_path)
         if error is not None:
             raise InvalidJsonFormatError(self._base_config_path, error)
