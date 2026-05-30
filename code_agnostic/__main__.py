@@ -48,13 +48,15 @@ cli.add_command(import_group)
 
 def main() -> int:
     try:
-        cli(standalone_mode=False)
+        result = cli(standalone_mode=False)
     except click.exceptions.Exit as exc:
         code = exc.exit_code
         return code if isinstance(code, int) else 1
     except click.ClickException as exc:
         exc.show()
         return 2
+    if isinstance(result, int):
+        return result
     return 0
 
 

@@ -64,3 +64,77 @@ def test_codex_workspace_skill_apply_without_global_mcp_entrypoint(
     assert status.returncode == 0, status.stderr + status.stdout
     assert "synced" in status.stdout
     assert "needs sync" not in status.stdout
+
+
+def test_entrypoint_plan_and_status_fail_on_invalid_mcp_source(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    enable = _run_cli(home, "apps", "enable", "-a", "codex")
+    assert enable.returncode == 0, enable.stderr
+
+    source = home / ".config" / "code-agnostic" / "config" / "mcp.base.json"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("{}", encoding="utf-8")
+
+    plan = _run_cli(home, "plan", "-a", "codex")
+    assert plan.returncode != 0
+    assert "Invalid config schema" in plan.stdout
+    assert "mcp.base.json" in plan.stdout
+
+    status = _run_cli(home, "status", "-a", "codex")
+    assert status.returncode != 0
+    assert "codex" in status.stdout
+    assert "error" in status.stdout
+    assert "Invalid config schema" in status.stdout
+    assert "synced" not in status.stdout
+
+
+def test_entrypoint_status_scopes_app_config_errors(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    enable_codex = _run_cli(home, "apps", "enable", "-a", "codex")
+    assert enable_codex.returncode == 0, enable_codex.stderr
+    enable_opencode = _run_cli(home, "apps", "enable", "-a", "opencode")
+    assert enable_opencode.returncode == 0, enable_opencode.stderr
+
+    opencode_config = home / ".config" / "opencode" / "opencode.json"
+    opencode_config.parent.mkdir(parents=True, exist_ok=True)
+    opencode_config.write_text("[]", encoding="utf-8")
+
+    status = _run_cli(home, "status", "-a", "codex")
+    assert status.returncode == 0, status.stderr + status.stdout
+    assert "codex" in status.stdout
+    assert "opencode" not in status.stdout
+    assert "opencode.json" not in status.stdout
+    assert "cannot evaluate" not in status.stdout
+
+
+def test_entrypoint_status_fails_on_missing_workspace_path(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    add_workspace = _run_cli(
+        home,
+        "workspaces",
+        "add",
+        "--name",
+        "missingws",
+        "--path",
+        str(workspace_root),
+    )
+    assert add_workspace.returncode == 0, add_workspace.stderr
+
+    workspace_root.rmdir()
+
+    status = _run_cli(home, "status")
+    assert status.returncode != 0
+    assert "missingws" in status.stdout
+    assert "error" in status.stdout
+    assert "workspace path" in status.stdout

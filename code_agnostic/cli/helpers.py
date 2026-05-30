@@ -37,13 +37,12 @@ def status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRo
 
     relevant = [action for action in plan.actions if action.app == app_name]
 
-    for error in plan.errors:
-        if app_name in str(error).lower():
-            return EditorStatusRow(
-                name=app_name,
-                status=EditorSyncStatus.ERROR,
-                detail=f"cannot evaluate ({error})",
-            )
+    if plan.errors:
+        return EditorStatusRow(
+            name=app_name,
+            status=EditorSyncStatus.ERROR,
+            detail=f"cannot evaluate ({plan.errors[0]})",
+        )
 
     synced = (
         all(action.status == ActionStatus.NOOP for action in relevant)

@@ -62,3 +62,94 @@ def test_status_can_scope_to_single_app(
     assert result.exit_code == 0
     assert "cursor" in result.output
     assert "opencode" not in result.output
+
+
+def test_status_reports_error_for_invalid_existing_mcp_source(
+    core_root: Path, cli_runner, enable_app
+) -> None:
+    enable_app("codex")
+    source = core_root / "config" / "mcp.base.json"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("{}", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["status", "-a", "codex"])
+
+    assert result.exit_code != 0
+    assert "codex" in result.output
+    assert "error" in result.output
+    assert "Invalid config schema" in result.output
+    assert "synced" not in result.output
+
+
+def test_status_app_scope_ignores_other_app_config_errors(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("codex")
+    enable_app("opencode")
+    opencode_config = tmp_path / ".config" / "opencode" / "opencode.json"
+    opencode_config.parent.mkdir(parents=True, exist_ok=True)
+    opencode_config.write_text("[]", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["status", "-a", "codex"])
+
+    assert result.exit_code == 0
+    assert "codex" in result.output
+    assert "opencode" not in result.output
+    assert "opencode.json" not in result.output
+    assert "cannot evaluate" not in result.output
+
+
+def test_status_returns_nonzero_for_workspace_error(tmp_path: Path, cli_runner) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    add_result = cli_runner.invoke(
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "missingws",
+            "--path",
+            str(workspace_root),
+        ],
+    )
+    assert add_result.exit_code == 0
+    workspace_root.rmdir()
+
+    result = cli_runner.invoke(cli, ["status"])
+
+    assert result.exit_code != 0
+    assert "missingws" in result.output
+    assert "error" in result.output
+    assert "workspace path" in result.output
+
+
+def test_status_app_scope_returns_nonzero_for_workspace_error(
+    tmp_path: Path, cli_runner, enable_app
+) -> None:
+    enable_app("codex")
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    add_result = cli_runner.invoke(
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "missingws",
+            "--path",
+            str(workspace_root),
+        ],
+    )
+    assert add_result.exit_code == 0
+    workspace_root.rmdir()
+
+    result = cli_runner.invoke(cli, ["status", "-a", "codex"])
+
+    assert result.exit_code != 0
+    assert "codex" in result.output
+    assert "missingws" in result.output
+    assert "workspace path" in result.output
