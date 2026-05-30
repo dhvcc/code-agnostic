@@ -75,8 +75,8 @@ Every property in the capability docs uses one of these states:
 
 ## Required docs
 
-- [skills.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/skills.md)
-- [agents.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/agents.md)
-- [rules.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/rules.md)
-- [mcp.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/mcp.md)
-- [lossiness.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/lossiness.md)
+- [skills.md](skills.md)
+- [agents.md](agents.md)
+- [rules.md](rules.md)
+- [mcp.md](mcp.md)
+- [lossiness.md](lossiness.md)
