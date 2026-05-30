@@ -722,6 +722,44 @@
       },
       "additionalProperties": false
     },
+    "Policy.Effect": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny"
+      ]
+    },
+    "ConfigV2.Experimental.Policy": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "provider.use"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "effect": {
+          "$ref": "#/$defs/Policy.Effect"
+        },
+        "resource": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "effect",
+        "resource"
+      ],
+      "additionalProperties": false
+    },
     "Config": {
       "type": "object",
       "properties": {
@@ -1194,6 +1232,13 @@
               "type": "integer",
               "maximum": 9007199254740991,
               "description": "Timeout in milliseconds for model context protocol (MCP) requests"
+            },
+            "policies": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConfigV2.Experimental.Policy"
+              },
+              "description": "Policy statements applied to supported resources, such as provider access"
             }
           },
           "additionalProperties": false

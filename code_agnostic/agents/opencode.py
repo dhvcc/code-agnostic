@@ -22,19 +22,25 @@ def serialize_opencode_agent(agent: Agent) -> str:
     if reasoning_effort:
         fm["reasoningEffort"] = reasoning_effort
 
-    permission = _compile_permission(agent)
-    if permission:
-        fm["permission"] = permission
-
-    for key, value in agent.metadata.app_passthrough(
+    passthrough = agent.metadata.app_passthrough(
         "opencode",
         consumed_keys={
             "model",
             "reasoning_effort",
             "sandbox_mode",
             "nickname_candidates",
+            "permission",
         },
-    ).items():
+    )
+
+    permission = _merge_permission(
+        _compile_permission(agent),
+        agent.metadata.app_overrides.get("opencode", {}).get("permission"),
+    )
+    if permission:
+        fm["permission"] = permission
+
+    for key, value in passthrough.items():
         if key in fm:
             continue
         fm[key] = value
@@ -50,8 +56,8 @@ def serialize_opencode_agent(agent: Agent) -> str:
     return "\n".join(parts)
 
 
-def _compile_permission(agent: Agent) -> dict[str, str]:
-    permission: dict[str, str] = {}
+def _compile_permission(agent: Agent) -> dict[str, Any]:
+    permission: dict[str, Any] = {}
     permission["read"] = "allow" if agent.metadata.tools.read else "deny"
     permission["edit"] = "allow" if agent.metadata.tools.write else "deny"
     for item in agent.metadata.tools.mcp:
@@ -62,3 +68,13 @@ def _compile_permission(agent: Agent) -> dict[str, str]:
         key = f"{server}_{tool}" if tool else f"{server}_*"
         permission[key] = "allow"
     return permission
+
+
+def _merge_permission(
+    generated: dict[str, Any], override: Any | None
+) -> dict[str, Any] | Any:
+    if override is None:
+        return generated
+    if isinstance(override, dict):
+        return {**generated, **override}
+    return override

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import yaml
+
 from code_agnostic.skills.compilers import (
     CodexSkillCompiler,
     CursorSkillCompiler,
@@ -54,7 +56,7 @@ def test_codex_compiler() -> None:
     assert "Skill body." in result
 
 
-def test_opencode_compiler_preserves_mcp_tools() -> None:
+def test_opencode_compiler_omits_unsupported_tool_permissions() -> None:
     skill = Skill(
         name="mcp-skill",
         source_path=Path("/fake/mcp-skill/SKILL.md"),
@@ -71,5 +73,8 @@ def test_opencode_compiler_preserves_mcp_tools() -> None:
     )
     compiler = OpenCodeSkillCompiler()
     result = compiler.compile(skill)
-    assert "github" in result
-    assert "create_pr" in result
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert "tools" not in payload
+    assert body.strip() == "Body."

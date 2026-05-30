@@ -29,9 +29,9 @@ Unknown keys fail validation.
 | --- | --- | --- | --- | --- |
 | `name` | supported | compiled | compiled | compiled |
 | `description` | supported | compiled | compiled | compiled |
-| `tools.read` | supported | compiled | compiled | compiled |
-| `tools.write` | supported | compiled | compiled | compiled |
-| `tools.mcp` | supported | compiled | compiled | compiled |
+| `tools.read` | supported | compiled | compiled | ignored |
+| `tools.write` | supported | compiled | compiled | ignored |
+| `tools.mcp` | supported | compiled | compiled | ignored |
 | `prompt.md` body | supported | compiled | compiled | compiled |
 | `x-cursor.*` | supported | native or compiled | ignored | ignored |
 | `x-codex.*` | supported | ignored | native or compiled | ignored |
@@ -41,3 +41,6 @@ Unknown keys fail validation.
 
 - The v1 skill contract stays intentionally small.
 - New fields should not be added until at least one target mapping and one test exist.
+- OpenCode `SKILL.md` frontmatter does not represent per-skill tool permissions;
+  skill access is controlled through `permission.skill` in OpenCode config or
+  agent permissions.

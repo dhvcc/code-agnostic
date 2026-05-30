@@ -37,6 +37,8 @@ def test_opencode_schema_repository_fallbacks_to_local(monkeypatch) -> None:
 
     schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
     assert "mcp" in _opencode_config_properties(schema)
+    experimental = _opencode_config_properties(schema)["experimental"]
+    assert "policies" in experimental["properties"]
 
 
 def test_codex_schema_repository_prefers_remote(monkeypatch) -> None:

@@ -114,6 +114,40 @@ def test_opencode_compiler_uses_permission_config_for_tools() -> None:
     assert "tools" not in payload
 
 
+def test_opencode_compiler_merges_explicit_permission_override() -> None:
+    agent = _make_agent(
+        app_overrides={
+            "opencode": {
+                "permission": {
+                    "edit": "ask",
+                    "bash": {"*": "ask", "git diff": "allow"},
+                    "glob": "deny",
+                    "github_*": "deny",
+                }
+            }
+        },
+        tools=AgentToolPermissions(
+            read=False,
+            write=True,
+            mcp=[{"server": "github"}, {"server": "docs", "tool": "search"}],
+        ),
+    )
+
+    compiler = OpenCodeAgentCompiler()
+    result = compiler.compile(agent)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["permission"] == {
+        "read": "deny",
+        "edit": "ask",
+        "github_*": "deny",
+        "docs_search": "allow",
+        "bash": {"*": "ask", "git diff": "allow"},
+        "glob": "deny",
+    }
+
+
 def test_cursor_compiler() -> None:
     agent = _make_agent()
     compiler = CursorAgentCompiler()
