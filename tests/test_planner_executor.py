@@ -335,6 +335,41 @@ def test_cursor_build_plan_includes_compiled_skill_files(
     assert skill_actions[0].status == ActionStatus.CREATE
 
 
+def test_codex_build_plan_creates_skill_under_symlinked_home_ancestor(
+    tmp_path: Path,
+    write_json,
+) -> None:
+    real_root = tmp_path / "real-root"
+    linked_root = tmp_path / "linked-root"
+    real_root.mkdir()
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    home = linked_root / "home"
+    core_root = home / ".config" / "code-agnostic"
+    codex_root = home / ".codex"
+    write_json(core_root / "config" / "mcp.base.json", {"mcpServers": {}})
+    skill_dir = core_root / "skills" / "reviewer"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: reviewer\n"
+        "description: Review code\n"
+        "---\n"
+        "\n"
+        "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    core = CoreRepository(core_root)
+    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+
+    skill_actions = [
+        action for action in plan.actions if action.scope == "app:codex:skills"
+    ]
+    assert len(skill_actions) == 1
+    assert skill_actions[0].status == ActionStatus.CREATE
+
+
 def test_cursor_build_plan_includes_compiled_agent_files(
     minimal_shared_config: Path,
     core_root: Path,

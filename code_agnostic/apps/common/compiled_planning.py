@@ -16,12 +16,15 @@ def find_replaceable_symlink_ancestor(target: Path, managed_root: Path) -> Path 
 
 
 def _symlink_ancestor_state(
-    target: Path, removable_link_paths: set[Path]
+    target: Path, removable_link_paths: set[Path], managed_root: Path | None
 ) -> tuple[bool, bool]:
     current = target
     found_symlink = False
     while True:
-        if current.is_symlink():
+        in_managed_root = managed_root is None or (
+            current == managed_root or current.is_relative_to(managed_root)
+        )
+        if current.is_symlink() and in_managed_root:
             found_symlink = True
             current_key = current.resolve(strict=False)
             if current_key in removable_link_paths:
@@ -37,6 +40,7 @@ def plan_compiled_text_action(
     payload: str,
     managed_paths: set[Path],
     removable_link_paths: set[Path] | None = None,
+    managed_root: Path | None = None,
     scope: str,
     app: str,
     create_detail: str,
@@ -46,7 +50,7 @@ def plan_compiled_text_action(
 ) -> Action:
     removable = removable_link_paths or set()
     has_symlink_ancestor, is_removable_ancestor = _symlink_ancestor_state(
-        target, removable
+        target, removable, managed_root
     )
 
     if has_symlink_ancestor and not is_removable_ancestor:

@@ -145,6 +145,7 @@ class IAppConfigService(ABC):
                 payload=payload,
                 managed_paths=managed_path_set,
                 removable_link_paths=removable_link_set,
+                managed_root=target_dir,
                 scope=scope,
                 app=app,
                 create_detail=create_detail,
