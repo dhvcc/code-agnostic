@@ -7,8 +7,13 @@ from typing import Any
 
 import yaml
 
+from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.skills.models import Skill
 from code_agnostic.skills.parser import serialize_skill
+
+_OPENCODE_SKILL_FRONTMATTER_KEYS = frozenset(
+    {"name", "description", "license", "compatibility", "metadata"}
+)
 
 
 class ISkillCompiler(ABC):
@@ -28,6 +33,13 @@ class OpenCodeSkillCompiler(ISkillCompiler):
             fm["description"] = skill.metadata.description
 
         for key, value in skill.metadata.app_overrides.get("opencode", {}).items():
+            if key not in _OPENCODE_SKILL_FRONTMATTER_KEYS:
+                allowed = ", ".join(sorted(_OPENCODE_SKILL_FRONTMATTER_KEYS))
+                raise InvalidConfigSchemaError(
+                    skill.source_path,
+                    f"x-opencode.{key} is not supported in OpenCode skill "
+                    f"frontmatter; allowed keys: {allowed}",
+                )
             if key in fm:
                 continue
             fm[key] = value

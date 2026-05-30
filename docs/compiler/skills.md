@@ -46,3 +46,5 @@ Unknown keys fail validation.
   agent permissions.
 - OpenCode-native skill frontmatter fields such as `license`, `compatibility`,
   and `metadata` can be preserved through `x-opencode`.
+- Unsupported `x-opencode` skill frontmatter keys are rejected during OpenCode
+  compilation instead of being emitted as ignored no-op fields.

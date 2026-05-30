@@ -80,7 +80,7 @@ code-agnostic apply
 | Workspace root `AGENTS.md` link | yes | yes | yes |
 | Native repo config include for workspace `AGENTS.md` | yes | -- | -- |
 | Repo/subdir gets shared workspace `AGENTS.md` today | yes | -- | yes |
-| Root-level `AGENTS.md` discovery only | -- | yes | yes |
+| Nested `AGENTS.md` discovery | -- | yes | yes |
 | Workspace propagation | yes | -- | yes |
 | Import from | yes | yes | yes |
 | Interactive import (TUI) | yes | yes | yes |
@@ -89,7 +89,7 @@ Cursor workspace propagation is intentionally disabled to avoid duplicate MCP in
 
 OpenCode workspace configs include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`.
 
-Cursor documents `AGENTS.md` as a root-level project file. Codex documents `AGENTS.md` discovery, but not a native config include for an extra workspace file. In practice that means subdirectories and repos opened below the workspace root will not reliably get the shared workspace `AGENTS.md` today for Cursor.
+Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-agnostic` still disables Cursor workspace propagation, so it does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load repo-local or nested `AGENTS.md` files that already exist in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
 
 ## Features
 
