@@ -204,7 +204,6 @@ All commands use named flags (`-a`, `-w`, `-v`). Singular aliases work too: `app
 
 The compiler migration is documented in:
 
-- [ROADMAP.md](ROADMAP.md)
 - [docs/compiler/overview.md](docs/compiler/overview.md)
 - [docs/compiler/skills.md](docs/compiler/skills.md)
 - [docs/compiler/agents.md](docs/compiler/agents.md)
