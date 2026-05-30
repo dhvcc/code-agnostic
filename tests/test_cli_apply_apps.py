@@ -95,6 +95,18 @@ def test_apply_codex_target_writes_toml_config(
     assert "[mcp_servers]" not in codex_config.read_text(encoding="utf-8")
 
 
+def test_apply_still_rejects_invalid_existing_global_mcp_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner, enable_app
+) -> None:
+    enable_app("codex")
+    (core_root / "config" / "mcp.base.json").write_text("{}", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 1
+    assert "Invalid config schema" in result.output
+
+
 def test_apply_codex_preserves_project_trust_settings(
     minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
 ) -> None:

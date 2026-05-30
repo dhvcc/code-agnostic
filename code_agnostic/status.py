@@ -3,6 +3,7 @@ from pathlib import Path
 from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
+from code_agnostic.constants import AGENTS_PROJECT_DIRNAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
     RepoSyncStatus,
@@ -129,6 +130,8 @@ class StatusService:
                 if meta.app_id == AppId.CURSOR:
                     continue
                 target = repo_path / meta.project_dir_name / "skills"
+                if meta.app_id == AppId.CODEX:
+                    target = repo_path / AGENTS_PROJECT_DIRNAME / "skills"
                 if not target.exists():
                     issues.append(
                         f"missing or mismatched {meta.app_id.value} skills link"

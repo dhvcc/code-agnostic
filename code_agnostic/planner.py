@@ -24,7 +24,7 @@ from code_agnostic.constants import (
     SKILLS_DIRNAME,
 )
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
-from code_agnostic.errors import SyncAppError
+from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
@@ -221,6 +221,8 @@ class SyncPlanner:
 
         try:
             mcp_base = self.core.load_mcp_base()
+        except MissingConfigFileError:
+            mcp_base = {MCP_SERVERS_KEY: {}}
         except SyncAppError as exc:
             return SyncPlan(actions=[], errors=[exc], skipped=[])
 
