@@ -5,6 +5,16 @@ from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 
 
+def _opencode_config_properties(schema: dict) -> dict:
+    ref = schema.get("$ref")
+    if ref == "#/$defs/Config":
+        config = schema.get("$defs", {}).get("Config", {})
+        properties = config.get("properties", {})
+        return properties if isinstance(properties, dict) else {}
+    properties = schema.get("properties", {})
+    return properties if isinstance(properties, dict) else {}
+
+
 class _Response:
     def __init__(self, payload: str) -> None:
         self._payload = payload
@@ -26,8 +36,7 @@ def test_opencode_schema_repository_fallbacks_to_local(monkeypatch) -> None:
     monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
 
     schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
-    assert schema.get("type") == "object"
-    assert "mcp" in schema.get("properties", {})
+    assert "mcp" in _opencode_config_properties(schema)
 
 
 def test_codex_schema_repository_prefers_remote(monkeypatch) -> None:
@@ -62,8 +71,7 @@ def test_remote_returns_invalid_json_falls_back_to_local(monkeypatch) -> None:
     monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _bad_json)
 
     schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
-    assert schema.get("type") == "object"
-    assert "mcp" in schema.get("properties", {})
+    assert "mcp" in _opencode_config_properties(schema)
 
 
 def test_remote_returns_non_dict_falls_back_to_local(monkeypatch) -> None:
@@ -73,8 +81,7 @@ def test_remote_returns_non_dict_falls_back_to_local(monkeypatch) -> None:
     monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _non_dict)
 
     schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
-    assert schema.get("type") == "object"
-    assert "mcp" in schema.get("properties", {})
+    assert "mcp" in _opencode_config_properties(schema)
 
 
 def test_cache_ttl_within_ttl_uses_cache(monkeypatch) -> None:

@@ -22,15 +22,9 @@ def serialize_opencode_agent(agent: Agent) -> str:
     if reasoning_effort:
         fm["reasoningEffort"] = reasoning_effort
 
-    tools: dict[str, Any] = {}
-    if agent.metadata.tools.read is not True:
-        tools["read"] = agent.metadata.tools.read
-    if agent.metadata.tools.write is not True:
-        tools["write"] = agent.metadata.tools.write
-    if agent.metadata.tools.mcp:
-        tools["mcp"] = agent.metadata.tools.mcp
-    if tools:
-        fm["tools"] = tools
+    permission = _compile_permission(agent)
+    if permission:
+        fm["permission"] = permission
 
     for key, value in agent.metadata.app_passthrough(
         "opencode",
@@ -54,3 +48,17 @@ def serialize_opencode_agent(agent: Agent) -> str:
 
     parts.append(agent.content)
     return "\n".join(parts)
+
+
+def _compile_permission(agent: Agent) -> dict[str, str]:
+    permission: dict[str, str] = {}
+    permission["read"] = "allow" if agent.metadata.tools.read else "deny"
+    permission["edit"] = "allow" if agent.metadata.tools.write else "deny"
+    for item in agent.metadata.tools.mcp:
+        server = item.get("server")
+        if not server:
+            continue
+        tool = item.get("tool")
+        key = f"{server}_{tool}" if tool else f"{server}_*"
+        permission[key] = "allow"
+    return permission

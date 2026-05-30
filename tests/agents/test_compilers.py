@@ -29,6 +29,7 @@ def _make_agent(
     model: str = "claude-sonnet-4-20250514",
     content: str = "Agent body.\n",
     app_overrides: dict[str, dict[str, object]] | None = None,
+    tools: AgentToolPermissions | None = None,
 ) -> Agent:
     return Agent(
         name=name,
@@ -40,7 +41,7 @@ def _make_agent(
             model_reasoning_effort="medium",
             sandbox_mode="read-only",
             nickname_candidates=["Atlas", "Echo"],
-            tools=AgentToolPermissions(read=True, write=True),
+            tools=tools or AgentToolPermissions(read=True, write=True),
             app_overrides=app_overrides or {},
             codex=AgentCodexConfig(
                 mcp_servers={
@@ -65,6 +66,7 @@ def test_opencode_compiler() -> None:
     assert payload["description"] == "Test agent"
     assert payload["model"] == "claude-sonnet-4-20250514"
     assert payload["reasoningEffort"] == "medium"
+    assert payload["permission"] == {"read": "allow", "edit": "allow"}
     assert "model_reasoning_effort" not in payload
     assert body.strip() == "Agent body."
 
@@ -84,6 +86,32 @@ def test_opencode_compiler_uses_app_override_and_passthrough() -> None:
 
     assert payload["model"] == "opencode/big-pickle"
     assert payload["temperature"] == 0.2
+
+
+def test_opencode_compiler_uses_permission_config_for_tools() -> None:
+    agent = _make_agent(
+        tools=AgentToolPermissions(
+            read=False,
+            write=False,
+            mcp=[
+                {"server": "github", "tool": "create_pr"},
+                {"server": "docs"},
+            ],
+        ),
+    )
+
+    compiler = OpenCodeAgentCompiler()
+    result = compiler.compile(agent)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["permission"] == {
+        "read": "deny",
+        "edit": "deny",
+        "github_create_pr": "allow",
+        "docs_*": "allow",
+    }
+    assert "tools" not in payload
 
 
 def test_cursor_compiler() -> None:

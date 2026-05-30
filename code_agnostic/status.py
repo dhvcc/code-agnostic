@@ -107,8 +107,7 @@ class StatusService:
             filename = meta.config_filename
             if filename is None or meta.project_dir_name is None:
                 continue
-            # Cursor workspace MCP targets the workspace root by default; per-repo
-            # propagation is optional (--experimental) and not validated here.
+            # Cursor workspace propagation is disabled to avoid duplicate MCP startup.
             if meta.app_id == AppId.CURSOR:
                 continue
 

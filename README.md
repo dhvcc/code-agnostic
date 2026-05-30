@@ -204,13 +204,13 @@ All commands use named flags (`-a`, `-w`, `-v`). Singular aliases work too: `app
 
 The compiler migration is documented in:
 
-- [ROADMAP.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/ROADMAP.md)
-- [docs/compiler/overview.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/overview.md)
-- [docs/compiler/skills.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/skills.md)
-- [docs/compiler/agents.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/agents.md)
-- [docs/compiler/rules.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/rules.md)
-- [docs/compiler/mcp.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/mcp.md)
-- [docs/compiler/lossiness.md](/Users/alexeyartishevsky/PycharmProjects/llm-sync/docs/compiler/lossiness.md)
+- [ROADMAP.md](ROADMAP.md)
+- [docs/compiler/overview.md](docs/compiler/overview.md)
+- [docs/compiler/skills.md](docs/compiler/skills.md)
+- [docs/compiler/agents.md](docs/compiler/agents.md)
+- [docs/compiler/rules.md](docs/compiler/rules.md)
+- [docs/compiler/mcp.md](docs/compiler/mcp.md)
+- [docs/compiler/lossiness.md](docs/compiler/lossiness.md)
 
 ## Roadmap
 

@@ -577,11 +577,7 @@ class SyncPlanner:
             )
 
         # --- Stale cleanup ---
-        active_workspace_apps = {
-            svc.app_id.value
-            for svc in self.app_services
-            if app_metadata(svc.app_id).supports_workspace_propagation
-        }
+        selected_workspace_apps = {svc.app_id.value for svc in self.app_services}
 
         stale_rules = plan_stale_group(
             old_links=load_state_links(managed_links, "rules"),
@@ -651,7 +647,7 @@ class SyncPlanner:
             if scope not in desired_paths_by_scope
             and (
                 scope == "rules"
-                or _workspace_scope_matches_app(scope, active_workspace_apps)
+                or _workspace_scope_matches_app(scope, selected_workspace_apps)
             )
         }
         for scope in sorted(all_stale_scopes):
@@ -681,7 +677,7 @@ class SyncPlanner:
             if scope not in desired_paths_by_scope
             and (
                 scope == "rules"
-                or _workspace_scope_matches_app(scope, active_workspace_apps)
+                or _workspace_scope_matches_app(scope, selected_workspace_apps)
             )
         }
         for scope in sorted(all_stale_path_scopes):
