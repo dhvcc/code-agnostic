@@ -236,3 +236,11 @@ The compiler migration is documented in:
 uv sync --dev
 uv run pytest
 ```
+
+Real app-ingestion E2E is gated because it requires installed target CLIs and
+uses each tool's own introspection surface:
+
+```bash
+CODE_AGNOSTIC_REAL_APP_E2E=1 uv run pytest tests/e2e/test_real_app_ingestion_e2e.py -q
+CODE_AGNOSTIC_REAL_APP_E2E=1 CODE_AGNOSTIC_REAL_APP_TARGETS=codex,opencode uv run pytest tests/e2e/test_real_app_ingestion_e2e.py -q
+```
