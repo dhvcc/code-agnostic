@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import yaml
 
@@ -20,11 +21,16 @@ class OpenCodeSkillCompiler(ISkillCompiler):
     """Cross-compile for OpenCode skills."""
 
     def compile(self, skill: Skill) -> str:
-        fm: dict[str, str] = {}
+        fm: dict[str, Any] = {}
         if skill.metadata.name:
             fm["name"] = skill.metadata.name
         if skill.metadata.description:
             fm["description"] = skill.metadata.description
+
+        for key, value in skill.metadata.app_overrides.get("opencode", {}).items():
+            if key in fm:
+                continue
+            fm[key] = value
 
         parts: list[str] = []
         if fm:

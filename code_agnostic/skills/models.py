@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class SkillMetadata:
     name: str = ""
     description: str = ""
     tools: SkillToolPermissions = field(default_factory=SkillToolPermissions)
+    app_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

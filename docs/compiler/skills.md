@@ -44,3 +44,5 @@ Unknown keys fail validation.
 - OpenCode `SKILL.md` frontmatter does not represent per-skill tool permissions;
   skill access is controlled through `permission.skill` in OpenCode config or
   agent permissions.
+- OpenCode-native skill frontmatter fields such as `license`, `compatibility`,
+  and `metadata` can be preserved through `x-opencode`.

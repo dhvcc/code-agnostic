@@ -73,6 +73,7 @@ def load_skill_bundle(path: Path) -> Skill:
                 write=bool(tools.get("write", False)),
                 mcp=[dict(item) for item in mcp_items],
             ),
+            app_overrides=_coerce_skill_app_overrides(payload),
         ),
         content=prompt,
     )
@@ -200,4 +201,14 @@ def _coerce_agent_app_overrides(payload: dict[str, Any]) -> dict[str, dict[str, 
         overrides[app_name] = {
             normalize_agent_override_key(str(key)): value for key, value in raw.items()
         }
+    return overrides
+
+
+def _coerce_skill_app_overrides(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    overrides: dict[str, dict[str, Any]] = {}
+    for app_name in ("cursor", "codex", "opencode"):
+        raw = payload.get(f"x-{app_name}")
+        if not isinstance(raw, dict):
+            continue
+        overrides[app_name] = {str(key): value for key, value in raw.items()}
     return overrides

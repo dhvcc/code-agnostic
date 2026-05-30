@@ -46,6 +46,7 @@ def parse_skill(path: Path) -> Skill:
         name=str(raw.get("name", name)),
         description=str(raw.get("description", "")),
         tools=tools,
+        app_overrides=_coerce_skill_app_overrides(raw),
     )
     return Skill(name=name, source_path=path, metadata=metadata, content=content)
 
@@ -82,3 +83,13 @@ def _is_skill_bundle_dir(path: Path) -> bool:
     return path.is_dir() and (
         (path / "meta.yaml").exists() or (path / "prompt.md").exists()
     )
+
+
+def _coerce_skill_app_overrides(payload: dict) -> dict[str, dict[str, object]]:
+    overrides: dict[str, dict[str, object]] = {}
+    for app_name in ("cursor", "codex", "opencode"):
+        raw = payload.get(f"x-{app_name}")
+        if not isinstance(raw, dict):
+            continue
+        overrides[app_name] = {str(key): value for key, value in raw.items()}
+    return overrides

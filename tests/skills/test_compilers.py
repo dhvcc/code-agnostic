@@ -78,3 +78,30 @@ def test_opencode_compiler_omits_unsupported_tool_permissions() -> None:
 
     assert "tools" not in payload
     assert body.strip() == "Body."
+
+
+def test_opencode_compiler_preserves_native_skill_overrides() -> None:
+    skill = Skill(
+        name="release-helper",
+        source_path=Path("/fake/release-helper/SKILL.md"),
+        metadata=SkillMetadata(
+            name="release-helper",
+            description="Release helper",
+            app_overrides={
+                "opencode": {
+                    "license": "MIT",
+                    "compatibility": "opencode",
+                    "metadata": {"audience": "maintainers"},
+                }
+            },
+        ),
+        content="Body.\n",
+    )
+
+    result = OpenCodeSkillCompiler().compile(skill)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["license"] == "MIT"
+    assert payload["compatibility"] == "opencode"
+    assert payload["metadata"] == {"audience": "maintainers"}
