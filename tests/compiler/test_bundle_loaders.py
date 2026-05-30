@@ -66,6 +66,34 @@ def test_load_skill_bundle(tmp_path: Path) -> None:
     assert skill.content == "Review the diff.\n"
 
 
+def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "release-helper"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: release-helper\n"
+        "description: Release helper\n"
+        "x-opencode:\n"
+        "  license: MIT\n"
+        "  compatibility: opencode\n"
+        "  metadata:\n"
+        "    audience: maintainers\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "prompt.md").write_text("Prepare a release.\n", encoding="utf-8")
+
+    skill = load_skill_bundle(skill_dir)
+
+    assert skill.metadata.app_overrides == {
+        "opencode": {
+            "license": "MIT",
+            "compatibility": "opencode",
+            "metadata": {"audience": "maintainers"},
+        }
+    }
+
+
 def test_load_agent_bundle(tmp_path: Path) -> None:
     agent_dir = tmp_path / "agents" / "architect"
     agent_dir.mkdir(parents=True)

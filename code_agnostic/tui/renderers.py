@@ -79,9 +79,9 @@ class SyncConsoleUI:
         self.console.print(
             UISection.note(
                 "next",
-                "Enable target app sync, then run apply.\n"
-                "- code-agnostic apps enable <app>\n"
-                "- code-agnostic apply <app>",
+                "Enable a target app, then apply the scoped plan.\n"
+                "- code-agnostic apps enable -a <app>\n"
+                "- code-agnostic apply -a <app>",
                 style=UIStyle.DIM.value,
             )
         )

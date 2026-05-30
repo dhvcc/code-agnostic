@@ -95,6 +95,18 @@ def test_apply_codex_target_writes_toml_config(
     assert "[mcp_servers]" not in codex_config.read_text(encoding="utf-8")
 
 
+def test_apply_still_rejects_invalid_existing_global_mcp_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner, enable_app
+) -> None:
+    enable_app("codex")
+    (core_root / "config" / "mcp.base.json").write_text("{}", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 1
+    assert "Invalid config schema" in result.output
+
+
 def test_apply_codex_preserves_project_trust_settings(
     minimal_shared_config: Path, tmp_path: Path, cli_runner, enable_app
 ) -> None:
@@ -474,7 +486,7 @@ def test_apply_cursor_target_does_not_apply_workspace_links(
     assert not repo_rules_link.exists()
 
 
-def test_apply_cursor_writes_workspace_root_mcp_json(
+def test_apply_cursor_skips_workspace_mcp_json(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -518,16 +530,12 @@ def test_apply_cursor_writes_workspace_root_mcp_json(
     assert apply_result.exit_code == 0
 
     mcp_path = workspace_root / ".cursor" / "mcp.json"
-    assert mcp_path.is_file()
-    payload = json.loads(mcp_path.read_text(encoding="utf-8"))
-    assert payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
+    assert not mcp_path.exists()
     sub_mcp = workspace_root / "service-a" / ".cursor" / "mcp.json"
-    assert sub_mcp.is_file()
-    sub_payload = json.loads(sub_mcp.read_text(encoding="utf-8"))
-    assert sub_payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
+    assert not sub_mcp.exists()
 
 
-def test_apply_cursor_writes_subrepo_mcp_json(
+def test_apply_cursor_skips_subrepo_mcp_json(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -571,9 +579,7 @@ def test_apply_cursor_writes_subrepo_mcp_json(
     assert apply_result.exit_code == 0
 
     sub_mcp = workspace_root / "service-a" / ".cursor" / "mcp.json"
-    assert sub_mcp.is_file()
-    payload = json.loads(sub_mcp.read_text(encoding="utf-8"))
-    assert payload["mcpServers"]["ws-only"]["url"] == "https://ws.example.com/mcp"
+    assert not sub_mcp.exists()
 
 
 def test_apply_cursor_does_not_write_workspace_mcp_from_global_config_only(

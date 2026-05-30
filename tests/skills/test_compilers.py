@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import yaml
+
 from code_agnostic.skills.compilers import (
     CodexSkillCompiler,
     CursorSkillCompiler,
@@ -54,7 +56,7 @@ def test_codex_compiler() -> None:
     assert "Skill body." in result
 
 
-def test_opencode_compiler_preserves_mcp_tools() -> None:
+def test_opencode_compiler_omits_unsupported_tool_permissions() -> None:
     skill = Skill(
         name="mcp-skill",
         source_path=Path("/fake/mcp-skill/SKILL.md"),
@@ -71,5 +73,35 @@ def test_opencode_compiler_preserves_mcp_tools() -> None:
     )
     compiler = OpenCodeSkillCompiler()
     result = compiler.compile(skill)
-    assert "github" in result
-    assert "create_pr" in result
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert "tools" not in payload
+    assert body.strip() == "Body."
+
+
+def test_opencode_compiler_preserves_native_skill_overrides() -> None:
+    skill = Skill(
+        name="release-helper",
+        source_path=Path("/fake/release-helper/SKILL.md"),
+        metadata=SkillMetadata(
+            name="release-helper",
+            description="Release helper",
+            app_overrides={
+                "opencode": {
+                    "license": "MIT",
+                    "compatibility": "opencode",
+                    "metadata": {"audience": "maintainers"},
+                }
+            },
+        ),
+        content="Body.\n",
+    )
+
+    result = OpenCodeSkillCompiler().compile(skill)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["license"] == "MIT"
+    assert payload["compatibility"] == "opencode"
+    assert payload["metadata"] == {"audience": "maintainers"}

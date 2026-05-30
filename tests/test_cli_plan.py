@@ -59,6 +59,8 @@ def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> N
     result = cli_runner.invoke(cli, ["plan"])
 
     assert result.exit_code == 0
+    assert "code-agnostic apps enable -a <app>" in result.output
+    assert "code-agnostic apply -a <app>" in result.output
 
 
 def test_plan_target_opencode_when_not_enabled(

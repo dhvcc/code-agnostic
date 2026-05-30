@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
+
+import yaml
 
 from code_agnostic.skills.models import Skill
 from code_agnostic.skills.parser import serialize_skill
@@ -15,10 +18,31 @@ class ISkillCompiler(ABC):
 
 
 class OpenCodeSkillCompiler(ISkillCompiler):
-    """Near-identity: OpenCode format IS the canonical format."""
+    """Cross-compile for OpenCode skills."""
 
     def compile(self, skill: Skill) -> str:
-        return serialize_skill(skill)
+        fm: dict[str, Any] = {}
+        if skill.metadata.name:
+            fm["name"] = skill.metadata.name
+        if skill.metadata.description:
+            fm["description"] = skill.metadata.description
+
+        for key, value in skill.metadata.app_overrides.get("opencode", {}).items():
+            if key in fm:
+                continue
+            fm[key] = value
+
+        parts: list[str] = []
+        if fm:
+            parts.append("---")
+            parts.append(
+                yaml.dump(fm, default_flow_style=False, sort_keys=False).rstrip()
+            )
+            parts.append("---")
+            parts.append("")
+
+        parts.append(skill.content)
+        return "\n".join(parts)
 
 
 class CursorSkillCompiler(ISkillCompiler):

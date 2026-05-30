@@ -24,7 +24,7 @@ from code_agnostic.constants import (
     SKILLS_DIRNAME,
 )
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
-from code_agnostic.errors import SyncAppError
+from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
@@ -221,6 +221,8 @@ class SyncPlanner:
 
         try:
             mcp_base = self.core.load_mcp_base()
+        except MissingConfigFileError:
+            mcp_base = {MCP_SERVERS_KEY: {}}
         except SyncAppError as exc:
             return SyncPlan(actions=[], errors=[exc], skipped=[])
 
@@ -577,11 +579,7 @@ class SyncPlanner:
             )
 
         # --- Stale cleanup ---
-        active_workspace_apps = {
-            svc.app_id.value
-            for svc in self.app_services
-            if app_metadata(svc.app_id).supports_workspace_propagation
-        }
+        selected_workspace_apps = {svc.app_id.value for svc in self.app_services}
 
         stale_rules = plan_stale_group(
             old_links=load_state_links(managed_links, "rules"),
@@ -651,7 +649,7 @@ class SyncPlanner:
             if scope not in desired_paths_by_scope
             and (
                 scope == "rules"
-                or _workspace_scope_matches_app(scope, active_workspace_apps)
+                or _workspace_scope_matches_app(scope, selected_workspace_apps)
             )
         }
         for scope in sorted(all_stale_scopes):
@@ -681,7 +679,7 @@ class SyncPlanner:
             if scope not in desired_paths_by_scope
             and (
                 scope == "rules"
-                or _workspace_scope_matches_app(scope, active_workspace_apps)
+                or _workspace_scope_matches_app(scope, selected_workspace_apps)
             )
         }
         for scope in sorted(all_stale_path_scopes):
