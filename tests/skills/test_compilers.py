@@ -2,8 +2,10 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
+from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.skills.compilers import (
     CodexSkillCompiler,
     CursorSkillCompiler,
@@ -105,3 +107,25 @@ def test_opencode_compiler_preserves_native_skill_overrides() -> None:
     assert payload["license"] == "MIT"
     assert payload["compatibility"] == "opencode"
     assert payload["metadata"] == {"audience": "maintainers"}
+
+
+def test_opencode_compiler_rejects_unsupported_skill_overrides() -> None:
+    skill = Skill(
+        name="release-helper",
+        source_path=Path("/fake/release-helper/SKILL.md"),
+        metadata=SkillMetadata(
+            name="release-helper",
+            description="Release helper",
+            app_overrides={
+                "opencode": {
+                    "permission": {"skill": {"secret-*": "deny"}},
+                }
+            },
+        ),
+        content="Body.\n",
+    )
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        OpenCodeSkillCompiler().compile(skill)
+
+    assert "x-opencode.permission is not supported" in exc_info.value.detail
