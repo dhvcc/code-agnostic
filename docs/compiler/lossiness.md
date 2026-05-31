@@ -14,6 +14,8 @@ The compiler must make cross-app lossiness explicit.
 - Rule `globs` compiling to `AGENTS.md` is lossy because Codex and OpenCode do not model that field in the same way as Cursor.
 - Agent `sandbox_mode` is Codex-oriented today; other targets should not silently invent an equivalent.
 - MCP `timeout` is no longer speculative: it is part of the canonical contract and maps to app-native timeout fields.
+- MCP `env` is rejected for OpenCode remote MCP servers because current
+  OpenCode schema only supports `environment` on local MCP servers.
 - Skill `tools.*` is lossy for OpenCode skills because current OpenCode
   `SKILL.md` frontmatter does not represent per-skill tool permissions.
 

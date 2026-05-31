@@ -47,7 +47,7 @@ Target markers are recognized only for known targetable app ids.
 | `args` | supported | native | native | native |
 | `url` | supported | native | native | native |
 | `headers` | supported | native | compiled | native |
-| `env` | supported | native | compiled | native |
+| `env` | supported | native | compiled | native for local servers; rejected for remote servers |
 | `auth.client_id` | supported | compiled | compiled | compiled |
 | `auth.client_secret` | supported | compiled | compiled | compiled |
 | `auth.scopes` | supported | compiled | compiled | compiled |
@@ -59,3 +59,6 @@ Target markers are recognized only for known targetable app ids.
 - If a property is not in this table, it is not part of the compiler contract.
 - Target-specific MCP extensions belong under `x-*` only after a concrete use case and test exist.
 - Canonical `timeout` is expressed in milliseconds.
+- OpenCode's current schema allows `environment` only on local MCP servers.
+  Remote OpenCode MCP servers can carry `headers` and OAuth config, but not
+  per-server environment variables.
