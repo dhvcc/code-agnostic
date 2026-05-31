@@ -12,11 +12,13 @@ from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
 from code_agnostic.apps.cursor.service import CursorConfigService
+from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import ActionKind, ActionStatus
 
 
@@ -131,3 +133,26 @@ def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
     ]
     assert len(write_actions) == 1
     assert write_actions[0].status == ActionStatus.CREATE
+
+
+def test_opencode_remote_mcp_environment_rejected_explicitly(
+    core_root: Path, tmp_path: Path
+) -> None:
+    core = CoreRepository(core_root)
+    service = _build_opencode_service(core, tmp_path / "opencode")
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        service.build_action(
+            {
+                "remote": MCPServerDTO(
+                    name="remote",
+                    type=MCPServerType.HTTP,
+                    url="https://example.com/mcp",
+                    env={"TOKEN": "${TOKEN}"},
+                )
+            }
+        )
+
+    assert "OpenCode remote MCP servers do not support environment variables" in str(
+        exc_info.value
+    )

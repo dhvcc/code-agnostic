@@ -6,7 +6,6 @@ from jsonschema import Draft202012Validator
 from code_agnostic.agents.compilers import OpenCodeAgentCompiler
 from code_agnostic.agents.parser import parse_agent
 from code_agnostic.apps.app_id import AppId, app_label
-from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -16,10 +15,11 @@ from code_agnostic.apps.common.interfaces.repositories import (
     IAppConfigRepository,
     ISchemaRepository,
 )
-from code_agnostic.core.repository import CoreRepository
+from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
+from code_agnostic.core.repository import CoreRepository
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import Action, ActionKind, ActionStatus
 from code_agnostic.skills.compilers import OpenCodeSkillCompiler
@@ -139,6 +139,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         if existing or self._opencode_repo.config_path.exists():
             self.validate_config(existing)
 
+        self._validate_common_mcp(common_servers)
         desired_mcp = self.mapper.from_common(common_servers)
 
         if self._base_config_path is not None:
@@ -160,6 +161,15 @@ class OpenCodeConfigService(RegisteredAppConfigService):
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
         )
+
+    def _validate_common_mcp(self, common_servers: dict[str, MCPServerDTO]) -> None:
+        for server in common_servers.values():
+            if server.type != MCPServerType.STDIO and server.env:
+                raise InvalidConfigSchemaError(
+                    self._base_config_path or self.repository.config_path,
+                    "OpenCode remote MCP servers do not support environment "
+                    f"variables: {server.name}",
+                )
 
     def plan_skill_actions(
         self,
