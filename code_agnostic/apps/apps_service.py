@@ -86,6 +86,9 @@ class AppsService:
 
     def plan_for_target(self, target: str) -> SyncPlan:
         normalized = target.lower()
+        if normalized != "all" and not self.is_enabled(normalized):
+            return SyncPlan([], [], [f"{normalized} is disabled for sync."])
+
         app_services = self._resolve_services_for_target(normalized)
         plan = SyncPlanner(
             core=self.core_repository,

@@ -76,15 +76,62 @@ class SyncConsoleUI:
                 UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
             )
 
-        self.console.print(
-            UISection.note(
-                "next",
-                "Enable a target app, then apply the scoped plan.\n"
-                "- code-agnostic apps enable -a <app>\n"
-                "- code-agnostic apply -a <app>",
-                style=UIStyle.DIM.value,
+        next_steps = self._next_steps(plan, mode)
+        if next_steps:
+            self.console.print(
+                UISection.note("next", next_steps, style=UIStyle.DIM.value)
             )
-        )
+
+    @staticmethod
+    def _next_steps(plan: SyncPlan, mode: str) -> str | None:
+        command, _, target = mode.partition(":")
+        target = target or "all"
+        is_scoped = target != "all"
+        target_flag = f" -a {target}" if is_scoped else ""
+
+        if command == "apply":
+            return None
+
+        if plan.errors:
+            return (
+                "Fix the errors above, then rerun the plan.\n"
+                f"- code-agnostic plan{target_flag}"
+            )
+
+        if plan.actions:
+            return (
+                "Review the planned changes. If they match what you expect, apply them.\n"
+                f"- code-agnostic apply{target_flag}"
+            )
+
+        if is_scoped and f"{target} is disabled for sync." in plan.skipped:
+            return (
+                f"Enable {target}, then preview and apply it.\n"
+                f"- code-agnostic apps enable -a {target}\n"
+                f"- code-agnostic plan -a {target}\n"
+                f"- code-agnostic apply -a {target}"
+            )
+
+        if "No apps enabled for sync." in plan.skipped:
+            if is_scoped:
+                return (
+                    f"Enable {target}, then preview and apply it.\n"
+                    f"- code-agnostic apps enable -a {target}\n"
+                    f"- code-agnostic plan -a {target}\n"
+                    f"- code-agnostic apply -a {target}"
+                )
+            return (
+                "Enable a target app, then preview and apply it.\n"
+                "- code-agnostic apps enable -a <app>\n"
+                "- code-agnostic plan -a <app>\n"
+                "- code-agnostic apply -a <app>"
+            )
+
+        if is_scoped:
+            return (
+                f"No changes needed for {target}.\n- code-agnostic status -a {target}"
+            )
+        return "No changes needed.\n- code-agnostic status"
 
     def render_apply_result(
         self, applied: int, failed: int, failures: list[str]

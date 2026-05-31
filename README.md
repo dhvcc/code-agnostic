@@ -65,6 +65,7 @@ code-agnostic apps enable -a cursor
 code-agnostic apps enable -a opencode
 
 # Preview and apply
+code-agnostic validate
 code-agnostic plan
 code-agnostic apply
 ```
@@ -98,10 +99,18 @@ Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-
 Plan-then-apply workflow. Preview every change before it touches disk.
 
 ```bash
+code-agnostic validate              # check canonical source files
 code-agnostic plan -a cursor        # dry-run for one editor
 code-agnostic plan                   # dry-run for all
 code-agnostic apply                  # apply changes
 code-agnostic status                 # check drift
+```
+
+If managed outputs need repair after an apply, restore the active synced revision:
+
+```bash
+code-agnostic restore
+code-agnostic restore -w myproject
 ```
 
 ### MCP management
@@ -154,6 +163,8 @@ cp -R ./my-skill ~/.config/code-agnostic/skills/my-skill
 code-agnostic plan
 code-agnostic apply
 ```
+
+Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`.
 
 Planned convenience command:
 
