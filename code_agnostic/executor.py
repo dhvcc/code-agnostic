@@ -386,14 +386,13 @@ class SyncExecutor:
             raise FileNotFoundError(f"No active revision found for {label}.")
 
         record = records[0]
-        snapshots = {
-            Path(target["path"]): self._snapshot_path(Path(target["path"]))
-            for target in record.targets
-            if isinstance(target, dict) and isinstance(target.get("path"), str)
-        }
+        snapshots: dict[Path, PathSnapshot] = {}
+        for target in record.targets:
+            if isinstance(target, dict) and isinstance(target.get("path"), str):
+                self._capture_path_and_symlink_target(snapshots, Path(target["path"]))
         if record.state is not None and isinstance(record.state.get("path"), str):
             state_path = Path(record.state["path"])
-            snapshots[state_path] = self._snapshot_path(state_path)
+            self._capture_path_and_symlink_target(snapshots, state_path)
 
         restored = 0
         try:

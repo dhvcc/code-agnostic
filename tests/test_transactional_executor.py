@@ -629,6 +629,76 @@ def test_restore_active_revision_repairs_symlinked_write_target_content(
     assert real_target.read_text(encoding="utf-8") == "after\n"
 
 
+def test_restore_active_revision_rolls_back_symlink_target_content_on_failure(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    real_a = tmp_path / "real-a.txt"
+    real_b = tmp_path / "real-b.txt"
+    real_a.write_text("before a\n", encoding="utf-8")
+    real_b.write_text("before b\n", encoding="utf-8")
+    link_a = tmp_path / "a.txt"
+    link_b = tmp_path / "b.txt"
+    link_a.symlink_to(real_a)
+    link_b.symlink_to(real_b)
+    executor = SyncExecutor(core=CoreRepository(core_root))
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=link_a,
+                status=ActionStatus.UPDATE,
+                detail="update first symlinked file",
+                payload="applied a\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=link_b,
+                status=ActionStatus.UPDATE,
+                detail="update second symlinked file",
+                payload="applied b\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = executor.execute(plan)
+    real_a.write_text("drift a\n", encoding="utf-8")
+    real_b.write_text("drift b\n", encoding="utf-8")
+    original_restore = executor._restore_manifest_file
+
+    def failing_restore(target: dict) -> bool:
+        if target.get("path") == str(link_b):
+            raise RuntimeError("boom")
+        return original_restore(target)
+
+    monkeypatch.setattr(executor, "_restore_manifest_file", failing_restore)
+
+    try:
+        executor.restore_active_revision()
+    except RuntimeError as exc:
+        assert str(exc) == "boom"
+    else:  # pragma: no cover - the patched restore must fail for this regression
+        raise AssertionError("restore_active_revision unexpectedly succeeded")
+
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+    assert link_a.is_symlink()
+    assert link_b.is_symlink()
+    assert link_a.resolve() == real_a.resolve()
+    assert link_b.resolve() == real_b.resolve()
+    assert real_a.read_text(encoding="utf-8") == "drift a\n"
+    assert real_b.read_text(encoding="utf-8") == "drift b\n"
+
+
 def test_execute_cleans_staging_dir_when_replace_fails(
     minimal_shared_config: Path,
     core_root: Path,
