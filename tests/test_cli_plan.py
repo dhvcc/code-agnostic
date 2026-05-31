@@ -60,6 +60,7 @@ def test_plan_with_no_apps_enabled(minimal_shared_config: Path, cli_runner) -> N
 
     assert result.exit_code == 0
     assert "code-agnostic apps enable -a <app>" in result.output
+    assert "code-agnostic plan -a <app>" in result.output
     assert "code-agnostic apply -a <app>" in result.output
 
 
@@ -69,6 +70,22 @@ def test_plan_target_opencode_when_not_enabled(
     result = cli_runner.invoke(cli, ["plan", "-a", "opencode"])
 
     assert result.exit_code == 0
+    assert "code-agnostic apps enable -a opencode" in result.output
+    assert "code-agnostic plan -a opencode" in result.output
+    assert "code-agnostic apply -a opencode" in result.output
+
+
+def test_plan_target_enabled_app_shows_scoped_apply_next_step(
+    minimal_shared_config: Path, cli_runner, enable_app
+) -> None:
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["plan", "-a", "cursor"])
+
+    assert result.exit_code == 0
+    assert "Review the planned changes" in result.output
+    assert "code-agnostic apply -a cursor" in result.output
+    assert "code-agnostic apps enable -a <app>" not in result.output
 
 
 def test_plan_missing_mcp_base_json(tmp_path: Path, cli_runner, enable_app) -> None:

@@ -31,6 +31,18 @@ def test_apply_cursor_target_writes_only_cursor_config(
     assert not (tmp_path / ".config" / "opencode" / "opencode.json").exists()
 
 
+def test_apply_target_does_not_show_plan_next_steps(
+    minimal_shared_config: Path, cli_runner, enable_app
+) -> None:
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "cursor"])
+
+    assert result.exit_code == 0
+    assert "Enable a target app" not in result.output
+    assert "Review the planned changes" not in result.output
+
+
 def test_apply_opencode_does_not_require_base_config(
     minimal_shared_config: Path, core_root: Path, tmp_path: Path, cli_runner, enable_app
 ) -> None:
