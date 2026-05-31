@@ -80,6 +80,13 @@ def _remove_tree(root: Path) -> None:
     root.rmdir()
 
 
+def _symlink_target_path(path: Path, target: str) -> Path:
+    target_path = Path(target)
+    if target_path.is_absolute():
+        return target_path
+    return path.parent / target_path
+
+
 class ActionHandler(Protocol):
     def handle(
         self, action: Action, context: ExecutionContext
@@ -531,8 +538,7 @@ class SyncExecutor:
                 return False, None
             if staged_action.staged_path is None:
                 return False, f"Missing staged payload for write action: {action.path}"
-            action.path.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(staged_action.staged_path, action.path)
+            self._replace_staged_path(staged_action.staged_path, action.path)
             return True, None
 
         handler = self.handlers.get(action.kind)
@@ -576,12 +582,12 @@ class SyncExecutor:
     ) -> dict[Path, PathSnapshot]:
         paths: dict[Path, PathSnapshot] = {}
         for action in plan.actions:
-            paths[action.path] = self._snapshot_path(action.path)
+            self._capture_path_and_symlink_target(paths, action.path)
 
         if persist_state:
             core = self.context.core
             core_state_path = core.root / SYNC_STATE_FILENAME
-            paths[core_state_path] = self._snapshot_path(core_state_path)
+            self._capture_path_and_symlink_target(paths, core_state_path)
             for workspace_name in {
                 action.workspace
                 for action in plan.actions
@@ -590,12 +596,21 @@ class SyncExecutor:
                 workspace_state_path = WorkspaceConfigRepository(
                     root=core.workspace_config_dir(workspace_name)
                 ).state_json
-                paths[workspace_state_path] = self._snapshot_path(workspace_state_path)
+                self._capture_path_and_symlink_target(paths, workspace_state_path)
             for record in revision_records:
-                paths[record.active_path] = self._snapshot_path(record.active_path)
-                paths[record.manifest_path] = self._snapshot_path(record.manifest_path)
-                paths[record.pending_path] = self._snapshot_path(record.pending_path)
+                self._capture_path_and_symlink_target(paths, record.active_path)
+                self._capture_path_and_symlink_target(paths, record.manifest_path)
+                self._capture_path_and_symlink_target(paths, record.pending_path)
         return paths
+
+    def _capture_path_and_symlink_target(
+        self, snapshots: dict[Path, PathSnapshot], path: Path
+    ) -> None:
+        snapshot = self._snapshot_path(path)
+        snapshots[path] = snapshot
+        if snapshot.is_symlink and snapshot.symlink_target is not None:
+            target_path = _symlink_target_path(path, snapshot.symlink_target)
+            snapshots.setdefault(target_path, self._snapshot_path(target_path))
 
     def _snapshot_path(self, path: Path) -> PathSnapshot:
         if path.is_symlink():
@@ -816,24 +831,38 @@ class SyncExecutor:
         staging_dirs.add(staging_root.parent)
         staged_path = staging_root / stage_name
         write_json(staged_path, payload)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(staged_path, target)
+        self._replace_staged_path(staged_path, target)
+
+    def _replace_staged_path(self, staged_path: Path, target: Path) -> None:
+        replacement_target = target
+        if target.is_symlink():
+            replacement_target = _symlink_target_path(target, os.readlink(target))
+        replacement_target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staged_path, replacement_target)
 
     def _serialize_manifest_file(
         self, *, path: Path, artifact_path: Path
     ) -> dict[str, Any]:
         checksum: str | None = None
         serialized_artifact_path: str | None = None
+        target_checksum: str | None = None
+        target_artifact_path: str | None = None
         exists = path.exists() or path.is_symlink()
         if path.is_symlink():
-            checksum = hashlib.sha256(os.readlink(path).encode("utf-8")).hexdigest()
+            link_target = os.readlink(path)
+            checksum = hashlib.sha256(link_target.encode("utf-8")).hexdigest()
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
-            artifact_path.write_text(os.readlink(path), encoding="utf-8")
+            artifact_path.write_text(link_target, encoding="utf-8")
             serialized_artifact_path = str(artifact_path.with_suffix(".symlink"))
             artifact_path.unlink()
-            Path(serialized_artifact_path).write_text(
-                os.readlink(path), encoding="utf-8"
-            )
+            Path(serialized_artifact_path).write_text(link_target, encoding="utf-8")
+            resolved_target = _symlink_target_path(path, link_target)
+            if resolved_target.exists() and resolved_target.is_file():
+                target_checksum = hashlib.sha256(
+                    resolved_target.read_bytes()
+                ).hexdigest()
+                artifact_path.write_bytes(resolved_target.read_bytes())
+                target_artifact_path = str(artifact_path)
         elif path.exists() and path.is_file():
             checksum = hashlib.sha256(path.read_bytes()).hexdigest()
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -845,6 +874,8 @@ class SyncExecutor:
             "exists": exists,
             "checksum": checksum,
             "artifact_path": serialized_artifact_path,
+            "target_checksum": target_checksum,
+            "target_artifact_path": target_artifact_path,
         }
 
     def _serialize_manifest_target(
@@ -862,6 +893,8 @@ class SyncExecutor:
             "exists": payload["exists"],
             "checksum": payload["checksum"],
             "artifact_path": payload["artifact_path"],
+            "target_checksum": payload["target_checksum"],
+            "target_artifact_path": payload["target_artifact_path"],
         }
 
     def _serialize_manifest_sources(self, root: Path) -> list[dict[str, str]]:
@@ -903,10 +936,25 @@ class SyncExecutor:
 
         path.parent.mkdir(parents=True, exist_ok=True)
         if artifact_path.suffix == ".symlink":
-            path.symlink_to(artifact_path.read_text(encoding="utf-8"))
+            link_target = artifact_path.read_text(encoding="utf-8")
+            path.symlink_to(link_target)
+            self._restore_symlink_target_file(path, link_target, target)
             return True
         path.write_bytes(artifact_path.read_bytes())
         return True
+
+    def _restore_symlink_target_file(
+        self, path: Path, link_target: str, target: dict[str, Any]
+    ) -> None:
+        artifact_path_text = target.get("target_artifact_path")
+        if not isinstance(artifact_path_text, str):
+            return
+        artifact_path = Path(artifact_path_text)
+        if not artifact_path.exists():
+            return
+        resolved_target = _symlink_target_path(path, link_target)
+        resolved_target.parent.mkdir(parents=True, exist_ok=True)
+        resolved_target.write_bytes(artifact_path.read_bytes())
 
     @staticmethod
     def _merge_managed_links(

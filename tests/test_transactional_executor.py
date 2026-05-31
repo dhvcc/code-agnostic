@@ -467,6 +467,168 @@ def test_execute_places_written_files_via_staging_replace(
     assert not (core_root / ".sync-staging").exists()
 
 
+def test_execute_preserves_symlinked_write_target(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    real_target = tmp_path / "real-generated.txt"
+    real_target.write_text("before\n", encoding="utf-8")
+    link = tmp_path / "generated.txt"
+    link.symlink_to(real_target)
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=link,
+                status=ActionStatus.UPDATE,
+                detail="update symlinked file",
+                payload="after\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+    assert link.is_symlink()
+    assert link.resolve() == real_target.resolve()
+    assert real_target.read_text(encoding="utf-8") == "after\n"
+
+
+def test_execute_rolls_back_symlinked_write_target_content(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    real_target = tmp_path / "real-generated.txt"
+    real_target.write_text("before\n", encoding="utf-8")
+    link = tmp_path / "generated.txt"
+    link.symlink_to(real_target)
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=link,
+                status=ActionStatus.UPDATE,
+                detail="update symlinked file",
+                payload="after\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.SYMLINK,
+                path=tmp_path / "broken-link",
+                status=ActionStatus.CREATE,
+                detail="break apply",
+                source=None,
+                scope="app:test:link",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Missing source for symlink action: {tmp_path / 'broken-link'}"
+    ]
+    assert link.is_symlink()
+    assert link.resolve() == real_target.resolve()
+    assert real_target.read_text(encoding="utf-8") == "before\n"
+
+
+def test_execute_preserves_symlinked_state_file_when_persisting_metadata(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    real_state = tmp_path / "real-sync-state.json"
+    real_state.write_text("{}\n", encoding="utf-8")
+    state_link = core_root / ".sync-state.json"
+    state_link.symlink_to(real_state)
+    target = tmp_path / "generated.txt"
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create file",
+                payload="hello\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+    assert state_link.is_symlink()
+    payload = json.loads(real_state.read_text(encoding="utf-8"))
+    assert payload["managed_paths"] == {"app:test:text": [str(target)]}
+
+
+def test_restore_active_revision_repairs_symlinked_write_target_content(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    real_target = tmp_path / "real-generated.txt"
+    real_target.write_text("before\n", encoding="utf-8")
+    link = tmp_path / "generated.txt"
+    link.symlink_to(real_target)
+    executor = SyncExecutor(core=CoreRepository(core_root))
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=link,
+                status=ActionStatus.UPDATE,
+                detail="update symlinked file",
+                payload="after\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = executor.execute(plan)
+    real_target.write_text("drift\n", encoding="utf-8")
+
+    result = executor.restore_active_revision()
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+    assert result.restored >= 1
+    assert link.is_symlink()
+    assert link.resolve() == real_target.resolve()
+    assert real_target.read_text(encoding="utf-8") == "after\n"
+
+
 def test_execute_cleans_staging_dir_when_replace_fails(
     minimal_shared_config: Path,
     core_root: Path,
