@@ -920,9 +920,9 @@ class SyncExecutor:
             return False
         path = Path(path_text)
         existed_before = path.exists() or path.is_symlink()
-        self._remove_existing_path(path)
 
         if target.get("exists") is not True:
+            self._remove_existing_path(path)
             return existed_before
 
         artifact_path_text = target.get("artifact_path")
@@ -933,6 +933,7 @@ class SyncExecutor:
         if not artifact_path.exists():
             return False
 
+        self._remove_existing_path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         if artifact_path.suffix == ".symlink":
             link_target = artifact_path.read_text(encoding="utf-8")

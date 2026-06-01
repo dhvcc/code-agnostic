@@ -421,6 +421,48 @@ def test_execute_restores_last_successful_revision_from_manifest(
     assert sibling.read_text(encoding="utf-8") == "sibling\n"
 
 
+def test_restore_active_revision_preserves_target_when_artifact_missing(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "generated.txt"
+    executor = SyncExecutor(core=CoreRepository(core_root))
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create file",
+                payload="applied\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+    applied, failed, failures = executor.execute(plan)
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+
+    active_revision = json.loads(
+        (core_root / ".sync-revisions" / "active.json").read_text(encoding="utf-8")
+    )
+    manifest_path = Path(active_revision["manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifact_path = Path(manifest["targets"][0]["artifact_path"])
+    artifact_path.unlink()
+    target.write_text("local work\n", encoding="utf-8")
+
+    result = executor.restore_active_revision()
+
+    assert result.restored == 1
+    assert target.read_text(encoding="utf-8") == "local work\n"
+
+
 def test_execute_places_written_files_via_staging_replace(
     minimal_shared_config: Path,
     core_root: Path,
