@@ -9,6 +9,7 @@ from code_agnostic.cli.helpers import workspace_config_root
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.tui import SyncConsoleUI
+from code_agnostic.utils import compact_home_path
 
 
 @click.group(help="Manage skill definitions in the hub config.")
@@ -24,8 +25,28 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
     core = CoreRepository()
     root = workspace_config_root(core, workspace)
     skill_sources = CoreRepository(root).list_skill_sources()
-    rows = [[source.name] for source in skill_sources]
-    ui.render_list("skills", ["Skill"], rows, "No skills configured.")
+    scope = f"workspace:{workspace}" if workspace else "global"
+    rows = [
+        [
+            source.name,
+            scope,
+            "bundle" if (source / "meta.yaml").exists() else "legacy",
+            compact_home_path(source),
+        ]
+        for source in skill_sources
+    ]
+    empty_message = (
+        f"No workspace skills configured for {workspace} in "
+        f"{compact_home_path(root / 'skills')}."
+        if workspace
+        else f"No global skills configured in {compact_home_path(root / 'skills')}."
+    )
+    ui.render_list(
+        "skills",
+        ["Skill", "Scope", "Format", "Source"],
+        rows,
+        empty_message,
+    )
 
 
 @skills.command("remove", help="Remove a skill by name.")
