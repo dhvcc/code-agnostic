@@ -13,11 +13,17 @@ AI coding tools each want config in a different place and format. When you use m
 ├── config/
 │   └── mcp.base.json             MCP servers (editor-agnostic)
 ├── rules/
-│   └── python-style.md           Rules with YAML frontmatter
+│   └── python-style/
+│       ├── meta.yaml             Rule metadata
+│       └── prompt.md             Rule instructions
 ├── skills/
-│   └── code-reviewer/SKILL.md    Skills with YAML frontmatter
+│   └── code-reviewer/
+│       ├── meta.yaml             Skill metadata
+│       └── prompt.md             Skill instructions
 └── agents/
-    └── architect.md              Agents with YAML frontmatter
+    └── architect/
+        ├── meta.yaml             Agent metadata
+        └── prompt.md             Agent instructions
 
         ↓ plan / apply ↓
 
@@ -27,6 +33,8 @@ AI coding tools each want config in a different place and format. When you use m
 ```
 
 Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex, etc.
+
+Legacy single-file rules, `skills/<name>/SKILL.md`, and markdown agents are still supported for migration, but bundle directories are the preferred source format for new config.
 
 Today the implementation is still mixed: some assets are compiled and some are symlinked. The active migration plan is to move to generated outputs everywhere with a strict compiler contract instead of implicit per-app behavior.
 

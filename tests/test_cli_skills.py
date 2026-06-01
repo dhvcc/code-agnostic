@@ -8,7 +8,7 @@ from code_agnostic.__main__ import cli
 def test_skills_list_empty(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(cli, ["skills", "list"])
     assert result.exit_code == 0
-    assert "No skills" in result.output
+    assert "No global skills" in result.output
 
 
 def test_skills_list_populated(
@@ -21,6 +21,9 @@ def test_skills_list_populated(
     result = cli_runner.invoke(cli, ["skills", "list"])
     assert result.exit_code == 0
     assert "my-skill" in result.output
+    assert "global" in result.output
+    assert "legacy" in result.output
+    assert "~/.config/code-agnostic/skills/my-skill" in result.output
 
 
 def test_skills_list_bundle_source(
@@ -37,6 +40,7 @@ def test_skills_list_bundle_source(
 
     assert result.exit_code == 0
     assert "bundle-skill" in result.output
+    assert "bundle" in result.output
 
 
 def test_skills_remove_existing(
@@ -88,3 +92,5 @@ def test_skills_workspace_scoped(
     result = cli_runner.invoke(cli, ["skills", "list", "-w", "myws"])
     assert result.exit_code == 0
     assert "ws-skill" in result.output
+    assert "workspace:myws" in result.output
+    assert "Source" in result.output
