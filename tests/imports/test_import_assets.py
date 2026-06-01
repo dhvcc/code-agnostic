@@ -9,9 +9,10 @@ from code_agnostic.imports.service import ImportService
 
 def test_skills_import_copies_skill_directories(tmp_path: Path) -> None:
     source = tmp_path / ".codex"
-    skill_dir = source / "skills" / "demo"
+    skill_dir = tmp_path / ".agents" / "skills" / "demo"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("skill", encoding="utf-8")
+    source.mkdir(parents=True)
     (source / "config.toml").write_text("", encoding="utf-8")
 
     core = CoreRepository(tmp_path / ".config" / "code-agnostic")
@@ -89,9 +90,10 @@ def test_codex_agents_import_copies_supported_app_assets(tmp_path: Path) -> None
 
 def test_assets_import_is_idempotent(tmp_path: Path) -> None:
     source = tmp_path / ".codex"
-    skill_dir = source / "skills" / "demo"
+    skill_dir = tmp_path / ".agents" / "skills" / "demo"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("skill", encoding="utf-8")
+    source.mkdir(parents=True)
     (source / "config.toml").write_text("", encoding="utf-8")
 
     core = CoreRepository(tmp_path / ".config" / "code-agnostic")
@@ -148,8 +150,8 @@ def test_assets_import_skips_symlink_entries_by_default(tmp_path: Path) -> None:
     real_skill.mkdir()
     (real_skill / "SKILL.md").write_text("skill", encoding="utf-8")
 
-    skills_root = source / "skills"
-    skills_root.mkdir()
+    skills_root = tmp_path / ".agents" / "skills"
+    skills_root.mkdir(parents=True)
     (skills_root / "linked-skill").symlink_to(real_skill)
 
     core = CoreRepository(tmp_path / ".config" / "code-agnostic")
@@ -166,7 +168,7 @@ def test_assets_import_overwrite_replaces_target_content(tmp_path: Path) -> None
     source = tmp_path / ".codex"
     source.mkdir(parents=True)
     (source / "config.toml").write_text("", encoding="utf-8")
-    skill_dir = source / "skills" / "demo"
+    skill_dir = tmp_path / ".agents" / "skills" / "demo"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("new", encoding="utf-8")
 

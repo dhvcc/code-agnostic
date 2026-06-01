@@ -25,7 +25,7 @@ def _write_codex_source(
         lines.append("")
     (root / "config.toml").write_text("\n".join(lines), encoding="utf-8")
     if with_skill:
-        skill_dir = root / "skills" / "imported-skill"
+        skill_dir = root.parent / ".agents" / "skills" / "imported-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text("from codex", encoding="utf-8")
     if with_agent:
