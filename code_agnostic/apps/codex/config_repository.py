@@ -11,6 +11,7 @@ import tomlkit
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.constants import (
     AGENTS_DIRNAME,
+    AGENTS_PROJECT_DIRNAME,
     CODEX_CONFIG_FILENAME,
     CODEX_PROJECT_DIRNAME,
     SKILLS_DIRNAME,
@@ -32,7 +33,7 @@ class CodexConfigRepository(IAppConfigRepository):
 
     @property
     def skills_dir(self) -> Path:
-        return self.root / SKILLS_DIRNAME
+        return self.root.parent / AGENTS_PROJECT_DIRNAME / SKILLS_DIRNAME
 
     @property
     def agents_dir(self) -> Path:

@@ -303,7 +303,7 @@ def test_codex_skills_agents_generated_e2e(
     assert apply_result.exit_code == 0
 
     codex_root = tmp_path / ".codex"
-    skill_path = codex_root / "skills" / "my-skill" / "SKILL.md"
+    skill_path = tmp_path / ".agents" / "skills" / "my-skill" / "SKILL.md"
     agent_path = codex_root / "agents" / "planner.toml"
 
     assert skill_path.is_file()
@@ -379,7 +379,7 @@ def test_full_roundtrip_skills_agents_all_apps(
     assert (cursor_root / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (cursor_root / "agents" / "planner.md").is_file()
 
-    assert (codex_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (tmp_path / ".agents" / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (codex_root / "agents" / "planner.toml").is_file()
 
 
@@ -431,7 +431,7 @@ def test_bundle_skills_and_agents_apply_all_apps(
     assert (cursor_root / "agents" / "planner.md").is_file()
     assert not (cursor_root / "agents" / "planner.md").is_symlink()
 
-    assert (codex_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (tmp_path / ".agents" / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (codex_root / "agents" / "planner.toml").is_file()
 
 

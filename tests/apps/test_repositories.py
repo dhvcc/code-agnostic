@@ -114,7 +114,7 @@ def test_cursor_repository_agents_dir(tmp_path: Path) -> None:
 def test_codex_repository_skills_dir(tmp_path: Path) -> None:
     root = tmp_path / ".codex"
     repo = CodexConfigRepository(root=root)
-    assert repo.skills_dir == root / "skills"
+    assert repo.skills_dir == tmp_path / ".agents" / "skills"
 
 
 def test_codex_repository_agents_dir(tmp_path: Path) -> None:

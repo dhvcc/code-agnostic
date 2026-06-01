@@ -531,7 +531,10 @@ def test_codex_build_plan_includes_compiled_skill_files(
         if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:codex:skills"
     ]
     assert len(skill_actions) == 1
-    assert skill_actions[0].path == codex_root / "skills" / "my-skill" / "SKILL.md"
+    assert (
+        skill_actions[0].path
+        == tmp_path / ".agents" / "skills" / "my-skill" / "SKILL.md"
+    )
     assert skill_actions[0].status == ActionStatus.CREATE
 
 
@@ -557,7 +560,10 @@ def test_codex_build_plan_includes_compiled_skill_files_for_bundle(
         if a.kind == ActionKind.WRITE_TEXT and a.scope == "app:codex:skills"
     ]
     assert len(skill_actions) == 1
-    assert skill_actions[0].path == codex_root / "skills" / "my-skill" / "SKILL.md"
+    assert (
+        skill_actions[0].path
+        == tmp_path / ".agents" / "skills" / "my-skill" / "SKILL.md"
+    )
     assert "Skill body." in skill_actions[0].payload
 
 
@@ -597,7 +603,7 @@ def test_opencode_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
     assert skill_actions[0].status == ActionStatus.UPDATE
 
 
-def test_codex_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
+def test_codex_build_plan_moves_managed_skills_out_of_codex_home(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -609,25 +615,30 @@ def test_codex_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
 
     core = CoreRepository(core_root)
     codex_root = tmp_path / ".codex"
-    legacy_dir = codex_root / "skills" / "my-skill"
-    legacy_dir.mkdir(parents=True)
-    (legacy_dir / "SKILL.md").write_text("old", encoding="utf-8")
-    core.save_state({"managed_links": {"app:codex:skills": [str(legacy_dir)]}})
+    old_skill = codex_root / "skills" / "my-skill" / "SKILL.md"
+    old_skill.parent.mkdir(parents=True)
+    old_skill.write_text("old", encoding="utf-8")
+    core.save_state({"managed_paths": {"app:codex:skills": [str(old_skill)]}})
 
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
 
-    assert not any(
-        action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_dir
+    remove_actions = [
+        action
         for action in plan.actions
-    )
+        if action.kind == ActionKind.REMOVE_FILE and action.path == old_skill
+    ]
+    assert len(remove_actions) == 1
     skill_actions = [
         action
         for action in plan.actions
         if action.kind == ActionKind.WRITE_TEXT and action.scope == "app:codex:skills"
     ]
     assert len(skill_actions) == 1
-    assert skill_actions[0].path == legacy_dir / "SKILL.md"
-    assert skill_actions[0].status == ActionStatus.UPDATE
+    assert (
+        skill_actions[0].path
+        == tmp_path / ".agents" / "skills" / "my-skill" / "SKILL.md"
+    )
+    assert skill_actions[0].status == ActionStatus.CREATE
 
 
 def test_cursor_build_plan_reuses_legacy_managed_skill_dir_without_conflict(
@@ -690,7 +701,7 @@ def test_codex_build_plan_replaces_unmanaged_skill_symlink(
         for action in plan.actions
         if action.kind == ActionKind.REMOVE_SYMLINK and action.path == legacy_dir
     ]
-    assert len(remove_actions) == 1
+    assert remove_actions == []
 
     skill_actions = [
         action
@@ -698,8 +709,11 @@ def test_codex_build_plan_replaces_unmanaged_skill_symlink(
         if action.kind == ActionKind.WRITE_TEXT and action.scope == "app:codex:skills"
     ]
     assert len(skill_actions) == 1
-    assert skill_actions[0].path == legacy_dir / "SKILL.md"
-    assert skill_actions[0].status == ActionStatus.UPDATE
+    assert (
+        skill_actions[0].path
+        == tmp_path / ".agents" / "skills" / "my-skill" / "SKILL.md"
+    )
+    assert skill_actions[0].status == ActionStatus.CREATE
     assert not any("Codex skill sync skipped (conflict)" in msg for msg in plan.skipped)
 
 
