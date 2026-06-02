@@ -259,6 +259,33 @@ uv sync --dev
 uv run pytest
 ```
 
+Before pushing release-prep work, run the supported Python matrix locally. Tox
+delegates each environment to `uv run --python`, so `uv` can provide the
+requested interpreter when it is not already installed:
+
+```bash
+uvx tox run -p auto
+uvx tox run -e uv310 -- tests/test_version.py -q
+```
+
+For a hermetic Linux matrix that does not depend on locally installed Python
+versions, run the Docker matrix:
+
+```bash
+./scripts/run-docker-matrix.sh
+./scripts/run-docker-matrix.sh tests/test_version.py -q
+```
+
+Limit the Docker matrix while iterating:
+
+```bash
+PYTHON_VERSIONS="3.10 3.14" ./scripts/run-docker-matrix.sh tests/test_version.py -q
+```
+
+The release gate still requires GitHub Actions to pass because the published
+workflow is the source of truth for OS coverage across Ubuntu, macOS, and
+Windows on every supported Python version.
+
 Real app-ingestion E2E is gated because it requires installed target CLIs and
 uses each tool's own introspection surface:
 
