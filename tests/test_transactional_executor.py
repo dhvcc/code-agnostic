@@ -2,6 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.executor import SyncExecutor
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
@@ -421,7 +423,7 @@ def test_execute_restores_last_successful_revision_from_manifest(
     assert sibling.read_text(encoding="utf-8") == "sibling\n"
 
 
-def test_restore_active_revision_preserves_target_when_artifact_missing(
+def test_restore_active_revision_fails_before_writes_when_artifact_missing(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -457,10 +459,73 @@ def test_restore_active_revision_preserves_target_when_artifact_missing(
     artifact_path.unlink()
     target.write_text("local work\n", encoding="utf-8")
 
-    result = executor.restore_active_revision()
+    with pytest.raises(FileNotFoundError):
+        executor.restore_active_revision()
 
-    assert result.restored == 1
     assert target.read_text(encoding="utf-8") == "local work\n"
+
+
+def test_restore_active_revision_preflights_pending_repair_before_writes(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    primary = tmp_path / "primary.txt"
+    sibling = tmp_path / "sibling.txt"
+    executor = SyncExecutor(core=CoreRepository(core_root))
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=primary,
+                status=ActionStatus.CREATE,
+                detail="create primary",
+                payload="applied primary\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=sibling,
+                status=ActionStatus.CREATE,
+                detail="create sibling",
+                payload="applied sibling\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+    applied, failed, failures = executor.execute(plan)
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+
+    active_revision = json.loads(
+        (core_root / ".sync-revisions" / "active.json").read_text(encoding="utf-8")
+    )
+    manifest_path = Path(active_revision["manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    primary_entry = next(
+        entry for entry in manifest["targets"] if entry["path"] == str(primary)
+    )
+    artifact_path = Path(primary_entry["artifact_path"])
+    artifact_path.unlink()
+    pending_path = core_root / ".sync-revisions" / "pending.json"
+    pending_path.write_text('{"revision_id": "pending"}\n', encoding="utf-8")
+    state_path = core_root / ".sync-state.json"
+    state_path.write_text('{"local": true}\n', encoding="utf-8")
+    primary.write_text("local primary\n", encoding="utf-8")
+    sibling.write_text("local sibling\n", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError):
+        executor.restore_active_revision()
+
+    assert primary.read_text(encoding="utf-8") == "local primary\n"
+    assert sibling.read_text(encoding="utf-8") == "local sibling\n"
+    assert state_path.read_text(encoding="utf-8") == '{"local": true}\n'
+    assert pending_path.exists()
 
 
 def test_execute_places_written_files_via_staging_replace(
