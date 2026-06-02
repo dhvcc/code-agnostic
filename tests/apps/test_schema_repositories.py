@@ -56,6 +56,24 @@ def test_codex_schema_repository_prefers_remote(monkeypatch) -> None:
     assert schema == remote_schema
 
 
+def test_codex_schema_repository_fallback_includes_current_feature_flags(
+    monkeypatch,
+) -> None:
+    def _fail(*args, **kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    schema = CodexSchemaRepository(ttl_seconds=0).load_schema()
+    global_features = schema["properties"]["features"]["properties"]
+    profile_features = schema["definitions"]["ConfigProfile"]["properties"]["features"][
+        "properties"
+    ]
+    for features in (global_features, profile_features):
+        assert "local_thread_store_compression" in features
+        assert "unified_exec_zsh_fork" in features
+
+
 def test_cursor_schema_repository_uses_local_only(monkeypatch) -> None:
     def _fail(*args, **kwargs):
         raise AssertionError("urlopen should not be called for local-only schema")

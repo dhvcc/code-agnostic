@@ -5,7 +5,8 @@ from pathlib import Path
 
 from code_agnostic.agents.parser import parse_agent
 from code_agnostic.rules.parser import parse_rule
-from code_agnostic.spec.loaders import load_rule_bundle
+from code_agnostic.skills.parser import parse_skill
+from code_agnostic.spec.loaders import load_rule_bundle, load_skill_bundle
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class LossinessExplainer:
     ) -> list[LossinessFinding]:
         findings: list[LossinessFinding] = []
         findings.extend(self._explain_rules(root / "rules", app=app, prefix=prefix))
+        findings.extend(self._explain_skills(root / "skills", app=app, prefix=prefix))
         findings.extend(self._explain_agents(root / "agents", app=app, prefix=prefix))
         return sorted(
             findings,
@@ -88,6 +90,62 @@ class LossinessExplainer:
                         targets=("codex", "opencode"),
                         app=app,
                         reason="target does not support rule globs",
+                    )
+                )
+
+        return findings
+
+    def _explain_skills(
+        self, skills_dir: Path, app: str, prefix: Path | None
+    ) -> list[LossinessFinding]:
+        if not skills_dir.exists():
+            return []
+
+        findings: list[LossinessFinding] = []
+        for child in sorted(skills_dir.iterdir()):
+            if child.name.startswith("."):
+                continue
+
+            if child.is_dir() and (child / "SKILL.md").exists():
+                skill = parse_skill(child / "SKILL.md")
+            elif child.is_dir() and (
+                (child / "meta.yaml").exists() or (child / "prompt.md").exists()
+            ):
+                skill = load_skill_bundle(child)
+            else:
+                continue
+
+            resource_path = self._resource_path(
+                root=skills_dir.parent, child=child, prefix=prefix
+            )
+            if skill.metadata.tools.read is not True:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="tools.read",
+                        targets=("cursor", "codex", "opencode"),
+                        app=app,
+                        reason="target does not support per-skill read permissions",
+                    )
+                )
+            if skill.metadata.tools.write is not False:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="tools.write",
+                        targets=("cursor", "codex", "opencode"),
+                        app=app,
+                        reason="target does not support per-skill write permissions",
+                    )
+                )
+            if skill.metadata.tools.mcp:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="tools.mcp",
+                        targets=("cursor", "codex", "opencode"),
+                        app=app,
+                        reason="target does not support per-skill MCP permissions",
                     )
                 )
 
