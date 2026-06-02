@@ -174,6 +174,8 @@ code-agnostic apply
 
 Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`. Codex generated skill outputs are written to `~/.agents/skills`, while Codex agents and config remain under `~/.codex`.
 
+Project-local skills are not first-class in `code-agnostic` yet. If a target app discovers repo-local skill folders such as `.agents/skills` or `.opencode/skills`, treat those as unmanaged app inputs until project scopes land in `code-agnostic`; `skills list`, `plan`, and `apply` currently manage only global and workspace-local skill source.
+
 Planned convenience command:
 
 ```bash
@@ -244,6 +246,7 @@ The compiler migration is documented in:
 - [x] Per-workspace git-exclude customization
 - [x] Interactive TUI for import selection
 - [ ] Claude Code support
+- [ ] Project-scoped skill installs and sync
 - [ ] `rules add` / `skills add` / `agents add` commands (open `$EDITOR` with template)
 - [ ] Planner integration for cross-compiled skills and agents
 - [ ] Shell auto-complete
