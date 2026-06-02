@@ -90,6 +90,36 @@ def test_explain_lossiness_filters_by_app(
     ]
 
 
+def test_explain_lossiness_reports_skill_tool_mappings(
+    minimal_shared_config: Path,
+    core_root: Path,
+    cli_runner,
+) -> None:
+    skill_dir = core_root / "skills" / "reviewer"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: reviewer\n"
+        "tools:\n"
+        "  write: true\n"
+        "  mcp:\n"
+        "    - server: github\n"
+        "      tool: create_review\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "prompt.md").write_text("Review code.\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["explain-lossiness", "--app", "cursor"])
+
+    assert result.exit_code == 0
+    assert result.output.splitlines() == [
+        "resource_path\tapp\tproperty\tstatus\treason",
+        "skills/reviewer\tcursor\ttools.mcp\tignored\ttarget does not support per-skill MCP permissions",
+        "skills/reviewer\tcursor\ttools.write\tignored\ttarget does not support per-skill write permissions",
+    ]
+
+
 def test_explain_lossiness_reports_workspace_paths(
     minimal_shared_config: Path,
     core_root: Path,

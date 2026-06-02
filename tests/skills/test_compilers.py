@@ -46,16 +46,87 @@ def test_cursor_compiler() -> None:
     skill = _make_skill(write=True)
     compiler = CursorSkillCompiler()
     result = compiler.compile(skill)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
     assert "test-skill" in result
-    assert "Skill body." in result
+    assert "tools" not in payload
+    assert body.strip() == "Skill body."
+
+
+def test_cursor_compiler_preserves_native_skill_overrides() -> None:
+    skill = Skill(
+        name="react-patterns",
+        source_path=Path("/fake/react-patterns/SKILL.md"),
+        metadata=SkillMetadata(
+            name="react-patterns",
+            description="React patterns",
+            app_overrides={
+                "cursor": {
+                    "paths": ["**/*.tsx"],
+                    "disable-model-invocation": True,
+                    "metadata": {"team": "frontend"},
+                }
+            },
+        ),
+        content="Body.\n",
+    )
+
+    result = CursorSkillCompiler().compile(skill)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["paths"] == ["**/*.tsx"]
+    assert payload["disable-model-invocation"] is True
+    assert payload["metadata"] == {"team": "frontend"}
+
+
+def test_cursor_compiler_rejects_unsupported_skill_overrides() -> None:
+    skill = Skill(
+        name="react-patterns",
+        source_path=Path("/fake/react-patterns/SKILL.md"),
+        metadata=SkillMetadata(
+            name="react-patterns",
+            description="React patterns",
+            app_overrides={"cursor": {"permission": {"edit": False}}},
+        ),
+        content="Body.\n",
+    )
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CursorSkillCompiler().compile(skill)
+
+    assert "x-cursor.permission is not supported" in exc_info.value.detail
 
 
 def test_codex_compiler() -> None:
-    skill = _make_skill()
+    skill = _make_skill(write=True)
     compiler = CodexSkillCompiler()
     result = compiler.compile(skill)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
     assert "test-skill" in result
-    assert "Skill body." in result
+    assert "tools" not in payload
+    assert body.strip() == "Skill body."
+
+
+def test_codex_compiler_rejects_unsupported_skill_overrides() -> None:
+    skill = Skill(
+        name="docs-helper",
+        source_path=Path("/fake/docs-helper/SKILL.md"),
+        metadata=SkillMetadata(
+            name="docs-helper",
+            description="Docs helper",
+            app_overrides={"codex": {"metadata": {"team": "docs"}}},
+        ),
+        content="Body.\n",
+    )
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CodexSkillCompiler().compile(skill)
+
+    assert "x-codex.metadata is not supported" in exc_info.value.detail
 
 
 def test_opencode_compiler_omits_unsupported_tool_permissions() -> None:
