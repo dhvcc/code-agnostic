@@ -16,6 +16,7 @@
     "always_apply": { "type": "boolean" },
     "x-cursor": { "type": "object" },
     "x-codex": { "type": "object" },
-    "x-opencode": { "type": "object" }
+    "x-opencode": { "type": "object" },
+    "x-claude": { "type": "object" }
   }
 }

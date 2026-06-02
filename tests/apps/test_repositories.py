@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
+from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 
@@ -59,6 +60,20 @@ def test_codex_repository_reads_and_writes_mcp(tmp_path: Path) -> None:
     reloaded = repo.load_mcp_payload()
     assert reloaded["local"]["command"] == "uvx"
     assert reloaded["local"]["args"] == ["demo"]
+
+
+def test_claude_repository_reads_and_writes_mcp(write_json, tmp_path: Path) -> None:
+    root = tmp_path / ".claude"
+    write_json(
+        tmp_path / ".claude.json",
+        {"mcpServers": {"demo": {"type": "http", "url": "https://x"}}},
+    )
+
+    repo = ClaudeConfigRepository(root=root, config_path=tmp_path / ".claude.json")
+    assert repo.load_mcp_payload() == {"demo": {"type": "http", "url": "https://x"}}
+
+    repo.save_mcp_payload({"local": {"type": "stdio", "command": "uvx"}})
+    assert repo.load_mcp_payload() == {"local": {"type": "stdio", "command": "uvx"}}
 
 
 def test_opencode_repository_load_mcp_when_file_missing(tmp_path: Path) -> None:
@@ -120,6 +135,14 @@ def test_codex_repository_skills_dir(tmp_path: Path) -> None:
 def test_codex_repository_agents_dir(tmp_path: Path) -> None:
     root = tmp_path / ".codex"
     repo = CodexConfigRepository(root=root)
+    assert repo.agents_dir == root / "agents"
+
+
+def test_claude_repository_skills_and_agents_dirs(tmp_path: Path) -> None:
+    root = tmp_path / ".claude"
+    repo = ClaudeConfigRepository(root=root)
+
+    assert repo.skills_dir == root / "skills"
     assert repo.agents_dir == root / "agents"
 
 

@@ -35,6 +35,24 @@ def test_load_rule_bundle(tmp_path: Path) -> None:
     assert rule.content == "Always use type hints.\n"
 
 
+def test_load_rule_bundle_accepts_claude_override(tmp_path: Path) -> None:
+    rule_dir = tmp_path / "rules" / "python-style"
+    rule_dir.mkdir(parents=True)
+    (rule_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: rule\n"
+        "description: Python style\n"
+        "x-claude:\n"
+        "  memory: local\n",
+        encoding="utf-8",
+    )
+    (rule_dir / "prompt.md").write_text("Always use type hints.\n", encoding="utf-8")
+
+    rule = load_rule_bundle(rule_dir)
+
+    assert rule.metadata.description == "Python style"
+
+
 def test_load_skill_bundle(tmp_path: Path) -> None:
     skill_dir = tmp_path / "skills" / "code-reviewer"
     skill_dir.mkdir(parents=True)
@@ -78,7 +96,10 @@ def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
         "  license: MIT\n"
         "  compatibility: opencode\n"
         "  metadata:\n"
-        "    audience: maintainers\n",
+        "    audience: maintainers\n"
+        "x-claude:\n"
+        "  when_to_use: Use during releases.\n"
+        "  disable-model-invocation: true\n",
         encoding="utf-8",
     )
     (skill_dir / "prompt.md").write_text("Prepare a release.\n", encoding="utf-8")
@@ -90,7 +111,11 @@ def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
             "license": "MIT",
             "compatibility": "opencode",
             "metadata": {"audience": "maintainers"},
-        }
+        },
+        "claude": {
+            "when_to_use": "Use during releases.",
+            "disable-model-invocation": True,
+        },
     }
 
 
@@ -147,7 +172,10 @@ def test_load_agent_bundle_with_app_overrides(tmp_path: Path) -> None:
         "model: gpt-5.4-mini\n"
         "x-opencode:\n"
         "  model: opencode/big-pickle\n"
-        "  temperature: 0.2\n",
+        "  temperature: 0.2\n"
+        "x-claude:\n"
+        "  model: claude-sonnet-4-20250514\n"
+        "  permissionMode: plan\n",
         encoding="utf-8",
     )
     (agent_dir / "prompt.md").write_text("Design the system.\n", encoding="utf-8")
@@ -156,7 +184,11 @@ def test_load_agent_bundle_with_app_overrides(tmp_path: Path) -> None:
 
     assert agent.metadata.model == "gpt-5.4-mini"
     assert agent.metadata.app_overrides == {
-        "opencode": {"model": "opencode/big-pickle", "temperature": 0.2}
+        "opencode": {"model": "opencode/big-pickle", "temperature": 0.2},
+        "claude": {
+            "model": "claude-sonnet-4-20250514",
+            "permissionMode": "plan",
+        },
     }
 
 

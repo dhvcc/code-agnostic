@@ -111,6 +111,30 @@ def test_parse_app_prefixed_agent_overrides(tmp_path: Path) -> None:
     }
 
 
+def test_parse_claude_prefixed_agent_overrides(tmp_path: Path) -> None:
+    (tmp_path / "reviewer.md").write_text(
+        "---\n"
+        "name: reviewer\n"
+        "model: gpt-5.4-mini\n"
+        "claude-model: claude-sonnet-4-20250514\n"
+        "claude-permissionMode: plan\n"
+        "---\n"
+        "\n"
+        "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    agent = parse_agent(tmp_path / "reviewer.md")
+
+    assert agent.metadata.model == "gpt-5.4-mini"
+    assert agent.metadata.app_overrides == {
+        "claude": {
+            "model": "claude-sonnet-4-20250514",
+            "permissionMode": "plan",
+        }
+    }
+
+
 def test_serialize_roundtrip(tmp_path: Path) -> None:
     agent = Agent(
         name="test-agent",

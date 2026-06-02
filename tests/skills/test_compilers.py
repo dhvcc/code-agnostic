@@ -7,6 +7,7 @@ import yaml
 
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.skills.compilers import (
+    ClaudeSkillCompiler,
     CodexSkillCompiler,
     CursorSkillCompiler,
     OpenCodeSkillCompiler,
@@ -127,6 +128,34 @@ def test_codex_compiler_rejects_unsupported_skill_overrides() -> None:
         CodexSkillCompiler().compile(skill)
 
     assert "x-codex.metadata is not supported" in exc_info.value.detail
+
+
+def test_claude_compiler_preserves_native_skill_overrides() -> None:
+    skill = Skill(
+        name="reviewer",
+        source_path=Path("/fake/reviewer/SKILL.md"),
+        metadata=SkillMetadata(
+            name="reviewer",
+            description="Review code",
+            app_overrides={
+                "claude": {
+                    "when_to_use": "Use for code review.",
+                    "disable-model-invocation": True,
+                }
+            },
+        ),
+        content="Body.\n",
+    )
+
+    result = ClaudeSkillCompiler().compile(skill)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["name"] == "reviewer"
+    assert payload["description"] == "Review code"
+    assert payload["when_to_use"] == "Use for code review."
+    assert payload["disable-model-invocation"] is True
+    assert body.strip() == "Body."
 
 
 def test_opencode_compiler_omits_unsupported_tool_permissions() -> None:

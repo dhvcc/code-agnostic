@@ -62,6 +62,31 @@ def test_parse_minimal_frontmatter(tmp_path: Path) -> None:
     assert skill.metadata.tools.mcp == []
 
 
+def test_parse_claude_skill_overrides(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "reviewer"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\n"
+        "name: reviewer\n"
+        "x-claude:\n"
+        "  when_to_use: Use for reviews.\n"
+        "  disable-model-invocation: true\n"
+        "---\n"
+        "\n"
+        "Review code.\n",
+        encoding="utf-8",
+    )
+
+    skill = parse_skill(skill_dir / "SKILL.md")
+
+    assert skill.metadata.app_overrides == {
+        "claude": {
+            "when_to_use": "Use for reviews.",
+            "disable-model-invocation": True,
+        }
+    }
+
+
 def test_serialize_roundtrip(tmp_path: Path) -> None:
     skill = Skill(
         name="test-skill",

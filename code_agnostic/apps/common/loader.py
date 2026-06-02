@@ -7,6 +7,7 @@ def load_app_service_modules() -> None:
         return
 
     from code_agnostic.apps.codex import service as _codex_service  # noqa: F401
+    from code_agnostic.apps.claude import service as _claude_service  # noqa: F401
     from code_agnostic.apps.cursor import service as _cursor_service  # noqa: F401
     from code_agnostic.apps.opencode import service as _opencode_service  # noqa: F401
 

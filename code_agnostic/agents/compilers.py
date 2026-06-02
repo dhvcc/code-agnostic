@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from code_agnostic.agents.claude import serialize_claude_agent
 from code_agnostic.agents.codex import serialize_codex_agent
 from code_agnostic.agents.models import Agent
 from code_agnostic.agents.opencode import serialize_opencode_agent
@@ -35,3 +36,10 @@ class CodexAgentCompiler(IAgentCompiler):
 
     def compile(self, agent: Agent) -> str:
         return serialize_codex_agent(agent)
+
+
+class ClaudeAgentCompiler(IAgentCompiler):
+    """Cross-compile for Claude Code subagents."""
+
+    def compile(self, agent: Agent) -> str:
+        return serialize_claude_agent(agent)

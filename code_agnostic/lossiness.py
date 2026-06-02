@@ -77,7 +77,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="always_apply",
-                        targets=("codex", "opencode"),
+                        targets=("codex", "opencode", "claude"),
                         app=app,
                         reason="target does not support rule always_apply semantics",
                     )
@@ -87,7 +87,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="globs",
-                        targets=("codex", "opencode"),
+                        targets=("codex", "opencode", "claude"),
                         app=app,
                         reason="target does not support rule globs",
                     )
@@ -123,7 +123,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.read",
-                        targets=("cursor", "codex", "opencode"),
+                        targets=("cursor", "codex", "opencode", "claude"),
                         app=app,
                         reason="target does not support per-skill read permissions",
                     )
@@ -133,7 +133,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.write",
-                        targets=("cursor", "codex", "opencode"),
+                        targets=("cursor", "codex", "opencode", "claude"),
                         app=app,
                         reason="target does not support per-skill write permissions",
                     )
@@ -143,7 +143,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.mcp",
-                        targets=("cursor", "codex", "opencode"),
+                        targets=("cursor", "codex", "opencode", "claude"),
                         app=app,
                         reason="target does not support per-skill MCP permissions",
                     )
@@ -176,7 +176,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="codex.mcp_servers",
-                        targets=("cursor", "opencode"),
+                        targets=("cursor", "opencode", "claude"),
                         app=app,
                         reason="target only supports codex.mcp_servers in Codex output",
                     )
@@ -186,7 +186,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="codex.skills.config",
-                        targets=("cursor", "opencode"),
+                        targets=("cursor", "opencode", "claude"),
                         app=app,
                         reason="target only supports codex.skills.config in Codex output",
                     )
@@ -196,7 +196,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="nickname_candidates",
-                        targets=("cursor", "opencode"),
+                        targets=("cursor", "opencode", "claude"),
                         app=app,
                         reason="target does not support agent nickname_candidates",
                     )
@@ -206,7 +206,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="sandbox_mode",
-                        targets=("cursor", "opencode"),
+                        targets=("cursor", "opencode", "claude"),
                         app=app,
                         reason="target does not support agent sandbox_mode",
                     )

@@ -47,6 +47,10 @@ def test_explain_lossiness_reports_documented_rule_and_agent_mappings(
     assert result.exit_code == 0
     assert result.output.splitlines() == [
         "resource_path\tapp\tproperty\tstatus\treason",
+        "agents/bundle-agent\tclaude\tcodex.mcp_servers\tignored\ttarget only supports codex.mcp_servers in Codex output",
+        "agents/bundle-agent\tclaude\tcodex.skills.config\tignored\ttarget only supports codex.skills.config in Codex output",
+        "agents/bundle-agent\tclaude\tnickname_candidates\tignored\ttarget does not support agent nickname_candidates",
+        "agents/bundle-agent\tclaude\tsandbox_mode\tignored\ttarget does not support agent sandbox_mode",
         "agents/bundle-agent\tcursor\tcodex.mcp_servers\tignored\ttarget only supports codex.mcp_servers in Codex output",
         "agents/bundle-agent\tcursor\tcodex.skills.config\tignored\ttarget only supports codex.skills.config in Codex output",
         "agents/bundle-agent\tcursor\tnickname_candidates\tignored\ttarget does not support agent nickname_candidates",
@@ -55,6 +59,8 @@ def test_explain_lossiness_reports_documented_rule_and_agent_mappings(
         "agents/bundle-agent\topencode\tcodex.skills.config\tignored\ttarget only supports codex.skills.config in Codex output",
         "agents/bundle-agent\topencode\tnickname_candidates\tignored\ttarget does not support agent nickname_candidates",
         "agents/bundle-agent\topencode\tsandbox_mode\tignored\ttarget does not support agent sandbox_mode",
+        "rules/bundle-rule\tclaude\talways_apply\tignored\ttarget does not support rule always_apply semantics",
+        "rules/bundle-rule\tclaude\tglobs\tignored\ttarget does not support rule globs",
         "rules/bundle-rule\tcodex\talways_apply\tignored\ttarget does not support rule always_apply semantics",
         "rules/bundle-rule\tcodex\tglobs\tignored\ttarget does not support rule globs",
         "rules/bundle-rule\topencode\talways_apply\tignored\ttarget does not support rule always_apply semantics",
@@ -147,6 +153,7 @@ def test_explain_lossiness_reports_workspace_paths(
     assert result.exit_code == 0
     assert result.output.splitlines() == [
         "resource_path\tapp\tproperty\tstatus\treason",
+        "workspaces/team/rules/bundle-rule\tclaude\tglobs\tignored\ttarget does not support rule globs",
         "workspaces/team/rules/bundle-rule\tcodex\tglobs\tignored\ttarget does not support rule globs",
         "workspaces/team/rules/bundle-rule\topencode\tglobs\tignored\ttarget does not support rule globs",
     ]

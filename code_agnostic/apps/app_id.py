@@ -2,6 +2,8 @@ from enum import Enum
 from dataclasses import dataclass
 
 from code_agnostic.constants import (
+    CLAUDE_CONFIG_FILENAME,
+    CLAUDE_PROJECT_DIRNAME,
     CODEX_CONFIG_FILENAME,
     CODEX_PROJECT_DIRNAME,
     CURSOR_CONFIG_FILENAME,
@@ -16,6 +18,7 @@ class AppId(str, Enum):
     OPENCODE = "opencode"
     CURSOR = "cursor"
     CODEX = "codex"
+    CLAUDE = "claude"
 
 
 @dataclass(frozen=True)
@@ -74,6 +77,17 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         supports_workspace_propagation=True,
         project_dir_name=CODEX_PROJECT_DIRNAME,
         config_filename=CODEX_CONFIG_FILENAME,
+    ),
+    AppId.CLAUDE: AppMetadata(
+        app_id=AppId.CLAUDE,
+        label="Claude Code",
+        targetable=True,
+        toggleable=True,
+        importable=True,
+        supports_import_agents=True,
+        supports_workspace_propagation=True,
+        project_dir_name=CLAUDE_PROJECT_DIRNAME,
+        config_filename=CLAUDE_CONFIG_FILENAME,
     ),
 }
 

@@ -17,6 +17,9 @@ _CURSOR_SKILL_FRONTMATTER_KEYS = frozenset(
 _OPENCODE_SKILL_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "license", "compatibility", "metadata"}
 )
+_CLAUDE_SKILL_FRONTMATTER_KEYS = frozenset(
+    {"name", "description", "when_to_use", "disable-model-invocation", "metadata"}
+)
 
 
 class ISkillCompiler(ABC):
@@ -90,4 +93,15 @@ class CodexSkillCompiler(ISkillCompiler):
             skill=skill,
             target_app="codex",
             allowed_override_keys=_CODEX_SKILL_FRONTMATTER_KEYS,
+        )
+
+
+class ClaudeSkillCompiler(ISkillCompiler):
+    """Cross-compile for Claude Code."""
+
+    def compile(self, skill: Skill) -> str:
+        return _compile_skill_markdown(
+            skill=skill,
+            target_app="claude",
+            allowed_override_keys=_CLAUDE_SKILL_FRONTMATTER_KEYS,
         )

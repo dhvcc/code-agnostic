@@ -81,6 +81,29 @@ def test_filter_for_target_codex_keeps_codex_and_workspace() -> None:
     assert "opencode" not in apps
 
 
+def test_filter_for_target_claude_keeps_claude_and_workspace() -> None:
+    plan = SyncPlan(
+        actions=[
+            _action(app="cursor"),
+            _action(app="opencode"),
+            _action(app="codex"),
+            _action(app="claude"),
+            _action(app="workspace"),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    result = plan.filter_for_target("claude")
+
+    apps = [a.app for a in result.actions]
+    assert "claude" in apps
+    assert "workspace" in apps
+    assert "cursor" not in apps
+    assert "opencode" not in apps
+    assert "codex" not in apps
+
+
 def test_filter_for_target_opencode_keeps_opencode_workspace_and_none() -> None:
     plan = SyncPlan(
         actions=[

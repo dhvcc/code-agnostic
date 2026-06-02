@@ -194,7 +194,7 @@ def _load_prompt(path: Path) -> str:
 
 def _coerce_agent_app_overrides(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     overrides: dict[str, dict[str, Any]] = {}
-    for app_name in ("cursor", "codex", "opencode"):
+    for app_name in ("cursor", "codex", "opencode", "claude"):
         raw = payload.get(f"x-{app_name}")
         if not isinstance(raw, dict):
             continue
@@ -206,7 +206,7 @@ def _coerce_agent_app_overrides(payload: dict[str, Any]) -> dict[str, dict[str, 
 
 def _coerce_skill_app_overrides(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     overrides: dict[str, dict[str, Any]] = {}
-    for app_name in ("cursor", "codex", "opencode"):
+    for app_name in ("cursor", "codex", "opencode", "claude"):
         raw = payload.get(f"x-{app_name}")
         if not isinstance(raw, dict):
             continue

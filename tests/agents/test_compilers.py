@@ -10,6 +10,7 @@ except ModuleNotFoundError:  # pragma: no cover
 import yaml
 
 from code_agnostic.agents.compilers import (
+    ClaudeAgentCompiler,
     CodexAgentCompiler,
     CursorAgentCompiler,
     OpenCodeAgentCompiler,
@@ -201,3 +202,28 @@ def test_codex_compiler_uses_generic_model_when_other_app_overrides_exist() -> N
 
     assert payload["model"] == "gpt-5.4-mini"
     assert "temperature" not in payload
+
+
+def test_claude_compiler_outputs_markdown_subagent() -> None:
+    agent = _make_agent(
+        app_overrides={
+            "claude": {
+                "permissionMode": "plan",
+                "color": "blue",
+                "skills": ["review-pr"],
+            }
+        },
+    )
+
+    result = ClaudeAgentCompiler().compile(agent)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["name"] == "test-agent"
+    assert payload["description"] == "Test agent"
+    assert payload["model"] == "claude-sonnet-4-20250514"
+    assert payload["effort"] == "medium"
+    assert payload["permissionMode"] == "plan"
+    assert payload["color"] == "blue"
+    assert payload["skills"] == ["review-pr"]
+    assert body.strip() == "Agent body."

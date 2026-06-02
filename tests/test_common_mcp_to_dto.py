@@ -214,6 +214,22 @@ def test_app_only_mcp_server_key_is_skipped_for_other_apps() -> None:
     assert result == {"shared": {"url": "https://example.com/mcp"}}
 
 
+def test_app_only_mcp_server_key_supports_claude() -> None:
+    result = mcp_servers_for_app(
+        {
+            "@claude-playwright": {"command": "npx"},
+            "!claude-local-only": {"url": "https://example.com/mcp"},
+            "shared": {"command": "uvx"},
+        },
+        "claude",
+    )
+
+    assert result == {
+        "playwright": {"command": "npx"},
+        "shared": {"command": "uvx"},
+    }
+
+
 def test_app_excluded_mcp_server_key_is_skipped_for_matching_app() -> None:
     result = mcp_servers_for_app(
         {

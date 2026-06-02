@@ -19,7 +19,7 @@ from code_agnostic.agents.models import (
 from code_agnostic.spec.loaders import load_agent_bundle
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-_APP_OVERRIDE_PREFIXES = ("cursor", "codex", "opencode")
+_APP_OVERRIDE_PREFIXES = ("cursor", "codex", "opencode", "claude")
 
 
 def parse_agent(path: Path) -> Agent:

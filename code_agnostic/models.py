@@ -29,6 +29,7 @@ class SyncTarget(str, Enum):
     OPENCODE = "opencode"
     CURSOR = "cursor"
     CODEX = "codex"
+    CLAUDE = "claude"
 
 
 class EditorSyncStatus(str, Enum):
@@ -95,7 +96,11 @@ class SyncPlan:
         normalized = target.lower()
         if normalized == SyncTarget.ALL.value:
             return self
-        if normalized in (SyncTarget.CURSOR.value, SyncTarget.CODEX.value):
+        if normalized in (
+            SyncTarget.CURSOR.value,
+            SyncTarget.CODEX.value,
+            SyncTarget.CLAUDE.value,
+        ):
             filtered = [
                 action
                 for action in self.actions
@@ -105,7 +110,11 @@ class SyncPlan:
 
         filtered_actions: list[Action] = []
         for action in self.actions:
-            if action.app in (SyncTarget.CURSOR.value, SyncTarget.CODEX.value):
+            if action.app in (
+                SyncTarget.CURSOR.value,
+                SyncTarget.CODEX.value,
+                SyncTarget.CLAUDE.value,
+            ):
                 continue
             if action.app == "workspace":
                 filtered_actions.append(action)

@@ -8,6 +8,9 @@ from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.codex.service import CodexConfigService
+from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
+from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
+from code_agnostic.apps.claude.service import ClaudeConfigService
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
@@ -50,12 +53,23 @@ def _build_codex_service(core: CoreRepository, root: Path) -> CodexConfigService
     )
 
 
+def _build_claude_service(core: CoreRepository, root: Path) -> ClaudeConfigService:
+    return ClaudeConfigService(
+        repository=ClaudeConfigRepository(
+            root=root,
+            config_path=root.parent / ".claude.json",
+        ),
+        mapper=ClaudeMCPMapper(),
+    )
+
+
 @pytest.mark.parametrize(
     ("app_id", "service_factory", "target_root_name"),
     [
         (AppId.OPENCODE, _build_opencode_service, "opencode"),
         (AppId.CURSOR, _build_cursor_service, ".cursor"),
         (AppId.CODEX, _build_codex_service, ".codex"),
+        (AppId.CLAUDE, _build_claude_service, ".claude"),
     ],
 )
 def test_app_services_build_skill_and_agent_scopes(
@@ -90,6 +104,7 @@ def test_app_services_build_skill_and_agent_scopes(
         (AppId.OPENCODE, _build_opencode_service, "opencode"),
         (AppId.CURSOR, _build_cursor_service, ".cursor"),
         (AppId.CODEX, _build_codex_service, ".codex"),
+        (AppId.CLAUDE, _build_claude_service, ".claude"),
     ],
 )
 def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
