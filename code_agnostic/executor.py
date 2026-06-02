@@ -99,6 +99,8 @@ class WriteJsonHandler:
     ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
             return False, None
+        if action.status == ActionStatus.CONFLICT:
+            return False, None
         write_json(action.path, action.payload)
         return True, None
 
@@ -126,6 +128,8 @@ class WriteTextHandler:
         self, action: Action, context: ExecutionContext
     ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
+            return False, None
+        if action.status == ActionStatus.CONFLICT:
             return False, None
         if not isinstance(action.payload, str):
             return False, f"Missing text payload for write action: {action.path}"
@@ -171,6 +175,8 @@ class WriteRuleHandler:
         self, action: Action, context: ExecutionContext
     ) -> tuple[bool, str | None]:
         if action.status == ActionStatus.NOOP:
+            return False, None
+        if action.status == ActionStatus.CONFLICT:
             return False, None
         if not isinstance(action.payload, str):
             return False, f"Missing rule payload for write action: {action.path}"
@@ -511,7 +517,7 @@ class SyncExecutor:
         staging_dirs: set[Path],
         index: int,
     ) -> tuple[Path | None, str | None]:
-        if action.status == ActionStatus.NOOP:
+        if action.status in (ActionStatus.NOOP, ActionStatus.CONFLICT):
             return None, None
 
         staging_root = self._staging_root_for_action(
@@ -569,7 +575,7 @@ class SyncExecutor:
             ActionKind.WRITE_TEXT,
             ActionKind.WRITE_RULE,
         }:
-            if action.status == ActionStatus.NOOP:
+            if action.status in (ActionStatus.NOOP, ActionStatus.CONFLICT):
                 return False, None
             if staged_action.staged_path is None:
                 return False, f"Missing staged payload for write action: {action.path}"
@@ -717,6 +723,7 @@ class SyncExecutor:
                     ).append(str(action.path))
                 if (
                     action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                    and action.status != ActionStatus.CONFLICT
                     and action.path.exists()
                 ):
                     workspace_paths.setdefault(ws_name, {}).setdefault(
@@ -728,6 +735,7 @@ class SyncExecutor:
                     global_links.setdefault(action.scope, []).append(str(action.path))
                 if (
                     action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                    and action.status != ActionStatus.CONFLICT
                     and action.path.exists()
                 ):
                     global_paths.setdefault(action.scope, []).append(str(action.path))

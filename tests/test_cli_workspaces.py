@@ -151,7 +151,7 @@ def test_workspaces_git_exclude_writes_enabled_apps_and_default_rules(
     assert result.exit_code == 0
     assert "Updated git excludes" in result.output
 
-    expected_entries = ["AGENTS.md", CODEX_AGENTS_OVERRIDE_FILENAME, "CLAUDE.md"]
+    expected_entries = ["AGENTS.md", CODEX_AGENTS_OVERRIDE_FILENAME]
     unexpected_entries = [".opencode", ".codex"]
 
     for repo_name in ["repo-a", "repo-b"]:
@@ -159,6 +159,7 @@ def test_workspaces_git_exclude_writes_enabled_apps_and_default_rules(
         content = exclude.read_text(encoding="utf-8")
         for item in expected_entries:
             assert item in content
+        assert "CLAUDE.md" not in content
         for item in unexpected_entries:
             assert item not in content
 
@@ -225,7 +226,7 @@ def test_workspaces_git_exclude_preserves_existing_file_content(
     assert ".codex" in content
     assert "AGENTS.md" in content
     assert CODEX_AGENTS_OVERRIDE_FILENAME in content
-    assert "CLAUDE.md" in content
+    assert "CLAUDE.md" not in content
 
 
 def test_workspaces_git_exclude_does_not_duplicate_existing_entries(
@@ -247,14 +248,14 @@ def test_workspaces_git_exclude_does_not_duplicate_existing_entries(
 
     result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
     assert result.exit_code == 0
-    assert "lines_added=3" in result.output
+    assert "lines_added=2" in result.output
 
     content = exclude.read_text(encoding="utf-8")
     assert content.count(".codex") == 1
     assert content.count(".agents") == 1
     assert content.count("AGENTS.md") == 1
     assert content.count(CODEX_AGENTS_OVERRIDE_FILENAME) == 1
-    assert content.count("CLAUDE.md") == 1
+    assert content.count("CLAUDE.md") == 0
 
 
 def test_workspaces_git_exclude_supports_git_file_repos(
@@ -287,4 +288,4 @@ def test_workspaces_git_exclude_supports_git_file_repos(
     assert ".codex" in content
     assert "AGENTS.md" in content
     assert CODEX_AGENTS_OVERRIDE_FILENAME in content
-    assert "CLAUDE.md" in content
+    assert "CLAUDE.md" not in content

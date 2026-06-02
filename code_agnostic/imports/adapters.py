@@ -4,6 +4,8 @@ from pathlib import Path
 from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
+from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
+from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
@@ -55,5 +57,20 @@ def create_import_adapter(app: str, source_root: Path | None = None) -> ImportAd
             agents_dir=repo.agents_dir,
             mapper=OpenCodeMCPMapper(),
             config_repository=repo,
+        )
+    if normalized == AppId.CLAUDE.value:
+        claude_repo = ClaudeConfigRepository(
+            root=source_root,
+            config_path=(
+                source_root.parent / ".claude.json" if source_root is not None else None
+            ),
+        )
+        return ImportAdapter(
+            app_id=AppId.CLAUDE,
+            root=claude_repo.root,
+            skills_dir=claude_repo.skills_dir,
+            agents_dir=claude_repo.agents_dir,
+            mapper=ClaudeMCPMapper(),
+            config_repository=claude_repo,
         )
     raise ValueError(f"Unsupported source app: {app}")

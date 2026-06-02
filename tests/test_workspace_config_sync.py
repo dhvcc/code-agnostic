@@ -11,6 +11,9 @@ from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.codex.service import CodexConfigService
+from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
+from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
+from code_agnostic.apps.claude.service import ClaudeConfigService
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
@@ -19,7 +22,11 @@ from code_agnostic.apps.opencode.config_repository import OpenCodeConfigReposito
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
-from code_agnostic.constants import AGENTS_FILENAME, CODEX_AGENTS_OVERRIDE_FILENAME
+from code_agnostic.constants import (
+    AGENTS_FILENAME,
+    CLAUDE_LOCAL_FILENAME,
+    CODEX_AGENTS_OVERRIDE_FILENAME,
+)
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.executor import SyncExecutor
@@ -51,6 +58,16 @@ def _codex_service(codex_root: Path) -> CodexConfigService:
         repository=CodexConfigRepository(root=codex_root),
         mapper=CodexMCPMapper(),
         schema_repository=CodexSchemaRepository(),
+    )
+
+
+def _claude_service(claude_root: Path) -> ClaudeConfigService:
+    return ClaudeConfigService(
+        repository=ClaudeConfigRepository(
+            root=claude_root,
+            config_path=claude_root.parent / ".claude.json",
+        ),
+        mapper=ClaudeMCPMapper(),
     )
 
 
@@ -459,6 +476,133 @@ def test_workspace_rules_sync_to_codex_repo_override_and_git_exclude(
     assert CODEX_AGENTS_OVERRIDE_FILENAME in exclude.read_text(encoding="utf-8")
 
 
+def test_workspace_rules_sync_to_claude_local_memory_preserves_committed_claude(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git" / "info").mkdir(parents=True)
+    (repo / "CLAUDE.md").write_text("tracked claude memory\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    memory_actions = {
+        a.scope: a
+        for a in plan.actions
+        if a.kind == ActionKind.WRITE_TEXT
+        and a.scope
+        in {
+            "ws:claude:workspace_memory",
+            "ws:claude:repo_memory",
+        }
+    }
+    assert memory_actions["ws:claude:workspace_memory"].path == (
+        workspace_root / CLAUDE_LOCAL_FILENAME
+    )
+    assert memory_actions["ws:claude:repo_memory"].path == (
+        repo / CLAUDE_LOCAL_FILENAME
+    )
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == (
+        "tracked claude memory\n"
+    )
+    assert (repo / CLAUDE_LOCAL_FILENAME).read_text(encoding="utf-8") == (
+        "workspace rules\n"
+    )
+
+
+def test_claude_owned_workspace_memory_conflicts_with_unmanaged_file(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    (repo / CLAUDE_LOCAL_FILENAME).write_text("user local memory\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    repo_memory = next(a for a in plan.actions if a.scope == "ws:claude:repo_memory")
+    assert repo_memory.status == ActionStatus.CONFLICT
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+    assert (repo / CLAUDE_LOCAL_FILENAME).read_text(encoding="utf-8") == (
+        "user local memory\n"
+    )
+
+
+def test_workspace_claude_mcp_merges_project_entries_into_home_config(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"ws-server": {"url": "https://example.com/mcp"}}},
+    )
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    config_actions = [
+        a
+        for a in plan.actions
+        if a.app == "claude" and a.path == tmp_path / ".claude.json"
+    ]
+    assert len(config_actions) == 1
+    payload = config_actions[0].payload
+    assert payload["projects"][str(workspace_root.resolve())]["mcpServers"] == {
+        "ws-server": {"type": "http", "url": "https://example.com/mcp"}
+    }
+    assert payload["projects"][str(repo.resolve())]["mcpServers"] == {
+        "ws-server": {"type": "http", "url": "https://example.com/mcp"}
+    }
+
+
 def test_workspace_targeted_plan_does_not_cleanup_other_app_scopes(
     minimal_shared_config: Path,
     core_root: Path,
@@ -667,6 +811,87 @@ def test_workspace_skills_sync_codex_to_agents_skills(
         repo_skills[0].path
         == workspace_root / "repo-a" / ".agents" / "skills" / "my-skill" / "SKILL.md"
     )
+
+
+def test_workspace_skills_and_agents_sync_claude_owned_paths(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text("a", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    workspace_skills = [
+        a for a in plan.actions if a.scope == "ws:claude:workspace_root_skills_dir"
+    ]
+    repo_skills = [a for a in plan.actions if a.scope == "ws:claude:repo_skills_dir"]
+    workspace_agents = [
+        a for a in plan.actions if a.scope == "ws:claude:workspace_root_agents_dir"
+    ]
+    repo_agents = [a for a in plan.actions if a.scope == "ws:claude:repo_agents_dir"]
+
+    assert workspace_skills[0].path == (
+        workspace_root / ".claude" / "skills" / "my-skill" / "SKILL.md"
+    )
+    assert repo_skills[0].path == (
+        repo / ".claude" / "skills" / "my-skill" / "SKILL.md"
+    )
+    assert workspace_agents[0].path == (
+        workspace_root / ".claude" / "agents" / "planner.md"
+    )
+    assert repo_agents[0].path == repo / ".claude" / "agents" / "planner.md"
+
+
+def test_workspace_claude_skips_unmanaged_existing_asset_files(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    unmanaged = repo / ".claude" / "skills" / "my-skill" / "SKILL.md"
+    unmanaged.parent.mkdir(parents=True)
+    unmanaged.write_text("user skill\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    repo_skill = next(a for a in plan.actions if a.path == unmanaged)
+    assert repo_skill.status == ActionStatus.CONFLICT
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert failed == 0
+    assert failures == []
+    assert applied > 0
+    assert unmanaged.read_text(encoding="utf-8") == "user skill\n"
 
 
 def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
@@ -1090,6 +1315,56 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_codex(
         a
         for a in plan2.actions
         if a.kind == ActionKind.REMOVE_FILE and a.scope == "ws:codex:repo_skills_dir"
+    ]
+    assert len(remove_actions) == 1
+
+    SyncExecutor(core=core).execute(plan2)
+    assert not skill_file.exists()
+
+
+def test_workspace_stale_skills_cleanup_when_skills_removed_for_claude(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    SyncExecutor(core=core).execute(plan)
+    skill_file = repo / ".claude" / "skills" / "my-skill" / "SKILL.md"
+    assert skill_file.is_file()
+
+    ws_repo = WorkspaceConfigRepository(root=ws_config)
+    state = ws_repo.load_state()
+    assert "ws:claude:repo_skills_dir" in state["managed_paths"]
+
+    import shutil
+
+    shutil.rmtree(ws_config / "skills")
+
+    plan2 = SyncPlanner(
+        core=core,
+        app_services=[_claude_service(tmp_path / ".claude")],
+    ).build()
+
+    remove_actions = [
+        a
+        for a in plan2.actions
+        if a.kind == ActionKind.REMOVE_FILE and a.scope == "ws:claude:repo_skills_dir"
     ]
     assert len(remove_actions) == 1
 

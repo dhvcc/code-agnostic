@@ -1,9 +1,15 @@
 from pathlib import Path
 
+from code_agnostic.utils import read_json_safe
+
 from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
-from code_agnostic.constants import AGENTS_PROJECT_DIRNAME
+from code_agnostic.constants import (
+    AGENTS_PROJECT_DIRNAME,
+    CLAUDE_CONFIG_FILENAME,
+    CLAUDE_LOCAL_FILENAME,
+)
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
     RepoSyncStatus,
@@ -111,6 +117,15 @@ class StatusService:
             # Cursor workspace propagation is disabled to avoid duplicate MCP startup.
             if meta.app_id == AppId.CURSOR:
                 continue
+            if meta.app_id == AppId.CLAUDE:
+                if ws_source.has_mcp() and not _claude_project_mcp_exists(repo_path):
+                    issues.append("missing or mismatched claude project mcp")
+                if (
+                    ws_source.has_rules()
+                    and not (repo_path / CLAUDE_LOCAL_FILENAME).exists()
+                ):
+                    issues.append("missing or mismatched claude local memory")
+                continue
 
             needs_config_link = ws_source.has_mcp() or (
                 ws_source.has_rules() and meta.app_id == AppId.OPENCODE
@@ -162,3 +177,16 @@ class StatusService:
             status=RepoSyncStatus.NEEDS_SYNC,
             detail="; ".join(issues),
         )
+
+
+def _claude_project_mcp_exists(repo_path: Path) -> bool:
+    payload, error = read_json_safe(Path.home() / CLAUDE_CONFIG_FILENAME)
+    if error is not None or not isinstance(payload, dict):
+        return False
+    projects = payload.get("projects")
+    if not isinstance(projects, dict):
+        return False
+    project = projects.get(str(repo_path.resolve()))
+    if not isinstance(project, dict):
+        return False
+    return isinstance(project.get("mcpServers"), dict)

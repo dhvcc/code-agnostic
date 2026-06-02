@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from code_agnostic.apps.app_id import AppId, app_metadata
-from code_agnostic.apps.common.compiled_planning import plan_compiled_text_action
+from code_agnostic.apps.common.compiled_planning import (
+    plan_compiled_text_action,
+    plan_owned_compiled_text_action,
+)
 from code_agnostic.apps.common.framework import create_registered_app_service
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
@@ -16,9 +19,12 @@ from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.codex.service import CodexConfigService
 from code_agnostic.apps.common.utils import common_mcp_to_dto, mcp_servers_for_app
+from code_agnostic.apps.common.models import MCPServerDTO
+from code_agnostic.apps.claude.service import ClaudeConfigService
 from code_agnostic.constants import (
     AGENTS_FILENAME,
     AGENTS_PROJECT_DIRNAME,
+    CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
     MCP_SERVERS_KEY,
     SKILLS_DIRNAME,
@@ -207,13 +213,57 @@ class SyncPlanner:
         self.app_services = app_services
         self.workspace_service = workspace_service or WorkspaceService()
         self.include_workspace = include_workspace
+        self._claude_project_mcp: dict[Path, dict[str, MCPServerDTO]] = {}
 
     def build(self) -> SyncPlan:
+        self._claude_project_mcp = {}
         app_plan = self._plan_apps()
         workspace_plan = (
             self._plan_workspaces() if self.include_workspace else SyncPlan([], [], [])
         )
-        return _merge_plans(app_plan, workspace_plan)
+        return self._merge_claude_project_mcp(_merge_plans(app_plan, workspace_plan))
+
+    def _merge_claude_project_mcp(self, plan: SyncPlan) -> SyncPlan:
+        if not self._claude_project_mcp:
+            return plan
+
+        claude_service = next(
+            (
+                service
+                for service in self.app_services
+                if service.app_id == AppId.CLAUDE
+                and isinstance(service, ClaudeConfigService)
+            ),
+            None,
+        )
+        if claude_service is None:
+            return plan
+
+        config_path = claude_service.repository.config_path
+        existing_action = next(
+            (
+                action
+                for action in plan.actions
+                if action.app == AppId.CLAUDE.value and action.path == config_path
+            ),
+            None,
+        )
+        base_payload = (
+            existing_action.payload
+            if existing_action is not None and isinstance(existing_action.payload, dict)
+            else None
+        )
+        project_action = claude_service.build_project_mcp_action(
+            self._claude_project_mcp,
+            base_payload=base_payload,
+        )
+        actions = [
+            action
+            for action in plan.actions
+            if not (action.app == AppId.CLAUDE.value and action.path == config_path)
+        ]
+        actions.insert(0, project_action)
+        return SyncPlan(actions=actions, errors=plan.errors, skipped=plan.skipped)
 
     def _plan_apps(self) -> SyncPlan:
         if not self.app_services:
@@ -342,6 +392,65 @@ class SyncPlanner:
             desired_paths_by_scope.setdefault("rules", []).append(target)
             workspace_agents_target = target
 
+        claude_enabled = any(svc.app_id == AppId.CLAUDE for svc in self.app_services)
+        if workspace_agents_content is not None and claude_enabled:
+            scope = "ws:claude:workspace_memory"
+            target = workspace_path / CLAUDE_LOCAL_FILENAME
+            action = plan_owned_compiled_text_action(
+                target=target,
+                payload=workspace_agents_content,
+                managed_paths={
+                    path.resolve(strict=False)
+                    for path in load_state_paths(managed_paths, scope)
+                },
+                removable_link_paths={
+                    path.resolve(strict=False)
+                    for path in load_state_links(managed_links, scope)
+                },
+                scope=scope,
+                app="workspace",
+                create_detail="create claude workspace local memory",
+                noop_detail="claude workspace local memory already up to date",
+                update_detail="update claude workspace local memory",
+            )
+            _prepare_workspace_action(
+                action,
+                workspace_name=workspace_name,
+                scope=scope,
+                removable_links=load_state_links(managed_links, scope),
+            )
+            actions.append(action)
+            desired_paths_by_scope.setdefault(scope, []).append(target)
+
+            scope = "ws:claude:repo_memory"
+            for repo in repos:
+                target = repo / CLAUDE_LOCAL_FILENAME
+                action = plan_owned_compiled_text_action(
+                    target=target,
+                    payload=workspace_agents_content,
+                    managed_paths={
+                        path.resolve(strict=False)
+                        for path in load_state_paths(managed_paths, scope)
+                    },
+                    removable_link_paths={
+                        path.resolve(strict=False)
+                        for path in load_state_links(managed_links, scope)
+                    },
+                    scope=scope,
+                    app="workspace",
+                    create_detail="create claude repo local memory",
+                    noop_detail="claude repo local memory already up to date",
+                    update_detail="update claude repo local memory",
+                )
+                _prepare_workspace_action(
+                    action,
+                    workspace_name=workspace_name,
+                    scope=scope,
+                    removable_links=load_state_links(managed_links, scope),
+                )
+                actions.append(action)
+                desired_paths_by_scope.setdefault(scope, []).append(target)
+
         # --- Workspace-level app config rendering + direct target writes ---
 
         # Workspace app config renders workspace-local MCP only. Global MCP remains in the
@@ -377,6 +486,10 @@ class SyncPlanner:
                 should_render_workspace_config = True
             if svc.app_id == AppId.CODEX and agent_sources:
                 should_render_workspace_config = True
+            if svc.app_id == AppId.CLAUDE:
+                if common_servers is not None:
+                    self._claude_project_mcp[workspace_path] = mcp_payload
+                should_render_workspace_config = False
 
             # Workspace root outputs
             workspace_target_service = _create_workspace_project_service(
@@ -458,6 +571,8 @@ class SyncPlanner:
                     repo / meta.project_dir_name,
                     ws_source,
                 )
+                if svc.app_id == AppId.CLAUDE and common_servers is not None:
+                    self._claude_project_mcp[repo] = mcp_payload
 
                 if svc.app_id == AppId.CODEX and workspace_agents_content is not None:
                     scope = "ws:codex:repo_agents_override"

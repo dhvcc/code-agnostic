@@ -138,3 +138,60 @@ def plan_compiled_text_action(
         app=app,
         scope=scope,
     )
+
+
+def plan_owned_compiled_text_action(
+    *,
+    target: Path,
+    payload: str,
+    managed_paths: set[Path],
+    removable_link_paths: set[Path] | None = None,
+    managed_root: Path | None = None,
+    scope: str,
+    app: str,
+    create_detail: str,
+    noop_detail: str,
+    update_detail: str,
+    conflict_detail: str = "non-managed path exists",
+) -> Action:
+    target_key = target.resolve(strict=False)
+    removable = removable_link_paths or set()
+    has_symlink_ancestor, is_removable_ancestor = _symlink_ancestor_state(
+        target, removable, managed_root
+    )
+
+    if target_key in managed_paths or is_removable_ancestor:
+        return plan_compiled_text_action(
+            target=target,
+            payload=payload,
+            managed_paths=managed_paths,
+            removable_link_paths=removable,
+            managed_root=managed_root,
+            scope=scope,
+            app=app,
+            create_detail=create_detail,
+            noop_detail=noop_detail,
+            update_detail=update_detail,
+            conflict_detail=conflict_detail,
+        )
+
+    if not target.exists() and not target.is_symlink() and not has_symlink_ancestor:
+        return Action(
+            kind=ActionKind.WRITE_TEXT,
+            path=target,
+            status=ActionStatus.CREATE,
+            detail=create_detail,
+            payload=payload,
+            app=app,
+            scope=scope,
+        )
+
+    return Action(
+        kind=ActionKind.WRITE_TEXT,
+        path=target,
+        status=ActionStatus.CONFLICT,
+        detail=conflict_detail,
+        payload=payload,
+        app=app,
+        scope=scope,
+    )

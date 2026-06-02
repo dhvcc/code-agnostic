@@ -7,7 +7,7 @@ import pytest
 from code_agnostic.constants import (
     AGENTS_PROJECT_DIRNAME,
     AGENTS_FILENAME,
-    CLAUDE_FILENAME,
+    CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
 )
 from code_agnostic.core.repository import CoreRepository
@@ -31,7 +31,30 @@ def test_defaults_only(service_with_workspace) -> None:
     assert AGENTS_PROJECT_DIRNAME in entries
     assert AGENTS_FILENAME in entries
     assert CODEX_AGENTS_OVERRIDE_FILENAME in entries
-    assert CLAUDE_FILENAME in entries
+    assert CLAUDE_LOCAL_FILENAME not in entries
+    assert "CLAUDE.md" not in entries
+
+
+def test_claude_defaults_include_only_owned_paths(
+    service_with_workspace,
+    minimal_shared_config: Path,
+) -> None:
+    core = CoreRepository()
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "review").mkdir(parents=True)
+    (ws_config / "skills" / "review" / "SKILL.md").write_text(
+        "review\n", encoding="utf-8"
+    )
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text("plan\n", encoding="utf-8")
+
+    entries = service_with_workspace.compute_entries("myws", ["claude"])
+
+    assert ".claude" not in entries
+    assert CLAUDE_LOCAL_FILENAME in entries
+    assert "CLAUDE.md" not in entries
+    assert ".claude/skills/review/SKILL.md" in entries
+    assert ".claude/agents/planner.md" in entries
 
 
 def test_custom_patterns_merged(service_with_workspace) -> None:

@@ -89,7 +89,7 @@ def test_apply_syncs_git_excludes_for_target_workspace_app(
     assert ".agents" in content
     assert "AGENTS.md" in content
     assert "AGENTS.override.md" in content
-    assert "CLAUDE.md" in content
+    assert "CLAUDE.md" not in content
     assert "*.generated" in content
     assert ".cursor" not in content
 

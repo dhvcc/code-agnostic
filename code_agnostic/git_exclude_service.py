@@ -6,13 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.app_id import app_metadata
+from code_agnostic.agents.claude import claude_agent_target_path
+from code_agnostic.agents.parser import parse_agent
 from code_agnostic.constants import (
     AGENTS_PROJECT_DIRNAME,
     AGENTS_FILENAME,
-    CLAUDE_FILENAME,
+    CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
 )
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.utils import read_json_safe, write_json
 
 
@@ -61,15 +64,38 @@ class GitExcludeService:
             if metadata.supports_workspace_propagation:
                 workspace_apps.append(app_name)
 
-        defaults = [f".{app_name}" for app_name in workspace_apps]
+        defaults = [
+            str(app_metadata(app_name).project_dir_name)
+            for app_name in workspace_apps
+            if app_name != "claude" and app_metadata(app_name).project_dir_name
+        ]
         if "codex" in workspace_apps:
             defaults.append(AGENTS_PROJECT_DIRNAME)
         defaults += [
             AGENTS_FILENAME,
             CODEX_AGENTS_OVERRIDE_FILENAME,
-            CLAUDE_FILENAME,
         ]
+        if "claude" in workspace_apps:
+            defaults.extend(self._claude_owned_entries(workspace_name))
         return defaults + extras
+
+    def _claude_owned_entries(self, workspace_name: str) -> list[str]:
+        ws_source = WorkspaceConfigRepository(
+            root=self._core.workspace_config_dir(workspace_name)
+        )
+        entries = [CLAUDE_LOCAL_FILENAME]
+        for source in ws_source.list_skill_sources():
+            entries.append(f".claude/skills/{source.name}/SKILL.md")
+        for source in ws_source.list_agent_sources():
+            try:
+                agent = parse_agent(source)
+            except Exception:
+                entries.append(f".claude/agents/{source.stem}.md")
+                continue
+            entries.append(
+                claude_agent_target_path(Path(".claude") / "agents", agent).as_posix()
+            )
+        return entries
 
     def add_pattern(self, workspace_name: str, pattern: str) -> None:
         self._ensure_workspace_exists(workspace_name)

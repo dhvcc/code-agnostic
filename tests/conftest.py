@@ -31,6 +31,7 @@ def enforce_default_path_isolation(isolated_home, tmp_path: Path) -> None:
     """Fail fast if defaults ever point outside per-test tmp home."""
 
     from code_agnostic.apps.codex.config_repository import CodexConfigRepository
+    from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
     from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
     from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
     from code_agnostic.core.repository import CoreRepository
@@ -39,6 +40,8 @@ def enforce_default_path_isolation(isolated_home, tmp_path: Path) -> None:
     assert OpenCodeConfigRepository().root == tmp_path / ".config" / "opencode"
     assert CursorConfigRepository().root == tmp_path / ".cursor"
     assert CodexConfigRepository().root == tmp_path / ".codex"
+    assert ClaudeConfigRepository().root == tmp_path / ".claude"
+    assert ClaudeConfigRepository().config_path == tmp_path / ".claude.json"
 
 
 @pytest.fixture(autouse=True)
