@@ -386,6 +386,7 @@ class SyncExecutor:
             raise FileNotFoundError(f"No active revision found for {label}.")
 
         record = records[0]
+        self._preflight_stored_revision_artifacts(record)
         snapshots: dict[Path, PathSnapshot] = {}
         for target in record.targets:
             if isinstance(target, dict) and isinstance(target.get("path"), str):
@@ -414,6 +415,7 @@ class SyncExecutor:
             records = self._load_previous_revisions([record])
             if records:
                 stored = records[0]
+                self._preflight_stored_revision_artifacts(stored)
                 if stored.state is not None:
                     self._restore_manifest_file(stored.state)
                 for target in stored.targets:
@@ -422,6 +424,40 @@ class SyncExecutor:
             sync_staging_root = record.root / SYNC_STAGING_DIRNAME
             if sync_staging_root.exists():
                 self._remove_tree(sync_staging_root)
+
+    def _preflight_stored_revision_artifacts(self, record: StoredRevision) -> None:
+        if record.state is not None:
+            self._require_manifest_artifacts(record.state)
+        for target in record.targets:
+            self._require_manifest_artifacts(target)
+
+    def _require_manifest_artifacts(self, target: dict[str, Any]) -> None:
+        path_text = target.get("path")
+        if not isinstance(path_text, str):
+            return
+        if target.get("exists") is not True:
+            return
+
+        artifact_path_text = target.get("artifact_path")
+        if not isinstance(artifact_path_text, str):
+            raise FileNotFoundError(
+                f"Missing revision artifact for {path_text}: artifact_path"
+            )
+        artifact_path = Path(artifact_path_text)
+        if not artifact_path.exists():
+            raise FileNotFoundError(
+                f"Missing revision artifact for {path_text}: {artifact_path}"
+            )
+
+        target_artifact_path_text = target.get("target_artifact_path")
+        if not isinstance(target_artifact_path_text, str):
+            return
+        target_artifact_path = Path(target_artifact_path_text)
+        if not target_artifact_path.exists():
+            raise FileNotFoundError(
+                "Missing symlink target revision artifact for "
+                f"{path_text}: {target_artifact_path}"
+            )
 
     def _mark_pending_revisions(self, revision_records: list[RevisionRecord]) -> None:
         for record in revision_records:
