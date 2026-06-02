@@ -6,7 +6,6 @@ from typing import Any
 from code_agnostic.apps.app_id import AppId, app_scope
 from code_agnostic.apps.common.compiled_planning import (
     find_replaceable_symlink_ancestor,
-    plan_compiled_text_action,
 )
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
@@ -17,6 +16,12 @@ from code_agnostic.apps.common.symlink_planning import (
     load_state_paths,
     plan_stale_files_group,
     plan_stale_group,
+)
+from code_agnostic.generated_artifacts import (
+    ArtifactKind,
+    GeneratedArtifact,
+    OwnershipPolicy,
+    plan_generated_artifact,
 )
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 
@@ -92,7 +97,10 @@ class IAppConfigService(ABC):
         raise NotImplementedError
 
     def agent_action_removable_links(self, removable_links: list[Path]) -> list[Path]:
-        return []
+        return removable_links
+
+    def compiled_resource_ownership_policy(self) -> OwnershipPolicy:
+        return OwnershipPolicy.OWNED_ONLY
 
     @staticmethod
     def _normalize_managed_group(value: Any) -> dict[str, Any]:
@@ -119,14 +127,18 @@ class IAppConfigService(ABC):
         desired_paths: list[Path] = []
         skipped: list[str] = []
         scheduled_removals: set[Path] = set()
+        ownership = self.compiled_resource_ownership_policy()
 
         for source in sources:
             target, payload = compile_source(source)
             desired_paths.append(target)
             replaceable_symlink = find_replaceable_symlink_ancestor(target, target_dir)
-            if (
-                replaceable_symlink is not None
-                and replaceable_symlink not in scheduled_removals
+            can_replace_symlink = replaceable_symlink is not None and (
+                ownership != OwnershipPolicy.OWNED_ONLY
+                or replaceable_symlink.resolve(strict=False) in removable_link_set
+            )
+            if replaceable_symlink is not None and (
+                can_replace_symlink and replaceable_symlink not in scheduled_removals
             ):
                 scheduled_removals.add(replaceable_symlink)
                 removable_link_set.add(replaceable_symlink.resolve(strict=False))
@@ -140,17 +152,21 @@ class IAppConfigService(ABC):
                         scope=scope,
                     )
                 )
-            action = plan_compiled_text_action(
-                target=target,
-                payload=payload,
+            action = plan_generated_artifact(
+                GeneratedArtifact(
+                    path=target,
+                    kind=ArtifactKind.TEXT,
+                    payload=payload,
+                    ownership=ownership,
+                    managed_root=target_dir,
+                    scope=scope,
+                    app=app,
+                    create_detail=create_detail,
+                    noop_detail=noop_detail,
+                    update_detail=update_detail,
+                ),
                 managed_paths=managed_path_set,
                 removable_link_paths=removable_link_set,
-                managed_root=target_dir,
-                scope=scope,
-                app=app,
-                create_detail=create_detail,
-                noop_detail=noop_detail,
-                update_detail=update_detail,
             )
             actions.append(action)
             if action.status == ActionStatus.CONFLICT:

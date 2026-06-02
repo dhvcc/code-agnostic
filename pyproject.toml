@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "code-agnostic"
-version = "0.3.7"
+version = "0.3.8"
 description = "Centralized hub for LLM coding config: MCP, skills, rules, and agents."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,9 @@ dev = [
   "pytest-asyncio>=0.23",
   "jsonschema>=4.0",
   "ruff>=0.8.0",
-  "mypy>=1.11"
+  "mypy>=1.11",
+  "types-jsonschema>=4.0",
+  "types-PyYAML>=6.0"
 ]
 
 [project.scripts]

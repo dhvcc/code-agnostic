@@ -18,7 +18,7 @@ def test_plan_shows_invalid_json_error_for_mcp_base(
     assert "Invalid JSON format" in result.output
 
 
-def test_plan_target_cursor_skips_cursor_workspace_dirs_but_keeps_workspace_rules_files(
+def test_plan_target_cursor_includes_workspace_mcp_and_skills(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -37,17 +37,27 @@ def test_plan_target_cursor_skips_cursor_workspace_dirs_but_keeps_workspace_rule
     assert add_result.exit_code == 0
 
     ws_config_dir = core_root / "workspaces" / "team"
+    (ws_config_dir / "mcp.base.json").write_text(
+        '{"mcpServers":{"team-context":{"command":"node","args":["server.js"]}}}',
+        encoding="utf-8",
+    )
+    (ws_config_dir / "skills" / "review").mkdir(parents=True, exist_ok=True)
+    (ws_config_dir / "skills" / "review" / "SKILL.md").write_text(
+        "Review skill\n", encoding="utf-8"
+    )
     (ws_config_dir / "rules").mkdir(parents=True, exist_ok=True)
     (ws_config_dir / "rules" / "shared.md").write_text("rules", encoding="utf-8")
 
     core = CoreRepository(core_root)
     plan = AppsService(core).plan_for_target("cursor")
+    scopes = {a.scope for a in plan.actions}
     assert any(
         a.kind == ActionKind.WRITE_TEXT and a.scope == "rules" for a in plan.actions
     )
-    assert not any(
-        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
-    )
+    assert "ws:cursor:workspace_root_mcp" in scopes
+    assert "ws:cursor:repo_mcp" in scopes
+    assert "ws:cursor:workspace_root_skills_dir" in scopes
+    assert "ws:cursor:repo_skills_dir" in scopes
 
     plan_result = cli_runner.invoke(cli, ["plan", "-a", "cursor"])
     assert plan_result.exit_code == 0

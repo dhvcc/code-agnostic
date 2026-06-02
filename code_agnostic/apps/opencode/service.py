@@ -119,6 +119,8 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         from code_agnostic.errors import InvalidJsonFormatError
         from code_agnostic.utils import read_json_safe
 
+        if self._base_config_path is None:
+            return {}
         if not self._base_config_path.exists():
             return {}
         payload, error = read_json_safe(self._base_config_path)

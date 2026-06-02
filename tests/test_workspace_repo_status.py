@@ -92,9 +92,9 @@ class TestWorkspaceRepoStatusBugRepro:
             app_metas=[app_metadata(opencode_meta.app_id)],
         )
 
-        assert repo_status.status == RepoSyncStatus.SYNCED, (
-            f"Expected SYNCED but got {repo_status.status}: {repo_status.detail}"
-        )
+        assert (
+            repo_status.status == RepoSyncStatus.SYNCED
+        ), f"Expected SYNCED but got {repo_status.status}: {repo_status.detail}"
 
     def test_repo_status_reports_synced_after_skills_sync(
         self,
@@ -138,9 +138,55 @@ class TestWorkspaceRepoStatusBugRepro:
             app_metas=[app_metadata(opencode_meta.app_id)],
         )
 
-        assert repo_status.status == RepoSyncStatus.SYNCED, (
-            f"Expected SYNCED but got {repo_status.status}: {repo_status.detail}"
+        assert (
+            repo_status.status == RepoSyncStatus.SYNCED
+        ), f"Expected SYNCED but got {repo_status.status}: {repo_status.detail}"
+
+    def test_repo_status_reports_drift_when_generated_skill_file_missing(
+        self,
+        minimal_shared_config: Path,
+        core_root: Path,
+        tmp_path: Path,
+    ) -> None:
+        workspace_root = tmp_path / "workspace"
+        workspace_root.mkdir()
+        (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+        core = CoreRepository(core_root)
+        core.add_workspace("myws", workspace_root)
+
+        ws_config = core.workspace_config_dir("myws")
+        (ws_config / "skills" / "my-skill").mkdir(parents=True)
+        (ws_config / "skills" / "my-skill" / "SKILL.md").write_text(
+            "shared skill", encoding="utf-8"
         )
+
+        opencode_root = tmp_path / ".config" / "opencode"
+        plan = SyncPlanner(
+            core=core, app_services=[_opencode_service(core, opencode_root)]
+        ).build()
+        SyncExecutor(core=core).execute(plan)
+
+        generated_skill = (
+            workspace_root / "repo-a" / ".opencode" / "skills" / "my-skill" / "SKILL.md"
+        )
+        generated_skill.unlink()
+
+        ws_source = WorkspaceConfigRepository(root=ws_config)
+        repo_path = workspace_root / "repo-a"
+
+        from code_agnostic.apps.app_id import app_metadata
+        from code_agnostic.models import WorkspaceRepoStatusRow
+
+        opencode_meta = _opencode_service(core, opencode_root)
+        repo_status: WorkspaceRepoStatusRow = StatusService._repo_sync_status(
+            repo_path=repo_path,
+            ws_source=ws_source,
+            app_metas=[app_metadata(opencode_meta.app_id)],
+        )
+
+        assert repo_status.status == RepoSyncStatus.NEEDS_SYNC
+        assert "missing or mismatched opencode skills" in repo_status.detail
 
     def test_workspace_status_reports_synced_after_full_apply(
         self,
@@ -178,9 +224,9 @@ class TestWorkspaceRepoStatusBugRepro:
             app_services=[_opencode_service(core, opencode_root)],
         )
         assert len(ws_rows) == 1
-        assert ws_rows[0].status == WorkspaceSyncStatus.SYNCED, (
-            f"Expected SYNCED but got {ws_rows[0].status}: {ws_rows[0].detail}"
-        )
+        assert (
+            ws_rows[0].status == WorkspaceSyncStatus.SYNCED
+        ), f"Expected SYNCED but got {ws_rows[0].status}: {ws_rows[0].detail}"
         assert len(ws_rows[0].repos) == 1
         assert ws_rows[0].repos[0].status == RepoSyncStatus.SYNCED
 
@@ -235,6 +281,6 @@ class TestWorkspaceRepoStatusBugRepro:
             app_metas=app_metas,
         )
 
-        assert repo_status.status == RepoSyncStatus.SYNCED, (
-            f"Expected SYNCED but got {repo_status.status}: {repo_status.detail}"
-        )
+        assert (
+            repo_status.status == RepoSyncStatus.SYNCED
+        ), f"Expected SYNCED but got {repo_status.status}: {repo_status.detail}"

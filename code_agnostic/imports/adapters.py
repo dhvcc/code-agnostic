@@ -39,24 +39,24 @@ def create_import_adapter(app: str, source_root: Path | None = None) -> ImportAd
             config_repository=repo,
         )
     if normalized == AppId.CURSOR.value:
-        repo = CursorConfigRepository(root=source_root)
+        cursor_repo = CursorConfigRepository(root=source_root)
         return ImportAdapter(
             app_id=AppId.CURSOR,
-            root=repo.root,
-            skills_dir=repo.skills_dir,
-            agents_dir=repo.agents_dir,
+            root=cursor_repo.root,
+            skills_dir=cursor_repo.skills_dir,
+            agents_dir=cursor_repo.agents_dir,
             mapper=CursorMCPMapper(),
-            config_repository=repo,
+            config_repository=cursor_repo,
         )
     if normalized == AppId.OPENCODE.value:
-        repo = OpenCodeConfigRepository(root=source_root)
+        opencode_repo = OpenCodeConfigRepository(root=source_root)
         return ImportAdapter(
             app_id=AppId.OPENCODE,
-            root=repo.root,
-            skills_dir=repo.skills_dir,
-            agents_dir=repo.agents_dir,
+            root=opencode_repo.root,
+            skills_dir=opencode_repo.skills_dir,
+            agents_dir=opencode_repo.agents_dir,
             mapper=OpenCodeMCPMapper(),
-            config_repository=repo,
+            config_repository=opencode_repo,
         )
     if normalized == AppId.CLAUDE.value:
         claude_repo = ClaudeConfigRepository(

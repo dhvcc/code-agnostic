@@ -8,10 +8,6 @@ from code_agnostic.agents.parser import parse_agent
 from code_agnostic.apps.app_id import AppId, app_label
 from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
-from code_agnostic.apps.common.compiled_planning import (
-    find_replaceable_symlink_ancestor,
-    plan_owned_compiled_text_action,
-)
 from code_agnostic.apps.common.framework import RegisteredAppConfigService
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
@@ -135,7 +131,7 @@ class ClaudeConfigService(RegisteredAppConfigService):
         removable_links: list[Path],
     ) -> tuple[list[Action], list[Path], list[str]]:
         compiler = ClaudeSkillCompiler()
-        return self._plan_owned_text_actions(
+        return self._plan_compiled_text_actions(
             sources=sources,
             target_dir=target_dir,
             scope=scope,
@@ -173,7 +169,7 @@ class ClaudeConfigService(RegisteredAppConfigService):
             agent = parse_agent(source)
             return claude_agent_target_path(target_dir, agent), compiler.compile(agent)
 
-        return self._plan_owned_text_actions(
+        return self._plan_compiled_text_actions(
             sources=sources,
             target_dir=target_dir,
             scope=scope,
@@ -186,63 +182,3 @@ class ClaudeConfigService(RegisteredAppConfigService):
             update_detail="update compiled claude agent",
             conflict_message="Claude agent sync skipped (conflict): {target}",
         )
-
-    def _plan_owned_text_actions(
-        self,
-        *,
-        sources: list[Path],
-        target_dir: Path,
-        scope: str,
-        app: str,
-        managed_paths: list[Path],
-        removable_links: list[Path],
-        compile_source,
-        create_detail: str,
-        noop_detail: str,
-        update_detail: str,
-        conflict_message: str,
-    ) -> tuple[list[Action], list[Path], list[str]]:
-        managed_path_set = {path.resolve(strict=False) for path in managed_paths}
-        removable_link_set = {path.resolve(strict=False) for path in removable_links}
-        actions: list[Action] = []
-        desired_paths: list[Path] = []
-        skipped: list[str] = []
-        scheduled_removals: set[Path] = set()
-
-        for source in sources:
-            target, payload = compile_source(source)
-            desired_paths.append(target)
-            replaceable_symlink = find_replaceable_symlink_ancestor(target, target_dir)
-            if (
-                replaceable_symlink is not None
-                and replaceable_symlink not in scheduled_removals
-            ):
-                scheduled_removals.add(replaceable_symlink)
-                removable_link_set.add(replaceable_symlink.resolve(strict=False))
-                actions.append(
-                    Action(
-                        kind=ActionKind.REMOVE_SYMLINK,
-                        path=replaceable_symlink,
-                        status=ActionStatus.REMOVE,
-                        detail=f"replace compiled {scope} symlink",
-                        app=app,
-                        scope=scope,
-                    )
-                )
-            action = plan_owned_compiled_text_action(
-                target=target,
-                payload=payload,
-                managed_paths=managed_path_set,
-                removable_link_paths=removable_link_set,
-                managed_root=target_dir,
-                scope=scope,
-                app=app,
-                create_detail=create_detail,
-                noop_detail=noop_detail,
-                update_detail=update_detail,
-            )
-            actions.append(action)
-            if action.status == ActionStatus.CONFLICT:
-                skipped.append(conflict_message.format(target=target))
-
-        return actions, desired_paths, skipped
