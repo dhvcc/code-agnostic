@@ -33,7 +33,7 @@ Rules:
 - `meta.yaml` is schema-validated
 - `prompt.md` contains instruction text only
 - canonical bundle files can declare `$schema` to get editor validation from published schema URLs
-- app-specific data is allowed only inside `x-cursor`, `x-codex`, or `x-opencode`
+- app-specific data is allowed only inside `x-cursor`, `x-codex`, `x-opencode`, or `x-claude`
 - matching `x-*` blocks can override shared fields for that app and can carry app-native passthrough keys
 - unknown top-level keys fail validation
 
@@ -61,6 +61,7 @@ name: reviewer
 - Cursor: generated rules, agents, skills, and MCP config
 - Codex: generated `AGENTS.md`, subagents, skills, and MCP config
 - OpenCode: generated `AGENTS.md`, agents, skills, and MCP config
+- Claude Code: generated `CLAUDE.local.md`, agents, skills, and MCP config
 
 Generated artifacts are the default target. Symlink mode is debug-only if retained at all.
 

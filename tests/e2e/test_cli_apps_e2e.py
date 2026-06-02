@@ -14,6 +14,7 @@ except ModuleNotFoundError:  # pragma: no cover
         ("opencode", "opencode", "write_json"),
         ("cursor", "cursor", "write_json"),
         ("codex", "codex", "write_text"),
+        ("claude", "claude", "write_json"),
     ],
 )
 def test_plan_then_apply_syncs_each_app_end_to_end(
@@ -66,7 +67,7 @@ def test_partial_apply_codex_writes_codex_config_only(
     assert not expected_app_config_path("cursor").exists()
 
 
-def test_full_roundtrip_all_three_apps(
+def test_full_roundtrip_all_apps(
     minimal_shared_config: Path,
     tmp_path: Path,
     cli_runner,
@@ -80,6 +81,7 @@ def test_full_roundtrip_all_three_apps(
     enable_app("opencode")
     enable_app("cursor")
     enable_app("codex")
+    enable_app("claude")
 
     plan_result = cli_runner.invoke(cli, ["plan"])
     assert plan_result.exit_code == 0
@@ -91,6 +93,7 @@ def test_full_roundtrip_all_three_apps(
     assert expected_app_config_path("opencode").exists()
     assert expected_app_config_path("cursor").exists()
     assert expected_app_config_path("codex").exists()
+    assert expected_app_config_path("claude").exists()
 
     opencode_payload = json.loads(
         expected_app_config_path("opencode").read_text(encoding="utf-8")
@@ -357,6 +360,7 @@ def test_full_roundtrip_skills_agents_all_apps(
     enable_app("opencode")
     enable_app("cursor")
     enable_app("codex")
+    enable_app("claude")
 
     core_root = tmp_path / ".config" / "code-agnostic"
     (core_root / "skills" / "shared-skill").mkdir(parents=True)
@@ -372,6 +376,7 @@ def test_full_roundtrip_skills_agents_all_apps(
     opencode_root = tmp_path / ".config" / "opencode"
     cursor_root = tmp_path / ".cursor"
     codex_root = tmp_path / ".codex"
+    claude_root = tmp_path / ".claude"
 
     assert (opencode_root / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (opencode_root / "agents" / "planner.md").is_file()
@@ -381,6 +386,9 @@ def test_full_roundtrip_skills_agents_all_apps(
 
     assert (tmp_path / ".agents" / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (codex_root / "agents" / "planner.toml").is_file()
+
+    assert (claude_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (claude_root / "agents" / "planner.md").is_file()
 
 
 def test_bundle_skills_and_agents_apply_all_apps(
@@ -394,6 +402,7 @@ def test_bundle_skills_and_agents_apply_all_apps(
     enable_app("opencode")
     enable_app("cursor")
     enable_app("codex")
+    enable_app("claude")
 
     core_root = tmp_path / ".config" / "code-agnostic"
 
@@ -422,6 +431,7 @@ def test_bundle_skills_and_agents_apply_all_apps(
     opencode_root = tmp_path / ".config" / "opencode"
     cursor_root = tmp_path / ".cursor"
     codex_root = tmp_path / ".codex"
+    claude_root = tmp_path / ".claude"
 
     assert (opencode_root / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (opencode_root / "agents" / "planner.md").is_file()
@@ -433,6 +443,9 @@ def test_bundle_skills_and_agents_apply_all_apps(
 
     assert (tmp_path / ".agents" / "skills" / "shared-skill" / "SKILL.md").is_file()
     assert (codex_root / "agents" / "planner.toml").is_file()
+
+    assert (claude_root / "skills" / "shared-skill" / "SKILL.md").is_file()
+    assert (claude_root / "agents" / "planner.md").is_file()
 
 
 def test_config_update_propagation(

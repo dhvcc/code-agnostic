@@ -30,9 +30,10 @@ AI coding tools each want config in a different place and format. When you use m
 ~/.config/opencode/               Compiled & synced for OpenCode
 ~/.cursor/                        Compiled & synced for Cursor
 ~/.codex/                         Compiled & synced for Codex
+~/.claude.json and ~/.claude/      Compiled & synced for Claude Code
 ```
 
-Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex, etc.
+Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex, and `CLAUDE.local.md` memory for Claude Code.
 
 Legacy single-file rules, `skills/<name>/SKILL.md`, and markdown agents are still supported for migration, but bundle directories are the preferred source format for new config.
 
@@ -71,6 +72,7 @@ code-agnostic import apply -a codex
 # Enable target editors
 code-agnostic apps enable -a cursor
 code-agnostic apps enable -a opencode
+code-agnostic apps enable -a claude
 
 # Preview and apply
 code-agnostic validate
@@ -80,23 +82,23 @@ code-agnostic apply
 
 ## Editor compatibility
 
-| Feature | OpenCode | Cursor | Codex |
-|---------|:--------:|:------:|:-----:|
-| MCP sync | yes | yes | yes |
-| Rules sync (cross-compiled) | yes | yes | yes |
-| Skills sync | yes | yes | yes |
-| Agents sync | yes | yes | yes |
-| Workspace root `AGENTS.md` link | yes | yes | yes |
-| Native repo config include for workspace `AGENTS.md` | yes | -- | -- |
-| Repo/subdir gets shared workspace `AGENTS.md` today | yes | -- | yes |
-| Nested `AGENTS.md` discovery | -- | yes | yes |
-| Workspace propagation | yes | -- | yes |
-| Import from | yes | yes | yes |
-| Interactive import (TUI) | yes | yes | yes |
+| Feature | OpenCode | Cursor | Codex | Claude Code |
+|---------|:--------:|:------:|:-----:|:-----------:|
+| MCP sync | yes | yes | yes | yes |
+| Rules sync (cross-compiled) | yes | yes | yes | yes |
+| Skills sync | yes | yes | yes | yes |
+| Agents sync | yes | yes | yes | yes |
+| Workspace root `AGENTS.md` link | yes | yes | yes | yes |
+| Native repo config include for workspace `AGENTS.md` | yes | -- | -- | -- |
+| Repo/subdir gets shared workspace instructions today | yes | -- | yes | yes |
+| Nested `AGENTS.md` discovery | -- | yes | yes | -- |
+| Workspace propagation | yes | -- | yes | yes |
+| Import from | yes | yes | yes | yes |
+| Interactive import (TUI) | yes | yes | yes | yes |
 
 Cursor workspace propagation is intentionally disabled to avoid duplicate MCP initialization in multi-root workspaces: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003
 
-OpenCode workspace configs include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`.
+OpenCode workspace configs include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`. Claude Code receives workspace instructions through generated `CLAUDE.local.md` files, never by editing committed `CLAUDE.md`.
 
 Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-agnostic` still disables Cursor workspace propagation, so it does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load repo-local or nested `AGENTS.md` files that already exist in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
 
@@ -172,9 +174,9 @@ code-agnostic plan
 code-agnostic apply
 ```
 
-Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`. Codex generated skill outputs are written to `~/.agents/skills`, while Codex agents and config remain under `~/.codex`.
+Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`. Codex generated skill outputs are written to `~/.agents/skills`, while Codex agents and config remain under `~/.codex`. Claude Code generated skills and agents are written under `~/.claude/skills` and `~/.claude/agents`, with workspace copies under repo-local `.claude/skills` and `.claude/agents`.
 
-Project-local skills are not first-class in `code-agnostic` yet. If a target app discovers repo-local skill folders such as `.agents/skills` or `.opencode/skills`, treat those as unmanaged app inputs until project scopes land in `code-agnostic`; `skills list`, `plan`, and `apply` currently manage only global and workspace-local skill source.
+Project-local skills are not first-class source inputs in `code-agnostic` yet. If a target app discovers repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or user-created `.claude/skills`, treat those as unmanaged app inputs. Workspace sync writes only the exact generated paths recorded in `.sync-state.json`.
 
 Planned convenience command:
 
@@ -186,7 +188,7 @@ That command should copy the skill into the source of truth and then run the nor
 
 ### Workspaces
 
-Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs reference the shared workspace file through `instructions`. Repo-local app config, skills, and agents are propagated for OpenCode and Codex.
+Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Repo-local app config, skills, and agents are propagated for OpenCode, Codex, and Claude.
 
 `.cursor` workspace propagation is intentionally disabled to avoid duplicate MCP initialization when opening multi-root workspaces in Cursor (related issue: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003).
 
@@ -213,6 +215,7 @@ Migrate existing config from any supported editor into the hub.
 ```bash
 code-agnostic import plan -a codex
 code-agnostic import apply -a codex
+code-agnostic import plan -a claude
 code-agnostic import apply -a cursor --include mcp --on-conflict overwrite
 code-agnostic import plan -a codex -i    # interactive TUI picker
 ```
@@ -245,7 +248,7 @@ The compiler migration is documented in:
 - [x] Cross-compilation for skills and agents
 - [x] Per-workspace git-exclude customization
 - [x] Interactive TUI for import selection
-- [ ] Claude Code support
+- [x] Claude Code support
 - [ ] Project-scoped skill installs and sync
 - [ ] `rules add` / `skills add` / `agents add` commands (open `$EDITOR` with template)
 - [ ] Planner integration for cross-compiled skills and agents
@@ -291,5 +294,5 @@ uses each tool's own introspection surface:
 
 ```bash
 CODE_AGNOSTIC_REAL_APP_E2E=1 uv run pytest tests/e2e/test_real_app_ingestion_e2e.py -q
-CODE_AGNOSTIC_REAL_APP_E2E=1 CODE_AGNOSTIC_REAL_APP_TARGETS=codex,opencode uv run pytest tests/e2e/test_real_app_ingestion_e2e.py -q
+CODE_AGNOSTIC_REAL_APP_E2E=1 CODE_AGNOSTIC_REAL_APP_TARGETS=codex,opencode,claude uv run pytest tests/e2e/test_real_app_ingestion_e2e.py -q
 ```

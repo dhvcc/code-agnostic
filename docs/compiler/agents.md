@@ -30,6 +30,7 @@ agents/<name>/
 - `x-cursor.*`
 - `x-codex.*`
 - `x-opencode.*`
+- `x-claude.*`
 
 Unknown keys fail validation outside app vendor blocks.
 
@@ -50,27 +51,28 @@ x-opencode:
 
 This means Codex still receives `model: gpt-5.4-mini`, while OpenCode receives `model: opencode/big-pickle` plus `temperature: 0.2`.
 
-Legacy single-file markdown agents can express the same override with flat aliases such as `opencode-model: opencode/big-pickle`.
+Legacy single-file markdown agents can express the same override with flat aliases such as `opencode-model: opencode/big-pickle` or `claude-model: claude-sonnet-4-20250514`.
 
 ## Capability matrix
 
-| Property | Compiler | Cursor | Codex | OpenCode |
-| --- | --- | --- | --- | --- |
-| `name` | supported | compiled | compiled | compiled |
-| `description` | supported | compiled | compiled | compiled |
-| `model` | supported | compiled | native | native |
-| `reasoning_effort` | supported | ignored or compiled | native | native |
-| `sandbox_mode` | supported | ignored | native | ignored |
-| `nickname_candidates` | supported | ignored | native | ignored |
-| `tools.read` | supported | compiled | pin to actual target behavior | compiled to `permission.read` |
-| `tools.write` | supported | compiled | pin to actual target behavior | compiled to `permission.edit` |
-| `tools.mcp` | supported | compiled | pin to actual target behavior | compiled to MCP tool permissions |
-| `codex.mcp_servers` | supported | ignored | native | ignored |
-| `codex.skills.config` | supported | ignored | native | ignored |
-| `prompt.md` body | supported | compiled | compiled | compiled |
-| `x-cursor.*` | supported | native or compiled | ignored | ignored |
-| `x-codex.*` | supported | ignored | native or compiled | ignored |
-| `x-opencode.*` | supported | ignored | ignored | native or compiled |
+| Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
+| --- | --- | --- | --- | --- | --- |
+| `name` | supported | compiled | compiled | compiled | compiled |
+| `description` | supported | compiled | compiled | compiled | compiled |
+| `model` | supported | compiled | native | native | native |
+| `reasoning_effort` | supported | ignored or compiled | native | native | compiled to `effort` |
+| `sandbox_mode` | supported | ignored | native | ignored | ignored |
+| `nickname_candidates` | supported | ignored | native | ignored | ignored |
+| `tools.read` | supported | compiled | pin to actual target behavior | compiled to `permission.read` | ignored |
+| `tools.write` | supported | compiled | pin to actual target behavior | compiled to `permission.edit` | ignored |
+| `tools.mcp` | supported | compiled | pin to actual target behavior | compiled to MCP tool permissions | ignored |
+| `codex.mcp_servers` | supported | ignored | native | ignored | ignored |
+| `codex.skills.config` | supported | ignored | native | ignored | ignored |
+| `prompt.md` body | supported | compiled | compiled | compiled | compiled |
+| `x-cursor.*` | supported | native or compiled | ignored | ignored | ignored |
+| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored |
+| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored |
+| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled |
 
 ## Notes
 

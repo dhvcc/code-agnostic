@@ -34,25 +34,26 @@ Legacy/common `mcp.base.json` server keys can target app compilation:
 
 - `@opencode-playwright` compiles only for OpenCode as `playwright`
 - `!codex-playwright` compiles for every target except Codex as `playwright`
+- `@claude-playwright` compiles only for Claude Code as `playwright`
 - unprefixed server keys compile for every target
 
 Target markers are recognized only for known targetable app ids.
 
 ## Capability matrix
 
-| Property | Compiler | Cursor | Codex | OpenCode |
-| --- | --- | --- | --- | --- |
-| `type` | supported | compiled | compiled | compiled |
-| `command` | supported | native | native | native |
-| `args` | supported | native | native | native |
-| `url` | supported | native | native | native |
-| `headers` | supported | native | compiled | native |
-| `env` | supported | native | compiled | native for local servers; rejected for remote servers |
-| `auth.client_id` | supported | compiled | compiled | compiled |
-| `auth.client_secret` | supported | compiled | compiled | compiled |
-| `auth.scopes` | supported | compiled | compiled | compiled |
-| `auth.token_endpoint` | supported | compiled | compiled | compiled |
-| `timeout` | supported | native | compiled to `tool_timeout_sec` | native |
+| Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
+| --- | --- | --- | --- | --- | --- |
+| `type` | supported | compiled | compiled | compiled | compiled |
+| `command` | supported | native | native | native | native |
+| `args` | supported | native | native | native | native |
+| `url` | supported | native | native | native | native |
+| `headers` | supported | native | compiled | native | native |
+| `env` | supported | native | compiled | native for local servers; rejected for remote servers | native |
+| `auth.client_id` | supported | compiled | compiled | compiled | ignored |
+| `auth.client_secret` | supported | compiled | compiled | compiled | ignored |
+| `auth.scopes` | supported | compiled | compiled | compiled | ignored |
+| `auth.token_endpoint` | supported | compiled | compiled | compiled | ignored |
+| `timeout` | supported | native | compiled to `tool_timeout_sec` | native | native |
 
 ## Notes
 
@@ -62,3 +63,6 @@ Target markers are recognized only for known targetable app ids.
 - OpenCode's current schema allows `environment` only on local MCP servers.
   Remote OpenCode MCP servers can carry `headers` and OAuth config, but not
   per-server environment variables.
+- Claude workspace MCP is written into `~/.claude.json` under
+  `projects[absolute_repo_path].mcpServers`; v1 does not generate committed
+  `.mcp.json`.

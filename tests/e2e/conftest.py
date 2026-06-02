@@ -12,6 +12,8 @@ def expected_app_config_path(tmp_path: Path):
             return tmp_path / ".cursor" / "mcp.json"
         if app == "codex":
             return tmp_path / ".codex" / "config.toml"
+        if app == "claude":
+            return tmp_path / ".claude.json"
         raise ValueError(f"unknown app: {app}")
 
     return _path_for

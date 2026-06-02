@@ -11,7 +11,7 @@ import pytest
 
 ENABLE_ENV = "CODE_AGNOSTIC_REAL_APP_E2E"
 TARGETS_ENV = "CODE_AGNOSTIC_REAL_APP_TARGETS"
-ALL_TARGETS = ("codex", "cursor", "opencode")
+ALL_TARGETS = ("codex", "cursor", "opencode", "claude")
 SMOKE_SERVER = """\
 import json
 import sys
@@ -89,6 +89,8 @@ def _required_cli(target: str) -> str:
         return "cursor-agent"
     if target == "opencode":
         return "opencode"
+    if target == "claude":
+        return "claude"
     raise AssertionError(f"unexpected target: {target}")
 
 
@@ -441,6 +443,50 @@ def _assert_opencode_ingestion(
     assert "connected" in output
 
 
+def _assert_claude_ingestion(
+    *,
+    env: dict[str, str],
+    artifact_dir: Path,
+    home: Path,
+    repo_root: Path,
+    tmp_path: Path,
+) -> None:
+    list_result = _run(
+        "claude_mcp_list",
+        ["claude", "mcp", "list"],
+        cwd=repo_root,
+        env=env,
+        artifact_dir=artifact_dir,
+        home=home,
+        tmp_path=tmp_path,
+        timeout=45,
+    )
+    _assert_success("claude mcp list", list_result)
+    list_output = list_result.stdout + list_result.stderr
+    assert "ca-smoke" in list_output
+
+    get_result = _run(
+        "claude_mcp_get",
+        ["claude", "mcp", "get", "ca-smoke"],
+        cwd=repo_root,
+        env=env,
+        artifact_dir=artifact_dir,
+        home=home,
+        tmp_path=tmp_path,
+        timeout=45,
+    )
+    _assert_success("claude mcp get", get_result)
+    get_output = get_result.stdout + get_result.stderr
+    assert "ca-smoke" in get_output
+    assert "mcp_smoke_server.py" in get_output
+
+    assert (repo_root / "CLAUDE.local.md").read_text(encoding="utf-8") == (
+        "Workspace smoke instructions.\n"
+    )
+    assert (repo_root / ".claude" / "skills" / "ca-smoke" / "SKILL.md").is_file()
+    assert (repo_root / ".claude" / "agents" / "ca-smoke-agent.md").is_file()
+
+
 @pytest.mark.parametrize("target", ALL_TARGETS)
 def test_real_app_ingestion_uses_tool_introspection(
     target: str, tmp_path: Path
@@ -483,6 +529,14 @@ def test_real_app_ingestion_uses_tool_introspection(
         )
     elif target == "opencode":
         _assert_opencode_ingestion(
+            env=env,
+            artifact_dir=artifact_dir,
+            home=home,
+            repo_root=repo_root,
+            tmp_path=tmp_path,
+        )
+    elif target == "claude":
+        _assert_claude_ingestion(
             env=env,
             artifact_dir=artifact_dir,
             home=home,
