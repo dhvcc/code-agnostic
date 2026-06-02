@@ -120,3 +120,39 @@ def test_mcp_import_bootstraps_missing_hub_file(tmp_path: Path) -> None:
     service.apply(plan)
 
     assert core.mcp_base_path.exists()
+
+
+def test_mcp_import_skips_missing_source_config_instead_of_writing_empty_hub(
+    tmp_path: Path,
+) -> None:
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app="codex",
+        include=[ImportSection.MCP],
+        conflict_policy=ConflictPolicy.SKIP,
+    )
+    result = service.apply(plan)
+
+    assert plan.actions == []
+    assert "Source MCP config missing" in plan.skipped[0]
+    assert result.applied == 0
+    assert result.failed == 0
+    assert not core.mcp_base_path.exists()
+
+
+def test_mcp_import_skips_source_config_without_mcp_entries(tmp_path: Path) -> None:
+    _write_codex_config(tmp_path / ".codex", 'model = "gpt-5"\n')
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app="codex",
+        include=[ImportSection.MCP],
+        conflict_policy=ConflictPolicy.SKIP,
+    )
+
+    assert plan.actions == []
+    assert "No MCP servers found in source config" in plan.skipped[0]
+    assert not core.mcp_base_path.exists()

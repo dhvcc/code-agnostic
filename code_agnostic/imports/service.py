@@ -195,6 +195,16 @@ class ImportService:
         except (InvalidJsonFormatError, InvalidConfigSchemaError) as exc:
             return actions, [str(exc)], skipped
 
+        if not source_dto:
+            source_config = adapter.config_repository.config_path
+            if source_config.exists():
+                skipped.append(
+                    f"No MCP servers found in source config: {source_config}"
+                )
+            else:
+                skipped.append(f"Source MCP config missing: {source_config}")
+            return actions, errors, skipped
+
         existing_payload, existing_error = read_json_safe(self._core.mcp_base_path)
         if existing_error is not None:
             return (
