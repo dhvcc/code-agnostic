@@ -62,9 +62,9 @@ Legacy single-file markdown agents can express the same override with flat alias
 | `reasoning_effort` | supported | ignored or compiled | native | native |
 | `sandbox_mode` | supported | ignored | native | ignored |
 | `nickname_candidates` | supported | ignored | native | ignored |
-| `tools.read` | supported | compiled | pin to actual target behavior | compiled to `permission.read` |
-| `tools.write` | supported | compiled | pin to actual target behavior | compiled to `permission.edit` |
-| `tools.mcp` | supported | compiled | pin to actual target behavior | compiled to MCP tool permissions |
+| `tools.read` | supported | compiled | ignored | compiled to `permission.read` |
+| `tools.write` | supported | compiled | ignored | compiled to `permission.edit` |
+| `tools.mcp` | supported | compiled | ignored | compiled to MCP tool permissions |
 | `codex.mcp_servers` | supported | ignored | native | ignored |
 | `codex.skills.config` | supported | ignored | native | ignored |
 | `prompt.md` body | supported | compiled | compiled | compiled |
@@ -74,5 +74,7 @@ Legacy single-file markdown agents can express the same override with flat alias
 
 ## Notes
 
-- Codex-specific cells must be documented from real target behavior, not inference.
+- Current Codex subagent TOML does not expose generic agent tool permissions;
+  `tools.*` is omitted from generated Codex agent files and reported by
+  `explain-lossiness`.
 - If a target cannot represent a field without changing behavior, the compiler should reject instead of silently dropping it.

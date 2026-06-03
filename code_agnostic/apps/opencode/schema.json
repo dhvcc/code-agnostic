@@ -57,7 +57,7 @@
             },
             "branch": {
               "type": "string",
-              "description": "Branch or ref Scout should clone and inspect"
+              "description": "Branch or ref to clone and inspect"
             }
           },
           "required": [
@@ -153,12 +153,6 @@
             },
             "websearch": {
               "$ref": "#/$defs/PermissionActionConfig"
-            },
-            "repo_clone": {
-              "$ref": "#/$defs/PermissionRuleConfig"
-            },
-            "repo_overview": {
-              "$ref": "#/$defs/PermissionRuleConfig"
             },
             "lsp": {
               "$ref": "#/$defs/PermissionRuleConfig"
@@ -959,9 +953,6 @@
               "$ref": "#/$defs/AgentConfig"
             },
             "explore": {
-              "$ref": "#/$defs/AgentConfig"
-            },
-            "scout": {
               "$ref": "#/$defs/AgentConfig"
             },
             "title": {
