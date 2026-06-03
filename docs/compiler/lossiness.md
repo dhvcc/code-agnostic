@@ -19,6 +19,8 @@ The compiler must make cross-app lossiness explicit.
 - Skill `tools.*` is lossy for Cursor, Codex, and OpenCode skills because
   current target `SKILL.md` frontmatter does not represent per-skill tool
   permissions.
+- Agent `tools.*` is lossy for Codex agents because current Codex subagent TOML
+  does not expose generic per-agent read, write, or MCP tool permissions.
 
 ## CLI follow-up
 

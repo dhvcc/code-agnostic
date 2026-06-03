@@ -94,6 +94,10 @@ code-agnostic apply
 | Import from | yes | yes | yes |
 | Interactive import (TUI) | yes | yes | yes |
 
+`yes` means the resource type is synced for that editor. Some metadata is still
+target-specific or lossy; run `code-agnostic explain-lossiness` to see fields
+that are omitted or rejected for a selected target.
+
 Cursor workspace propagation is intentionally disabled to avoid duplicate MCP initialization in multi-root workspaces: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003
 
 OpenCode workspace configs include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`.

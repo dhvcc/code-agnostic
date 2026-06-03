@@ -120,6 +120,38 @@ def test_explain_lossiness_reports_skill_tool_mappings(
     ]
 
 
+def test_explain_lossiness_reports_codex_agent_tool_mappings(
+    minimal_shared_config: Path,
+    core_root: Path,
+    cli_runner,
+) -> None:
+    agent_dir = core_root / "agents" / "reviewer"
+    agent_dir.mkdir(parents=True)
+    (agent_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: reviewer\n"
+        "tools:\n"
+        "  read: false\n"
+        "  write: false\n"
+        "  mcp:\n"
+        "    - server: github\n"
+        "      tool: create_review\n",
+        encoding="utf-8",
+    )
+    (agent_dir / "prompt.md").write_text("Review code.\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["explain-lossiness", "--app", "codex"])
+
+    assert result.exit_code == 0
+    assert result.output.splitlines() == [
+        "resource_path\tapp\tproperty\tstatus\treason",
+        "agents/reviewer\tcodex\ttools.mcp\tignored\ttarget does not support agent MCP permissions",
+        "agents/reviewer\tcodex\ttools.read\tignored\ttarget does not support agent read permissions",
+        "agents/reviewer\tcodex\ttools.write\tignored\ttarget does not support agent write permissions",
+    ]
+
+
 def test_explain_lossiness_reports_workspace_paths(
     minimal_shared_config: Path,
     core_root: Path,
