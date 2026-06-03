@@ -39,8 +39,8 @@ def workspaces_add(obj: dict[str, str], name: str, path: Path) -> None:
     ui.render_workspace_saved(name, str(path.expanduser().resolve()))
 
 
-@workspaces.command("remove", help="Remove a workspace from config by name.")
-@click.option("--name", required=True, help="Workspace name to remove.")
+@workspaces.command("remove", help="Unregister a workspace by name.")
+@click.option("--name", required=True, help="Workspace name to unregister.")
 @click.pass_obj
 def workspaces_remove(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
