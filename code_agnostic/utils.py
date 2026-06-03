@@ -1,7 +1,11 @@
 import json
+import os
 from copy import deepcopy
 from pathlib import Path
+import tempfile
 from typing import Any
+
+_replace_file = os.replace
 
 
 def read_json(path: Path) -> Any:
@@ -21,10 +25,29 @@ def read_json_safe(path: Path) -> tuple[Any | None, str | None]:
 
 
 def write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=False)
-        handle.write("\n")
+    rendered = json.dumps(payload, indent=2, sort_keys=False) + "\n"
+    replacement_target = path
+    if path.is_symlink():
+        link_target = Path(os.readlink(path))
+        replacement_target = (
+            link_target if link_target.is_absolute() else path.parent / link_target
+        )
+
+    replacement_target.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=replacement_target.parent,
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(rendered)
+        _replace_file(temp_path, replacement_target)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
 
 
 def merge_dict_overlay(
