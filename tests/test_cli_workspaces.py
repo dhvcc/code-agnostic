@@ -35,11 +35,12 @@ def test_workspaces_add_list_remove_commands(
         cli, ["workspaces", "remove", "--name", "workspace-example"]
     )
     assert remove_result.exit_code == 0
-    assert "Workspace removed: workspace-example" in remove_result.output
+    assert "Workspace unregistered: workspace-example" in remove_result.output
 
     list_after_remove = cli_runner.invoke(cli, ["workspaces", "list"])
     assert list_after_remove.exit_code == 0
     assert "No workspaces configured" in list_after_remove.output
+    assert (minimal_shared_config / "workspaces" / "workspace-example").is_dir()
 
 
 def test_workspaces_add_rejects_missing_path(

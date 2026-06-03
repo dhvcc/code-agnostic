@@ -148,7 +148,7 @@ class SyncConsoleUI:
     def render_workspace_saved(
         self, name: str, path: str, removed: bool = False
     ) -> None:
-        verb = "removed" if removed else "added"
+        verb = "unregistered" if removed else "added"
         border_style = UIStyle.YELLOW.value if removed else UIStyle.GREEN.value
         self.console.print(
             UISection.note(

@@ -99,7 +99,7 @@ def test_workspaces_remove_with_named_flag(
     cli_runner.invoke(cli, ["workspaces", "add", "--name", "myws", "--path", str(ws)])
     result = cli_runner.invoke(cli, ["workspaces", "remove", "--name", "myws"])
     assert result.exit_code == 0
-    assert "Workspace removed" in result.output
+    assert "Workspace unregistered" in result.output
 
 
 def test_workspaces_git_exclude_with_workspace_flag(
