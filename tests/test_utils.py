@@ -1,6 +1,9 @@
 import json
+import os
 import stat
 from pathlib import Path
+
+import pytest
 
 from code_agnostic.utils import (
     compact_home_path,
@@ -81,6 +84,7 @@ def test_write_json_preserves_symlinked_destination(tmp_path: Path) -> None:
     assert json.loads(real_target.read_text(encoding="utf-8")) == {"updated": True}
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits are not stable on Windows")
 def test_write_json_preserves_existing_file_mode(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text('{"existing": true}\n', encoding="utf-8")
