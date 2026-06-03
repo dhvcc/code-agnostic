@@ -1,4 +1,5 @@
 import json
+import stat
 from pathlib import Path
 
 from code_agnostic.utils import (
@@ -78,6 +79,16 @@ def test_write_json_preserves_symlinked_destination(tmp_path: Path) -> None:
     assert link.is_symlink()
     assert link.resolve() == real_target.resolve()
     assert json.loads(real_target.read_text(encoding="utf-8")) == {"updated": True}
+
+
+def test_write_json_preserves_existing_file_mode(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text('{"existing": true}\n', encoding="utf-8")
+    path.chmod(0o644)
+
+    write_json(path, {"updated": True})
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
 # --- is_under ---
