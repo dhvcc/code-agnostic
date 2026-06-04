@@ -60,6 +60,7 @@ def test_import_plan_codex_shows_sections(cli_runner, tmp_path: Path) -> None:
     assert "mcp" in result.output
     assert "skills" in result.output
     assert "agents" in result.output
+    assert "code-agnostic import apply -a codex" in result.output
 
 
 def test_import_apply_codex_imports_mcp_skills_and_agents(
@@ -255,6 +256,30 @@ def test_import_apply_conflict_policy_fail(cli_runner, tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "conflict" in result.output.lower()
+
+
+def test_import_plan_conflict_skip_shows_overwrite_next_step(
+    cli_runner, tmp_path: Path
+) -> None:
+    _write_codex_source(
+        tmp_path / ".codex",
+        {"demo": {"command": "uvx"}},
+        with_skill=False,
+    )
+    core_mcp_path = tmp_path / ".config" / "code-agnostic" / "config" / "mcp.base.json"
+    core_mcp_path.parent.mkdir(parents=True, exist_ok=True)
+    core_mcp_path.write_text(
+        json.dumps({"mcpServers": {"demo": {"url": "https://existing"}}}),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(
+        cli, ["import", "plan", "-a", "codex", "--include", "mcp"]
+    )
+
+    assert result.exit_code == 0
+    assert "Skipped conflicts were left unchanged." in result.output
+    assert "code-agnostic import plan -a codex --on-conflict overwrite" in result.output
 
 
 def test_import_plan_default_view_shows_app_labels(cli_runner, tmp_path: Path) -> None:
