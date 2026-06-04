@@ -104,6 +104,39 @@ def test_mcp_import_conflict_overwrite_replaces_existing(tmp_path: Path) -> None
     assert payload["mcpServers"]["demo"] == {"command": "uvx", "args": []}
 
 
+def test_mcp_import_preserves_existing_schema_metadata(tmp_path: Path) -> None:
+    _write_codex_config(
+        tmp_path / ".codex",
+        "\n".join(["[mcp_servers.demo]", 'command = "uvx"', ""]),
+    )
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    core.mcp_base_path.parent.mkdir(parents=True, exist_ok=True)
+    core.mcp_base_path.write_text(
+        json.dumps(
+            {
+                "$schema": "https://example.test/mcp.base.schema.json",
+                "mcpServers": {
+                    "existing": {"command": "existing", "args": []},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app="codex",
+        include=[ImportSection.MCP],
+        conflict_policy=ConflictPolicy.SKIP,
+    )
+    service.apply(plan)
+
+    payload = json.loads(core.mcp_base_path.read_text(encoding="utf-8"))
+    assert payload["$schema"] == "https://example.test/mcp.base.schema.json"
+    assert payload["mcpServers"]["existing"] == {"command": "existing", "args": []}
+    assert payload["mcpServers"]["demo"] == {"command": "uvx", "args": []}
+
+
 def test_mcp_import_bootstraps_missing_hub_file(tmp_path: Path) -> None:
     _write_codex_config(
         tmp_path / ".codex",
