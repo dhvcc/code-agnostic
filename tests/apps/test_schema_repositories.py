@@ -74,6 +74,19 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "unified_exec_zsh_fork" in features
 
 
+def test_codex_schema_repository_fallback_includes_current_app_config(
+    monkeypatch,
+) -> None:
+    def _fail(*args, **kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    schema = CodexSchemaRepository(ttl_seconds=0).load_schema()
+    app_config = schema["definitions"]["AppConfig"]["properties"]
+    assert "approvals_reviewer" in app_config
+
+
 def test_cursor_schema_repository_uses_local_only(monkeypatch) -> None:
     def _fail(*args, **kwargs):
         raise AssertionError("urlopen should not be called for local-only schema")
@@ -102,6 +115,25 @@ def test_remote_returns_non_dict_falls_back_to_local(monkeypatch) -> None:
 
     schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
     assert "mcp" in _opencode_config_properties(schema)
+
+
+def test_opencode_schema_repository_fallback_matches_current_agent_and_permissions(
+    monkeypatch,
+) -> None:
+    def _fail(*args, **kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
+    properties = _opencode_config_properties(schema)
+    agent_properties = properties["agent"]["properties"]
+    permission_properties = schema["$defs"]["PermissionConfig"]["anyOf"][1][
+        "properties"
+    ]
+    assert "scout" not in agent_properties
+    assert "repo_clone" not in permission_properties
+    assert "repo_overview" not in permission_properties
 
 
 def test_cache_ttl_within_ttl_uses_cache(monkeypatch) -> None:

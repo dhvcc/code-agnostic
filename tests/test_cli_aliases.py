@@ -49,4 +49,4 @@ def test_workspace_alias_remove(
     cli_runner.invoke(cli, ["workspace", "add", "--name", "myws", "--path", str(ws)])
     result = cli_runner.invoke(cli, ["workspace", "remove", "--name", "myws"])
     assert result.exit_code == 0
-    assert "Workspace removed" in result.output
+    assert "Workspace unregistered" in result.output

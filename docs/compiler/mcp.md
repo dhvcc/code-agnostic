@@ -1,6 +1,8 @@
 # MCP compiler contract
 
-Canonical MCP source should move to `config/mcp.base.yaml`.
+Canonical MCP source is moving toward `config/mcp.base.yaml`. Today the CLI
+also supports legacy/common `config/mcp.base.json`, and import/MCP management
+commands still write that JSON source.
 
 Published schemas:
 

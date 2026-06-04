@@ -292,7 +292,11 @@ class ImportService:
             else:
                 skipped.append(f"MCP server skipped due to conflict: {name}")
 
-        normalized_payload = {"mcpServers": dto_to_common_mcp(merged)}
+        normalized_payload = {}
+        existing_schema = existing_payload.get("$schema")
+        if isinstance(existing_schema, str) and existing_schema:
+            normalized_payload["$schema"] = existing_schema
+        normalized_payload["mcpServers"] = dto_to_common_mcp(merged)
         actions.append(
             ImportAction(
                 section=ImportSection.MCP,

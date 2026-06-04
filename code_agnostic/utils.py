@@ -21,10 +21,10 @@ def read_json_safe(path: Path) -> tuple[Any | None, str | None]:
 
 
 def write_json(path: Path, payload: Any) -> None:
+    rendered = json.dumps(payload, indent=2, sort_keys=False) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=False)
-        handle.write("\n")
+        handle.write(rendered)
 
 
 def merge_dict_overlay(

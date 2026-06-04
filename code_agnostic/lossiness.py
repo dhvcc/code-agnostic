@@ -211,6 +211,36 @@ class LossinessExplainer:
                         reason="target does not support agent sandbox_mode",
                     )
                 )
+            if agent.metadata.tools.read is not True:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="tools.read",
+                        targets=("codex",),
+                        app=app,
+                        reason="target does not support agent read permissions",
+                    )
+                )
+            if agent.metadata.tools.write is not True:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="tools.write",
+                        targets=("codex",),
+                        app=app,
+                        reason="target does not support agent write permissions",
+                    )
+                )
+            if agent.metadata.tools.mcp:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="tools.mcp",
+                        targets=("codex",),
+                        app=app,
+                        reason="target does not support agent MCP permissions",
+                    )
+                )
 
         return findings
 
