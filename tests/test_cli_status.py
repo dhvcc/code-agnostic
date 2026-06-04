@@ -52,6 +52,50 @@ def test_status_reports_editor_and_workspace_repo_sync(
     assert "service-web" in synced_status.output
 
 
+def test_status_reports_workspace_repo_generated_config_content_drift(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("opencode")
+
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "service-api"
+    (repo / ".git").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "ws",
+            "--path",
+            str(workspace_root),
+        ],
+    )
+    assert add_result.exit_code == 0
+
+    ws_config_dir = core_root / "workspaces" / "ws"
+    (ws_config_dir / AGENTS_FILENAME).write_text("workspace rules", encoding="utf-8")
+
+    apply_result = cli_runner.invoke(cli, ["apply"])
+    assert apply_result.exit_code == 0
+
+    (repo / ".opencode" / "opencode.json").write_text("{}\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["status"])
+
+    assert result.exit_code == 0
+    assert "ws" in result.output
+    assert "service-api" in result.output
+    assert "drift" in result.output
+    assert "needs sync" in result.output
+
+
 def test_status_can_scope_to_single_app(
     minimal_shared_config: Path, cli_runner, enable_app
 ) -> None:

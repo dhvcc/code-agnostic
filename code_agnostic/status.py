@@ -6,11 +6,15 @@ from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.constants import AGENTS_PROJECT_DIRNAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
+    Action,
+    ActionStatus,
     RepoSyncStatus,
     WorkspaceRepoStatusRow,
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
 )
+from code_agnostic.planner import SyncPlanner
+from code_agnostic.utils import is_under
 from code_agnostic.workspaces import WorkspaceService
 
 
@@ -24,6 +28,7 @@ class StatusService:
         app_services: list[IAppConfigService] | None = None,
     ) -> list[WorkspaceStatusRow]:
         status_rows: list[WorkspaceStatusRow] = []
+        workspace_actions = self._workspace_actions(source_repo, app_services)
 
         for workspace in source_repo.load_workspaces():
             workspace_name = workspace["name"]
@@ -69,7 +74,18 @@ class StatusService:
                     app_metas.append(meta)
 
             repo_rows = [
-                self._repo_sync_status(repo, ws_source, app_metas) for repo in repos
+                self._repo_sync_status(
+                    repo,
+                    ws_source,
+                    app_metas,
+                    workspace_actions=[
+                        action
+                        for action in workspace_actions
+                        if action.workspace == workspace_name
+                        and is_under(action.path, repo)
+                    ],
+                )
+                for repo in repos
             ]
 
             detail = "all git repos synced"
@@ -93,12 +109,30 @@ class StatusService:
         return status_rows
 
     @staticmethod
+    def _workspace_actions(
+        source_repo: ISourceRepository,
+        app_services: list[IAppConfigService] | None,
+    ) -> list[Action]:
+        if not app_services:
+            return []
+        plan = SyncPlanner(core=source_repo, app_services=app_services).build()
+        return [action for action in plan.actions if action.workspace is not None]
+
+    @staticmethod
     def _repo_sync_status(
         repo_path: Path,
         ws_source: WorkspaceConfigRepository,
         app_metas: list[AppMetadata] | None = None,
+        workspace_actions: list[Action] | None = None,
     ) -> WorkspaceRepoStatusRow:
         issues: list[str] = []
+
+        if workspace_actions is not None:
+            for action in workspace_actions:
+                if action.status == ActionStatus.NOOP:
+                    continue
+                issues.append(StatusService._repo_action_issue(action, repo_path))
+            return StatusService._repo_status_row(repo_path, issues)
 
         # Check workspace-managed config files in repo project dirs.
         # Workspace rendering creates regular files (not symlinks) in
@@ -150,15 +184,42 @@ class StatusService:
                         f"missing or mismatched {meta.app_id.value} agents link"
                     )
 
+        return StatusService._repo_status_row(repo_path, issues)
+
+    @staticmethod
+    def _repo_status_row(repo_path: Path, issues: list[str]) -> WorkspaceRepoStatusRow:
         if not issues:
             return WorkspaceRepoStatusRow(
                 repo=repo_path.name,
                 status=RepoSyncStatus.SYNCED,
                 detail="linked",
             )
-
         return WorkspaceRepoStatusRow(
             repo=repo_path.name,
             status=RepoSyncStatus.NEEDS_SYNC,
             detail="; ".join(issues),
         )
+
+    @staticmethod
+    def _repo_action_issue(action: Action, repo_path: Path) -> str:
+        rel_path = StatusService._relative_repo_path(action.path, repo_path)
+        if action.status == ActionStatus.CREATE:
+            return f"missing {rel_path}"
+        if action.status in {ActionStatus.UPDATE, ActionStatus.FIX}:
+            return f"mismatched {rel_path}"
+        if action.status == ActionStatus.CONFLICT:
+            return f"conflict at {rel_path}"
+        if action.status == ActionStatus.REMOVE:
+            return f"stale {rel_path}"
+        return f"{action.status.value} {rel_path}"
+
+    @staticmethod
+    def _relative_repo_path(path: Path, repo_path: Path) -> str:
+        try:
+            return (
+                path.resolve(strict=False)
+                .relative_to(repo_path.resolve(strict=False))
+                .as_posix()
+            )
+        except ValueError:
+            return path.as_posix()
