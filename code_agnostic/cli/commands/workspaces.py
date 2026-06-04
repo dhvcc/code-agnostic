@@ -15,7 +15,7 @@ from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.workspaces import WorkspaceService
 
 
-@click.group(help="Manage workspace roots for repo rule propagation.")
+@click.group(help="Manage workspace roots for repo-local sync.")
 def workspaces() -> None:
     pass
 

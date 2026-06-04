@@ -24,7 +24,7 @@ The compiler must make cross-app lossiness explicit.
 
 ## CLI follow-up
 
-This doc is the contract for a future `code-agnostic explain-lossiness` command. That command should report:
+This doc is the contract for `code-agnostic explain-lossiness`. That command reports:
 
 - resource path
 - target app

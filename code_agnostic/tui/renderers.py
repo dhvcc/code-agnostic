@@ -1,6 +1,10 @@
 from rich.console import Console
 
-from code_agnostic.imports.models import ImportApplyResult, ImportPlan
+from code_agnostic.imports.models import (
+    ImportActionStatus,
+    ImportApplyResult,
+    ImportPlan,
+)
 from code_agnostic.models import (
     AppStatusRow,
     EditorStatusRow,
@@ -329,6 +333,60 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
             )
+
+        next_steps = self._import_next_steps(plan, mode)
+        if next_steps:
+            self.console.print(
+                UISection.note("next", next_steps, style=UIStyle.DIM.value)
+            )
+
+    @staticmethod
+    def _import_next_steps(plan: ImportPlan, mode: str) -> str | None:
+        parts = mode.split(":", 2)
+        if len(parts) != 3:
+            return None
+
+        _, command, target = parts
+        target_flag = f" -a {target}" if target else ""
+        conflict_items = [*plan.errors, *plan.skipped]
+        has_conflict = any("conflict" in item.lower() for item in conflict_items)
+
+        if command == "apply":
+            return None
+
+        if plan.errors:
+            lines = [
+                "Fix the errors above, then rerun the import preview.",
+                f"- code-agnostic import plan{target_flag}",
+            ]
+            if has_conflict:
+                lines.append(
+                    "For conflicts, choose --on-conflict overwrite or --on-conflict fail."
+                )
+            return "\n".join(lines)
+
+        has_writes = any(
+            action.status in {ImportActionStatus.CREATE, ImportActionStatus.UPDATE}
+            for action in plan.actions
+        )
+        if has_writes:
+            lines = [
+                "Review the imported items. If they match what you expect, write them to the hub.",
+                f"- code-agnostic import apply{target_flag}",
+            ]
+            if has_conflict:
+                lines.append(
+                    "Skipped conflicts will stay unchanged unless you rerun with --on-conflict overwrite."
+                )
+            return "\n".join(lines)
+
+        if has_conflict:
+            return (
+                "Skipped conflicts were left unchanged.\n"
+                f"- code-agnostic import plan{target_flag} --on-conflict overwrite"
+            )
+
+        return "No import changes needed.\n- code-agnostic validate"
 
     def render_import_apply_result(self, result: ImportApplyResult) -> None:
         self.render_apply_result(

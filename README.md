@@ -139,19 +139,31 @@ Env vars without a value (`--env GITHUB_TOKEN`) are stored as `${GITHUB_TOKEN}` 
 
 ### Rules with metadata
 
-Rules live in `rules/` as markdown files with optional YAML frontmatter:
+New rules should use bundle directories with schema-validated metadata and a
+separate prompt body:
 
-```markdown
----
+```text
+rules/python-style/
+├── meta.yaml
+└── prompt.md
+```
+
+```yaml
+# rules/python-style/meta.yaml
+spec_version: v1
+kind: rule
 description: "Python coding standards"
 globs: ["*.py"]
 always_apply: false
----
+```
 
+```markdown
+<!-- rules/python-style/prompt.md -->
 Always use type hints. Prefer dataclasses over dicts.
 ```
 
 Cross-compiled per editor: Cursor gets `.mdc` files with native frontmatter, OpenCode/Codex get `AGENTS.md` sections.
+Legacy single-file rule markdown with YAML frontmatter remains supported for migration.
 
 ```bash
 code-agnostic rules list
@@ -160,7 +172,10 @@ code-agnostic rules remove --name python-style
 
 ### Skills and agents
 
-Canonical YAML frontmatter format, cross-compiled per editor. Install or edit skills in the `code-agnostic` source of truth, then run `plan` / `apply`; do not hand-copy generated skills into `.codex`, `.cursor`, or OpenCode directories.
+Use bundle directories for new skills and agents, then let `code-agnostic`
+cross-compile them per editor. Install or edit skills in the `code-agnostic`
+source of truth, then run `plan` / `apply`; do not hand-copy generated skills
+into `.codex`, `.cursor`, `.agents`, or OpenCode directories.
 
 ```bash
 code-agnostic skills list
@@ -240,7 +255,7 @@ The compiler migration is documented in:
 
 - [x] Plan/apply/status sync engine
 - [x] MCP server sync across editors
-- [x] Skills and agents sync (symlink-based)
+- [x] Skills and agents sync across editors
 - [x] Workspace propagation into git repos
 - [x] Import from existing editor configs
 - [x] Consistent CLI with named flags and aliases
