@@ -70,8 +70,27 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         "properties"
     ]
     for features in (global_features, profile_features):
+        assert "code_mode" in features
         assert "local_thread_store_compression" in features
-        assert "unified_exec_zsh_fork" in features
+        assert "responses_websocket_response_processed" not in features
+
+    code_mode = global_features["code_mode"]
+    assert code_mode == {"$ref": "#/definitions/FeatureToml_for_CodeModeConfigToml"}
+
+
+def test_codex_schema_repository_fallback_allows_advertised_reasoning_efforts(
+    monkeypatch,
+) -> None:
+    def _fail(*args, **kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    schema = CodexSchemaRepository(ttl_seconds=0).load_schema()
+    reasoning_effort = schema["definitions"]["ReasoningEffort"]
+    assert reasoning_effort["type"] == "string"
+    assert reasoning_effort["minLength"] == 1
+    assert "enum" not in reasoning_effort
 
 
 def test_codex_schema_repository_fallback_includes_current_app_config(
@@ -128,10 +147,12 @@ def test_opencode_schema_repository_fallback_matches_current_agent_and_permissio
     schema = OpenCodeSchemaRepository(ttl_seconds=0).load_schema()
     properties = _opencode_config_properties(schema)
     agent_properties = properties["agent"]["properties"]
+    agent_config_properties = schema["$defs"]["AgentConfig"]["properties"]
     permission_properties = schema["$defs"]["PermissionConfig"]["anyOf"][1][
         "properties"
     ]
     assert "scout" not in agent_properties
+    assert agent_config_properties["variant"]["type"] == "string"
     assert "repo_clone" not in permission_properties
     assert "repo_overview" not in permission_properties
 
