@@ -12,12 +12,18 @@ from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.utils import compact_home_path
 
 
-@click.group(help="Manage skill definitions in the hub config.")
+@click.group(
+    help=(
+        "Manage source skill definitions. Commands use global source by default; "
+        "pass -w/--workspace for workspace source. Repo-local skill folders are "
+        "unmanaged until project-scoped installs are supported."
+    )
+)
 def skills() -> None:
     pass
 
 
-@skills.command("list", help="List configured skills.")
+@skills.command("list", help="List global skills, or workspace skills with -w.")
 @workspace_option()
 @click.pass_obj
 def skills_list(obj: dict[str, str], workspace: str | None) -> None:
@@ -49,7 +55,7 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
     )
 
 
-@skills.command("remove", help="Remove a skill by name.")
+@skills.command("remove", help="Remove a global skill, or a workspace skill with -w.")
 @click.option("--name", required=True, help="Skill name to remove.")
 @workspace_option()
 @click.pass_obj
@@ -60,4 +66,5 @@ def skills_remove(obj: dict[str, str], name: str, workspace: str | None) -> None
     if not skill_dir.exists():
         raise click.ClickException(f"Skill not found: {name}")
     shutil.rmtree(skill_dir)
-    click.echo(f"Removed: {name}")
+    scope = f"workspace:{workspace}" if workspace else "global"
+    click.echo(f"Removed {scope} skill: {name}")

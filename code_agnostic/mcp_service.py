@@ -68,10 +68,11 @@ class MCPManagementService:
         servers = raw.get("mcpServers", {})
 
         if name in servers:
+            scope = f"workspace:{workspace}" if workspace else "global"
             if on_conflict == ConflictPolicy.FAIL:
                 raise ValueError(f"Server already exists: {name}")
             if on_conflict == ConflictPolicy.SKIP:
-                return f"Skipped (already exists): {name}"
+                return f"Skipped {scope} MCP server (already exists): {name}"
 
         entry: dict[str, Any] = {}
         if command is not None:
@@ -92,7 +93,8 @@ class MCPManagementService:
         servers[name] = entry
         raw["mcpServers"] = servers
         self._save_raw(raw, workspace)
-        return f"Added: {name}"
+        scope = f"workspace:{workspace}" if workspace else "global"
+        return f"Added {scope} MCP server: {name}"
 
     def remove_server(self, name: str, workspace: str | None = None) -> bool:
         raw = self._load_raw(workspace)

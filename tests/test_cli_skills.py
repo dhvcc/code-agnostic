@@ -52,7 +52,7 @@ def test_skills_remove_existing(
 
     result = cli_runner.invoke(cli, ["skills", "remove", "--name", "old-skill"])
     assert result.exit_code == 0
-    assert "Removed" in result.output
+    assert "Removed global skill" in result.output
     assert not skill_dir.exists()
 
 

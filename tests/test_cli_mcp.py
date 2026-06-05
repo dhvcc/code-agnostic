@@ -9,7 +9,7 @@ from code_agnostic.__main__ import cli
 def test_mcp_list_empty(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(cli, ["mcp", "list"])
     assert result.exit_code == 0
-    assert "No MCP servers" in result.output
+    assert "No global MCP servers" in result.output
 
 
 def test_mcp_list_populated(
@@ -28,6 +28,7 @@ def test_mcp_list_populated(
     result = cli_runner.invoke(cli, ["mcp", "list"])
     assert result.exit_code == 0
     assert "github" in result.output
+    assert "global" in result.output
 
 
 def test_mcp_add_stdio(
@@ -38,7 +39,7 @@ def test_mcp_add_stdio(
         ["mcp", "add", "github", "--command", "npx", "--args", "mcp-github"],
     )
     assert result.exit_code == 0
-    assert "Added" in result.output
+    assert "Added global MCP server" in result.output
 
     payload = json.loads(
         (core_root / "config" / "mcp.base.json").read_text(encoding="utf-8")
@@ -140,7 +141,7 @@ def test_mcp_add_conflict_skip(minimal_shared_config: Path, cli_runner) -> None:
         cli, ["mcp", "add", "demo", "--command", "other", "--on-conflict", "skip"]
     )
     assert result.exit_code == 0
-    assert "Skipped" in result.output
+    assert "Skipped global MCP server" in result.output
 
 
 def test_mcp_add_conflict_overwrite(
@@ -172,7 +173,7 @@ def test_mcp_remove_existing(minimal_shared_config: Path, cli_runner) -> None:
     cli_runner.invoke(cli, ["mcp", "add", "demo", "--command", "uvx"])
     result = cli_runner.invoke(cli, ["mcp", "remove", "demo"])
     assert result.exit_code == 0
-    assert "Removed" in result.output
+    assert "Removed global MCP server" in result.output
 
 
 def test_mcp_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> None:
@@ -198,10 +199,12 @@ def test_mcp_workspace_scoped(
         cli, ["mcp", "add", "local", "--command", "uvx", "-w", "myws"]
     )
     assert result.exit_code == 0
+    assert "Added workspace:myws MCP server" in result.output
 
     list_result = cli_runner.invoke(cli, ["mcp", "list", "-w", "myws"])
     assert list_result.exit_code == 0
     assert "local" in list_result.output
+    assert "workspace:myws" in list_result.output
 
     global_list = cli_runner.invoke(cli, ["mcp", "list"])
     assert "local" not in global_list.output
