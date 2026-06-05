@@ -85,6 +85,26 @@ def test_load_workspaces_ignores_malformed_entries(
     ]
 
 
+def test_load_workspaces_rejects_invalid_json(core_repo: CoreRepository) -> None:
+    repo = core_repo
+    repo.config_dir.mkdir(parents=True, exist_ok=True)
+    repo.workspaces_path.write_text("{bad", encoding="utf-8")
+
+    with pytest.raises(InvalidJsonFormatError):
+        repo.load_workspaces()
+
+
+def test_load_workspaces_rejects_non_list_registry(
+    core_repo: CoreRepository,
+) -> None:
+    repo = core_repo
+    repo.config_dir.mkdir(parents=True, exist_ok=True)
+    repo.workspaces_path.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(InvalidConfigSchemaError):
+        repo.load_workspaces()
+
+
 def test_load_mcp_base_raises_invalid_json_error(core_repo: CoreRepository) -> None:
     repo = core_repo
     repo.config_dir.mkdir(parents=True, exist_ok=True)

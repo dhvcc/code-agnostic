@@ -171,6 +171,21 @@ def test_status_returns_nonzero_for_workspace_error(tmp_path: Path, cli_runner) 
     assert "workspace path" in result.output
 
 
+def test_status_reports_error_for_corrupted_workspace_registry(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["status"])
+
+    assert result.exit_code != 0
+    assert "workspaces" in result.output
+    assert "error" in result.output
+    assert "Invalid JSON format" in result.output
+    assert "synced" not in result.output
+
+
 def test_status_app_scope_returns_nonzero_for_workspace_error(
     tmp_path: Path, cli_runner, enable_app
 ) -> None:

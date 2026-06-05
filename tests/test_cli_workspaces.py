@@ -56,6 +56,23 @@ def test_workspaces_add_rejects_missing_path(
     assert "does not exist or is not a directory" in result.output
 
 
+def test_workspaces_add_preserves_corrupted_registry(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner
+) -> None:
+    workspace_root = tmp_path / "ws"
+    workspace_root.mkdir()
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "new", "--path", str(workspace_root)]
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid JSON format" in result.output
+    assert registry.read_text(encoding="utf-8") == "{bad"
+
+
 def test_workspaces_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(cli, ["workspaces", "remove", "--name", "ghost"])
 

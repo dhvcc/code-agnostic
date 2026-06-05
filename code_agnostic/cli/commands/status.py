@@ -7,7 +7,13 @@ from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.cli.helpers import status_row_for_app
 from code_agnostic.cli.options import app_option, verbose_option
 from code_agnostic.core.repository import CoreRepository
-from code_agnostic.models import EditorStatusRow, EditorSyncStatus, WorkspaceSyncStatus
+from code_agnostic.errors import SyncAppError
+from code_agnostic.models import (
+    EditorStatusRow,
+    EditorSyncStatus,
+    WorkspaceStatusRow,
+    WorkspaceSyncStatus,
+)
 from code_agnostic.status import StatusService
 from code_agnostic.tui import SyncConsoleUI
 
@@ -50,9 +56,20 @@ def status(obj: dict[str, str], app: str, verbose: bool) -> None:
 
     status_service = StatusService()
     enabled_services = apps._resolve_services_for_target(normalized_target)
-    workspace_rows = status_service.build_workspace_status(
-        core, app_services=enabled_services
-    )
+    try:
+        workspace_rows = status_service.build_workspace_status(
+            core, app_services=enabled_services
+        )
+    except SyncAppError as exc:
+        workspace_rows = [
+            WorkspaceStatusRow(
+                name="workspaces",
+                path=str(core.workspaces_path),
+                status=WorkspaceSyncStatus.ERROR,
+                detail=str(exc),
+                repos=[],
+            )
+        ]
     ui.render_status(
         editor_rows,
         workspace_rows,

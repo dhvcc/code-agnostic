@@ -191,10 +191,12 @@ class CoreRepository(BaseSourceRepository):
 
     def load_workspaces(self) -> list[dict[str, str]]:
         payload, error = read_json_safe(self.workspaces_path)
-        if error is not None or payload is None:
+        if error is not None:
+            raise InvalidJsonFormatError(self.workspaces_path, error)
+        if payload is None:
             return []
         if not isinstance(payload, list):
-            return []
+            raise InvalidConfigSchemaError(self.workspaces_path, "must be a JSON array")
 
         result: list[dict[str, str]] = []
         seen_names: set[str] = set()
