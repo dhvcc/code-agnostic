@@ -209,7 +209,7 @@ class StatusTable:
             Column(header="Workspace", width=24),
             Column(header="Status", width=12),
             Column(header="Repos", width=8, justify="right"),
-            Column(header="Detail", overflow="ellipsis"),
+            Column(header="Detail", overflow="fold"),
             expand=True,
             header_style="bold",
         )
