@@ -50,6 +50,8 @@ x-opencode:
 ```
 
 This means Codex still receives `model: gpt-5.4-mini`, while OpenCode receives `model: opencode/big-pickle` plus `temperature: 0.2`.
+Current OpenCode agent-native fields such as `variant` can be preserved through
+`x-opencode`.
 
 Legacy single-file markdown agents can express the same override with flat aliases such as `opencode-model: opencode/big-pickle` or `claude-model: claude-sonnet-4-20250514`.
 

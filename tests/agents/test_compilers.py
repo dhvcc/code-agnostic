@@ -76,7 +76,11 @@ def test_opencode_compiler_uses_app_override_and_passthrough() -> None:
     agent = _make_agent(
         model="gpt-5.4-mini",
         app_overrides={
-            "opencode": {"model": "opencode/big-pickle", "temperature": 0.2}
+            "opencode": {
+                "model": "opencode/big-pickle",
+                "temperature": 0.2,
+                "variant": "large-context",
+            }
         },
     )
 
@@ -87,6 +91,7 @@ def test_opencode_compiler_uses_app_override_and_passthrough() -> None:
 
     assert payload["model"] == "opencode/big-pickle"
     assert payload["temperature"] == 0.2
+    assert payload["variant"] == "large-context"
 
 
 def test_opencode_compiler_uses_permission_config_for_tools() -> None:
