@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 
 from code_agnostic.constants import (
-    AGENTS_PROJECT_DIRNAME,
     AGENTS_FILENAME,
     CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
 )
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.git_exclude_service import GitExcludeService
+from code_agnostic.utils import write_json
 
 
 @pytest.fixture
@@ -24,13 +24,36 @@ def service_with_workspace(minimal_shared_config: Path, tmp_path: Path):
     return service
 
 
-def test_defaults_only(service_with_workspace) -> None:
+def test_defaults_are_exact_generated_artifact_paths(service_with_workspace) -> None:
+    core = CoreRepository()
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("rules\n", encoding="utf-8")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"demo": {"command": "uvx", "args": ["demo"]}}},
+    )
+    (ws_config / "skills" / "review").mkdir(parents=True)
+    (ws_config / "skills" / "review" / "SKILL.md").write_text(
+        "review\n", encoding="utf-8"
+    )
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text("plan\n", encoding="utf-8")
+
     entries = service_with_workspace.compute_entries("myws", ["cursor", "codex"])
+
+    assert entries == [
+        ".agents/skills/review/SKILL.md",
+        ".codex/agents/planner.toml",
+        ".codex/config.toml",
+        ".cursor/agents/planner.md",
+        ".cursor/mcp.json",
+        ".cursor/skills/review/SKILL.md",
+        AGENTS_FILENAME,
+        CODEX_AGENTS_OVERRIDE_FILENAME,
+    ]
     assert ".cursor" not in entries
-    assert ".codex" in entries
-    assert AGENTS_PROJECT_DIRNAME in entries
-    assert AGENTS_FILENAME in entries
-    assert CODEX_AGENTS_OVERRIDE_FILENAME in entries
+    assert ".codex" not in entries
+    assert ".agents" not in entries
     assert CLAUDE_LOCAL_FILENAME not in entries
     assert "CLAUDE.md" not in entries
 
@@ -41,6 +64,7 @@ def test_claude_defaults_include_only_owned_paths(
 ) -> None:
     core = CoreRepository()
     ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("rules\n", encoding="utf-8")
     (ws_config / "skills" / "review").mkdir(parents=True)
     (ws_config / "skills" / "review" / "SKILL.md").write_text(
         "review\n", encoding="utf-8"
@@ -60,9 +84,7 @@ def test_claude_defaults_include_only_owned_paths(
 def test_custom_patterns_merged(service_with_workspace) -> None:
     service_with_workspace.add_pattern("myws", "*.generated")
     entries = service_with_workspace.compute_entries("myws", ["cursor"])
-    assert ".cursor" not in entries
-    assert AGENTS_FILENAME in entries
-    assert "*.generated" in entries
+    assert entries == ["*.generated"]
 
 
 def test_no_defaults(minimal_shared_config: Path, tmp_path: Path) -> None:

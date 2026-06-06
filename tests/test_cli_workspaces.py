@@ -2,6 +2,21 @@ from pathlib import Path
 
 from code_agnostic.__main__ import cli
 from code_agnostic.constants import AGENTS_FILENAME, CODEX_AGENTS_OVERRIDE_FILENAME
+from code_agnostic.utils import write_json
+
+
+def _write_workspace_source(ws_config: Path) -> None:
+    (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"demo": {"command": "uvx", "args": ["demo"]}}},
+    )
+    (ws_config / "skills" / "review").mkdir(parents=True)
+    (ws_config / "skills" / "review" / "SKILL.md").write_text(
+        "review\n", encoding="utf-8"
+    )
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text("plan\n", encoding="utf-8")
 
 
 def test_workspaces_add_list_remove_commands(
@@ -187,21 +202,30 @@ def test_workspaces_git_exclude_writes_enabled_apps_and_default_rules(
         cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
+    _write_workspace_source(minimal_shared_config / "workspaces" / "corp")
 
     enable_app("cursor")
+    enable_app("codex")
 
     result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
     assert result.exit_code == 0
     assert "Updated git excludes" in result.output
 
-    expected_entries = ["AGENTS.md", CODEX_AGENTS_OVERRIDE_FILENAME]
-    unexpected_entries = [".opencode", ".codex"]
+    expected_entries = {
+        ".agents/skills/review/SKILL.md",
+        ".codex/agents/planner.toml",
+        ".codex/config.toml",
+        ".cursor/agents/planner.md",
+        ".cursor/mcp.json",
+        ".cursor/skills/review/SKILL.md",
+        CODEX_AGENTS_OVERRIDE_FILENAME,
+    }
+    unexpected_entries = {".opencode", ".codex", ".cursor", ".agents", AGENTS_FILENAME}
 
     for repo_name in ["repo-a", "repo-b"]:
         exclude = workspace_root / repo_name / ".git" / "info" / "exclude"
-        content = exclude.read_text(encoding="utf-8")
-        for item in expected_entries:
-            assert item in content
+        content = set(exclude.read_text(encoding="utf-8").splitlines())
+        assert expected_entries <= content
         assert "CLAUDE.md" not in content
         for item in unexpected_entries:
             assert item not in content
@@ -229,6 +253,10 @@ def test_workspaces_git_exclude_can_target_single_workspace(
         ).exit_code
         == 0
     )
+    write_json(
+        minimal_shared_config / "workspaces" / "a" / "mcp.base.json",
+        {"mcpServers": {"demo": {"command": "uvx", "args": ["demo"]}}},
+    )
 
     enable_app("cursor")
 
@@ -238,9 +266,10 @@ def test_workspaces_git_exclude_can_target_single_workspace(
     exclude_a = ws_a / "repo-a" / ".git" / "info" / "exclude"
     exclude_b = ws_b / "repo-b" / ".git" / "info" / "exclude"
 
-    exclude_content = exclude_a.read_text(encoding="utf-8")
-    assert "AGENTS.md" in exclude_content
+    exclude_content = set(exclude_a.read_text(encoding="utf-8").splitlines())
+    assert ".cursor/mcp.json" in exclude_content
     assert ".cursor" not in exclude_content
+    assert AGENTS_FILENAME not in exclude_content
     assert not exclude_b.exists()
 
 
@@ -255,6 +284,7 @@ def test_workspaces_git_exclude_preserves_existing_file_content(
         cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
+    _write_workspace_source(minimal_shared_config / "workspaces" / "corp")
 
     enable_app("codex")
 
@@ -266,10 +296,13 @@ def test_workspaces_git_exclude_preserves_existing_file_content(
 
     content = exclude.read_text(encoding="utf-8").splitlines()
     assert content[:2] == ["# existing comment", "build/"]
-    assert ".codex" in content
-    assert "AGENTS.md" in content
+    assert ".codex/config.toml" in content
+    assert ".codex/agents/planner.toml" in content
+    assert ".agents/skills/review/SKILL.md" in content
     assert CODEX_AGENTS_OVERRIDE_FILENAME in content
     assert "CLAUDE.md" not in content
+    assert ".codex" not in content
+    assert AGENTS_FILENAME not in content
 
 
 def test_workspaces_git_exclude_does_not_duplicate_existing_entries(
@@ -283,20 +316,21 @@ def test_workspaces_git_exclude_does_not_duplicate_existing_entries(
         cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
+    _write_workspace_source(minimal_shared_config / "workspaces" / "corp")
 
     enable_app("codex")
 
     exclude = workspace_root / "repo-a" / ".git" / "info" / "exclude"
-    exclude.write_text(" .codex \nAGENTS.md\n", encoding="utf-8")
+    exclude.write_text(" .codex/config.toml \nAGENTS.override.md\n", encoding="utf-8")
 
     result = cli_runner.invoke(cli, ["workspaces", "git-exclude"])
     assert result.exit_code == 0
     assert "lines_added=2" in result.output
 
     content = exclude.read_text(encoding="utf-8")
-    assert content.count(".codex") == 1
-    assert content.count(".agents") == 1
-    assert content.count("AGENTS.md") == 1
+    assert content.count(".codex/config.toml") == 1
+    assert content.count(".codex/agents/planner.toml") == 1
+    assert content.count(".agents/skills/review/SKILL.md") == 1
     assert content.count(CODEX_AGENTS_OVERRIDE_FILENAME) == 1
     assert content.count("CLAUDE.md") == 0
 
@@ -317,6 +351,7 @@ def test_workspaces_git_exclude_supports_git_file_repos(
         cli, ["workspaces", "add", "--name", "corp", "--path", str(workspace_root)]
     )
     assert add_result.exit_code == 0
+    _write_workspace_source(minimal_shared_config / "workspaces" / "corp")
 
     enable_app("codex")
 
@@ -328,7 +363,10 @@ def test_workspaces_git_exclude_supports_git_file_repos(
 
     content = exclude.read_text(encoding="utf-8").splitlines()
     assert content[:2] == ["# existing", "build/"]
-    assert ".codex" in content
-    assert "AGENTS.md" in content
+    assert ".codex/config.toml" in content
+    assert ".codex/agents/planner.toml" in content
+    assert ".agents/skills/review/SKILL.md" in content
     assert CODEX_AGENTS_OVERRIDE_FILENAME in content
     assert "CLAUDE.md" not in content
+    assert ".codex" not in content
+    assert AGENTS_FILENAME not in content

@@ -228,7 +228,7 @@ def test_workspace_rules_file_planned_for_cursor(
 # --- Workspace MCP config sync ---
 
 
-def test_workspace_mcp_sync_skips_cursor_workspace_outputs(
+def test_workspace_mcp_sync_writes_cursor_workspace_outputs(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -250,8 +250,22 @@ def test_workspace_mcp_sync_skips_cursor_workspace_outputs(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    assert not any(
-        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
+    actions = {
+        action.scope: action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_JSON
+    }
+    assert actions["ws:cursor:workspace_root_mcp"].path == (
+        workspace_root / ".cursor" / "mcp.json"
+    )
+    assert actions["ws:cursor:repo_mcp"].path == (
+        workspace_root / "repo-a" / ".cursor" / "mcp.json"
+    )
+    assert (
+        actions["ws:cursor:workspace_root_mcp"].payload["mcpServers"]["test-server"][
+            "url"
+        ]
+        == "https://test.example.com/mcp"
     )
     assert not any(ws_config in action.path.parents for action in plan.actions)
 
@@ -426,11 +440,14 @@ def test_workspace_mcp_sync_respects_targeted_server_keys(
 
     opencode_payload = root_mcp["ws:opencode:workspace_root_mcp"].payload
     codex_payload = tomllib.loads(root_mcp["ws:codex:workspace_root_mcp"].payload)
-    assert not any(
-        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
+    cursor_payload = next(
+        action.payload
+        for action in plan.actions
+        if action.scope == "ws:cursor:workspace_root_mcp"
     )
     assert set(opencode_payload["mcp"]) == {"playwright", "shared", "all-apps"}
     assert set(codex_payload["mcp_servers"]) == {"all-apps"}
+    assert set(cursor_payload["mcpServers"]) == {"shared", "all-apps"}
 
 
 def test_workspace_rules_sync_to_codex_repo_override_and_git_exclude(
@@ -564,6 +581,76 @@ def test_claude_owned_workspace_memory_conflict_fails_apply(
     assert (repo / CLAUDE_LOCAL_FILENAME).read_text(encoding="utf-8") == (
         "user local memory\n"
     )
+
+
+def test_codex_owned_workspace_override_conflicts_with_unmanaged_file(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    override = repo / CODEX_AGENTS_OVERRIDE_FILENAME
+    override.write_text("user override\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
+
+    plan = SyncPlanner(
+        core=core, app_services=[_codex_service(tmp_path / ".codex")]
+    ).build()
+
+    override_action = next(action for action in plan.actions if action.path == override)
+    assert override_action.status == ActionStatus.CONFLICT
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Conflict (not overwritten): {override} (non-managed path exists)"
+    ]
+    assert override.read_text(encoding="utf-8") == "user override\n"
+
+
+def test_codex_owned_workspace_override_updates_managed_file(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    override = repo / CODEX_AGENTS_OVERRIDE_FILENAME
+    override.write_text("old generated override\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
+    WorkspaceConfigRepository(root=ws_config).save_state(
+        {"managed_paths": {"ws:codex:repo_agents_override": [str(override)]}}
+    )
+
+    plan = SyncPlanner(
+        core=core, app_services=[_codex_service(tmp_path / ".codex")]
+    ).build()
+
+    override_action = next(action for action in plan.actions if action.path == override)
+    assert override_action.status == ActionStatus.UPDATE
+
+    _applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert failed == 0
+    assert failures == []
+    assert override.read_text(encoding="utf-8") == "workspace rules\n"
 
 
 def test_workspace_claude_mcp_merges_project_entries_into_home_config(
@@ -756,7 +843,7 @@ def test_workspace_plan_skips_legacy_link_cleanup_when_same_path_is_now_generate
 # --- Workspace skill symlinks ---
 
 
-def test_workspace_skills_sync_skips_cursor_workspace_outputs(
+def test_workspace_skills_sync_writes_cursor_workspace_outputs(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -775,9 +862,17 @@ def test_workspace_skills_sync_skips_cursor_workspace_outputs(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    assert not any(
-        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
-    )
+    skill_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT
+        and action.scope
+        in {"ws:cursor:workspace_root_skills_dir", "ws:cursor:repo_skills_dir"}
+    ]
+    assert {action.path for action in skill_actions} == {
+        workspace_root / ".cursor" / "skills" / "my-skill" / "SKILL.md",
+        workspace_root / "repo-a" / ".cursor" / "skills" / "my-skill" / "SKILL.md",
+    }
 
 
 def test_workspace_skills_sync_codex_to_agents_skills(
@@ -920,6 +1015,9 @@ def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
     legacy_link = workspace_root / ".agents" / "skills"
     legacy_link.parent.mkdir(parents=True, exist_ok=True)
     legacy_link.symlink_to(legacy_target)
+    WorkspaceConfigRepository(root=ws_config).save_state(
+        {"managed_links": {"ws:codex:workspace_root_skills_dir": [str(legacy_link)]}}
+    )
 
     codex_root = tmp_path / ".codex-global"
     plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
@@ -954,7 +1052,7 @@ def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
 # --- Workspace agent symlinks ---
 
 
-def test_workspace_agents_sync_skips_cursor_workspace_outputs(
+def test_workspace_agents_sync_writes_cursor_workspace_outputs(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -973,9 +1071,17 @@ def test_workspace_agents_sync_skips_cursor_workspace_outputs(
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
 
-    assert not any(
-        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
-    )
+    agent_actions = [
+        action
+        for action in plan.actions
+        if action.kind == ActionKind.WRITE_TEXT
+        and action.scope
+        in {"ws:cursor:workspace_root_agents_dir", "ws:cursor:repo_agents_dir"}
+    ]
+    assert {action.path for action in agent_actions} == {
+        workspace_root / ".cursor" / "agents" / "planner.md",
+        workspace_root / "repo-a" / ".cursor" / "agents" / "planner.md",
+    }
 
 
 def test_workspace_cursor_does_not_render_global_mcp_when_workspace_has_no_mcp_file(
@@ -1010,7 +1116,7 @@ def test_workspace_cursor_does_not_render_global_mcp_when_workspace_has_no_mcp_f
     assert repo_mcp == []
 
 
-def test_workspace_cursor_subrepo_propagation_disabled_by_default(
+def test_workspace_cursor_subrepo_propagation_enabled_for_mcp(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -1031,9 +1137,10 @@ def test_workspace_cursor_subrepo_propagation_disabled_by_default(
 
     cursor_root = tmp_path / ".cursor"
     plan = SyncPlanner(core=core, app_services=[_cursor_service(cursor_root)]).build()
-    assert not any(
-        a.scope is not None and a.scope.startswith("ws:cursor:") for a in plan.actions
+    assert any(
+        action.scope == "ws:cursor:workspace_root_mcp" for action in plan.actions
     )
+    assert any(action.scope == "ws:cursor:repo_mcp" for action in plan.actions)
 
 
 def test_workspace_agents_synced_to_codex(

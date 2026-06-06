@@ -76,21 +76,38 @@ def test_apply_syncs_git_excludes_for_target_workspace_app(
         core_root / "workspaces" / "myws" / "git-exclude.json",
         {"include_defaults": True, "extra_patterns": ["*.generated"]},
     )
+    ws_config = core_root / "workspaces" / "myws"
+    (ws_config / "AGENTS.md").write_text("workspace rules\n", encoding="utf-8")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"demo": {"command": "uvx", "args": ["demo"]}}},
+    )
+    (ws_config / "skills" / "review").mkdir(parents=True)
+    (ws_config / "skills" / "review" / "SKILL.md").write_text(
+        "review\n", encoding="utf-8"
+    )
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.md").write_text("plan\n", encoding="utf-8")
     enable_app("codex")
     enable_app("cursor")
 
     result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
 
     assert result.exit_code == 0
-    content = (workspace_root / "repo-a" / ".git" / "info" / "exclude").read_text(
-        encoding="utf-8"
+    content = set(
+        (workspace_root / "repo-a" / ".git" / "info" / "exclude")
+        .read_text(encoding="utf-8")
+        .splitlines()
     )
-    assert ".codex" in content
-    assert ".agents" in content
-    assert "AGENTS.md" in content
+    assert ".codex/config.toml" in content
+    assert ".codex/agents/planner.toml" in content
+    assert ".agents/skills/review/SKILL.md" in content
     assert "AGENTS.override.md" in content
-    assert "CLAUDE.md" not in content
     assert "*.generated" in content
+    assert "CLAUDE.md" not in content
+    assert "AGENTS.md" not in content
+    assert ".codex" not in content
+    assert ".agents" not in content
     assert ".cursor" not in content
 
 
@@ -498,7 +515,7 @@ def test_apply_cursor_target_does_not_apply_workspace_links(
     assert not repo_rules_link.exists()
 
 
-def test_apply_cursor_skips_workspace_mcp_json(
+def test_apply_cursor_writes_workspace_mcp_json(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -542,12 +559,18 @@ def test_apply_cursor_skips_workspace_mcp_json(
     assert apply_result.exit_code == 0
 
     mcp_path = workspace_root / ".cursor" / "mcp.json"
-    assert not mcp_path.exists()
+    assert (
+        json.loads(mcp_path.read_text(encoding="utf-8"))["mcpServers"]["ws-only"]["url"]
+        == "https://ws.example.com/mcp"
+    )
     sub_mcp = workspace_root / "service-a" / ".cursor" / "mcp.json"
-    assert not sub_mcp.exists()
+    assert (
+        json.loads(sub_mcp.read_text(encoding="utf-8"))["mcpServers"]["ws-only"]["url"]
+        == "https://ws.example.com/mcp"
+    )
 
 
-def test_apply_cursor_skips_subrepo_mcp_json(
+def test_apply_cursor_writes_subrepo_mcp_json(
     minimal_shared_config: Path,
     tmp_path: Path,
     core_root: Path,
@@ -591,7 +614,10 @@ def test_apply_cursor_skips_subrepo_mcp_json(
     assert apply_result.exit_code == 0
 
     sub_mcp = workspace_root / "service-a" / ".cursor" / "mcp.json"
-    assert not sub_mcp.exists()
+    assert (
+        json.loads(sub_mcp.read_text(encoding="utf-8"))["mcpServers"]["ws-only"]["url"]
+        == "https://ws.example.com/mcp"
+    )
 
 
 def test_apply_cursor_does_not_write_workspace_mcp_from_global_config_only(

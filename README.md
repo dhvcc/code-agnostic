@@ -107,7 +107,7 @@ code-agnostic apply
 | Native repo config include for workspace `AGENTS.md` | yes | -- | -- | -- |
 | Repo/subdir gets shared workspace instructions today | yes | -- | yes | yes |
 | Nested `AGENTS.md` discovery | -- | yes | yes | -- |
-| Workspace propagation | yes | -- | yes | yes |
+| Workspace propagation | yes | yes | yes | yes |
 | Import from | yes | yes | yes | yes |
 | Interactive import (TUI) | yes | yes | yes | yes |
 
@@ -115,11 +115,11 @@ code-agnostic apply
 target-specific or lossy; run `code-agnostic explain-lossiness` to see fields
 that are omitted or rejected for a selected target.
 
-Cursor workspace propagation is intentionally disabled to avoid duplicate MCP initialization in multi-root workspaces: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003
+Cursor workspace propagation writes repo-local MCP, skills, and agents when those resources exist in the workspace source config.
 
 OpenCode workspace configs include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`. Claude Code receives workspace instructions through generated `CLAUDE.local.md` files, never by editing committed `CLAUDE.md`.
 
-Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-agnostic` still disables Cursor workspace propagation, so it does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load repo-local or nested `AGENTS.md` files that already exist in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
+Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-agnostic` does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load repo-local or nested `AGENTS.md` files that already exist in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
 
 ## Features
 
@@ -227,9 +227,9 @@ That command should copy the skill into the source of truth and then run the nor
 
 ### Workspaces
 
-Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Workspace source config, skills, and agents are propagated into repo-local generated paths for OpenCode, Codex, and Claude; user-created project-local skill folders remain unmanaged until project-scoped installs are supported.
+Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Workspace source config, skills, and agents are propagated into repo-local generated paths for OpenCode, Cursor, Codex, and Claude; user-created project-local skill folders remain unmanaged until project-scoped installs are supported.
 
-`.cursor` workspace propagation is intentionally disabled to avoid duplicate MCP initialization when opening multi-root workspaces in Cursor (related issue: https://forum.cursor.com/t/mcp-multi-root-workspace-causes-duplicate-mcp-server-initialization-4x-createclient-actions/144003).
+Cursor propagation intentionally stays to repo-local MCP, skills, and agents; it does not copy the shared workspace `AGENTS.md` into child repos.
 
 ```bash
 code-agnostic workspaces add --name myproject --path ~/code/myproject

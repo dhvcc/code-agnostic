@@ -69,10 +69,13 @@ def serialize_codex_agent(agent: Agent) -> str:
     description = agent.metadata.description or agent.metadata.name or agent.name
 
     doc = tomlkit.document()
-    doc.add("name", agent.metadata.name or agent.name)
-    doc.add("description", description)
+    doc.add("name", tomlkit.item(agent.metadata.name or agent.name))
+    doc.add("description", tomlkit.item(description))
     if agent.metadata.nickname_candidates:
-        doc.add("nickname_candidates", list(agent.metadata.nickname_candidates))
+        doc.add(
+            "nickname_candidates",
+            tomlkit.item(list(agent.metadata.nickname_candidates)),
+        )
     model = agent.metadata.effective_value("codex", "model")
     if model:
         doc.add("model", model)

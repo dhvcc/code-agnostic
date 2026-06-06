@@ -81,3 +81,4 @@ Every property in the capability docs uses one of these states:
 - [rules.md](rules.md)
 - [mcp.md](mcp.md)
 - [lossiness.md](lossiness.md)
+- [generated-artifacts.md](generated-artifacts.md)

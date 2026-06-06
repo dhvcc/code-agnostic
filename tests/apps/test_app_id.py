@@ -7,7 +7,7 @@ from code_agnostic.apps.app_id import AppId, app_metadata, app_scope
     ("app_id", "project_dir_name", "config_filename", "workspace_propagation"),
     [
         (AppId.OPENCODE, ".opencode", "opencode.json", True),
-        (AppId.CURSOR, ".cursor", "mcp.json", False),
+        (AppId.CURSOR, ".cursor", "mcp.json", True),
         (AppId.CODEX, ".codex", "config.toml", True),
         (AppId.CLAUDE, ".claude", ".claude.json", True),
     ],

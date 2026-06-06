@@ -125,12 +125,17 @@ def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
         workspace_path = Path(item["path"])
         if not workspace_path.exists() or not workspace_path.is_dir():
             continue
-        entries = exclude_service.compute_entries(item["name"], enabled_apps)
         repos = workspace_service.discover_git_repos(workspace_path)
         for repo in repos:
             git_dir = workspace_service.resolve_git_dir(repo)
             if git_dir is None:
                 continue
+            entries = exclude_service.compute_entries_for_repo(
+                item["name"],
+                enabled_apps,
+                workspace_path=workspace_path,
+                repo_path=repo,
+            )
             exclude_path = git_dir / "info" / "exclude"
             added, changed = ensure_exclude_entries(exclude_path, entries)
             processed += 1

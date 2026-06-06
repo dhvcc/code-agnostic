@@ -20,6 +20,16 @@ class IAppConfigRepository(ABC):
     def config_path(self) -> Path:
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def skills_dir(self) -> Path:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def agents_dir(self) -> Path:
+        raise NotImplementedError
+
     @abstractmethod
     def load_config(self) -> dict[str, Any]:
         raise NotImplementedError

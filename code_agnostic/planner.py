@@ -2,7 +2,6 @@ from pathlib import Path
 
 from code_agnostic.apps.app_id import AppId, app_metadata
 from code_agnostic.apps.common.compiled_planning import (
-    plan_compiled_text_action,
     plan_owned_compiled_text_action,
 )
 from code_agnostic.apps.common.framework import create_registered_app_service
@@ -335,7 +334,7 @@ class SyncPlanner:
             content = _compile_workspace_agents(rules)
             workspace_agents_content = content
             target = workspace_path / AGENTS_FILENAME
-            rule_action = plan_compiled_text_action(
+            rule_action = plan_owned_compiled_text_action(
                 target=target,
                 payload=content,
                 managed_paths={
@@ -365,7 +364,7 @@ class SyncPlanner:
             content = ws_source.rules_file.read_text(encoding="utf-8")
             workspace_agents_content = content
             target = workspace_path / AGENTS_FILENAME
-            rule_action = plan_compiled_text_action(
+            rule_action = plan_owned_compiled_text_action(
                 target=target,
                 payload=content,
                 managed_paths={
@@ -577,7 +576,7 @@ class SyncPlanner:
                 if svc.app_id == AppId.CODEX and workspace_agents_content is not None:
                     scope = "ws:codex:repo_agents_override"
                     override_target = repo / CODEX_AGENTS_OVERRIDE_FILENAME
-                    override_action = plan_compiled_text_action(
+                    override_action = plan_owned_compiled_text_action(
                         target=override_target,
                         payload=workspace_agents_content,
                         managed_paths={
@@ -673,18 +672,22 @@ class SyncPlanner:
                     desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
                     skipped.extend(agent_skipped)
 
-        exclude_entries = GitExcludeService(self.core).compute_entries(
-            workspace_name,
-            [
-                svc.app_id.value
-                for svc in self.app_services
-                if app_metadata(svc.app_id).supports_workspace_propagation
-            ],
-        )
+        exclude_service = GitExcludeService(self.core)
+        exclude_apps = [
+            svc.app_id.value
+            for svc in self.app_services
+            if app_metadata(svc.app_id).supports_workspace_propagation
+        ]
         for repo in repos:
             git_dir = self.workspace_service.resolve_git_dir(repo)
             if git_dir is None:
                 continue
+            exclude_entries = exclude_service.compute_entries_for_repo(
+                workspace_name,
+                exclude_apps,
+                workspace_path=workspace_path,
+                repo_path=repo,
+            )
             actions.append(
                 _plan_git_exclude_entries(
                     exclude_path=git_dir / "info" / "exclude",

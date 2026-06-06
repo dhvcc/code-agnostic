@@ -21,6 +21,7 @@ from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
 from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.executor import SyncExecutor
 from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import ActionKind, ActionStatus
 
@@ -148,6 +149,53 @@ def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
     ]
     assert len(write_actions) == 1
     assert write_actions[0].status == ActionStatus.CREATE
+
+
+@pytest.mark.parametrize(
+    ("app_id", "service_factory", "target_root_name"),
+    [
+        (AppId.OPENCODE, _build_opencode_service, "opencode"),
+        (AppId.CURSOR, _build_cursor_service, ".cursor"),
+        (AppId.CODEX, _build_codex_service, ".codex"),
+        (AppId.CLAUDE, _build_claude_service, ".claude"),
+    ],
+)
+def test_app_generated_skills_conflict_with_unmanaged_existing_files(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    app_id: AppId,
+    service_factory: ServiceFactory,
+    target_root_name: str,
+) -> None:
+    core = CoreRepository(core_root)
+    (core.skills_dir / "review").mkdir(parents=True)
+    (core.skills_dir / "review" / "SKILL.md").write_text(
+        "Review code.\n", encoding="utf-8"
+    )
+
+    service = service_factory(core, tmp_path / target_root_name)
+    unmanaged = service.repository.skills_dir / "review" / "SKILL.md"
+    unmanaged.parent.mkdir(parents=True)
+    unmanaged.write_text("user-owned skill\n", encoding="utf-8")
+
+    plan = service.build_plan({}, core)
+    skill_action = next(
+        action
+        for action in plan.actions
+        if action.scope == app_scope(app_id, "skills") and action.path == unmanaged
+    )
+
+    assert skill_action.status == ActionStatus.CONFLICT
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Conflict (not overwritten): {unmanaged} (non-managed path exists)"
+    ]
+    assert unmanaged.read_text(encoding="utf-8") == "user-owned skill\n"
 
 
 def test_opencode_remote_mcp_environment_rejected_explicitly(

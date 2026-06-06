@@ -1,15 +1,9 @@
 from pathlib import Path
 
-from code_agnostic.utils import read_json_safe
-
 from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
-from code_agnostic.constants import (
-    AGENTS_PROJECT_DIRNAME,
-    CLAUDE_CONFIG_FILENAME,
-    CLAUDE_LOCAL_FILENAME,
-)
+from code_agnostic.constants import CLAUDE_CONFIG_FILENAME
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
     Action,
@@ -20,7 +14,8 @@ from code_agnostic.models import (
     WorkspaceSyncStatus,
 )
 from code_agnostic.planner import SyncPlanner
-from code_agnostic.utils import is_under
+from code_agnostic.utils import is_under, read_json_safe
+from code_agnostic.workspace_artifacts import repo_artifact_paths
 from code_agnostic.workspaces import WorkspaceService
 
 
@@ -132,72 +127,26 @@ class StatusService:
         workspace_actions: list[Action] | None = None,
     ) -> WorkspaceRepoStatusRow:
         issues: list[str] = []
+        app_ids = [meta.app_id for meta in app_metas or []]
 
         if workspace_actions is not None:
             for action in workspace_actions:
                 if action.status == ActionStatus.NOOP:
                     continue
                 issues.append(StatusService._repo_action_issue(action, repo_path))
-            return StatusService._repo_status_row(repo_path, issues)
-
-        # Check workspace-managed config files in repo project dirs.
-        # Workspace rendering creates regular files (not symlinks) in
-        # ws_source.root/<project_dir_name>/..., and repos get the same.
+        else:
+            for artifact in repo_artifact_paths(
+                ws_source,
+                app_ids,
+                repo_path=repo_path,
+            ):
+                if not (repo_path / artifact.relative_path).exists():
+                    issues.append(f"missing or mismatched {artifact.label}")
 
         for meta in app_metas or []:
-            filename = meta.config_filename
-            if filename is None or meta.project_dir_name is None:
-                continue
-            # Cursor workspace propagation is disabled to avoid duplicate MCP startup.
-            if meta.app_id == AppId.CURSOR:
-                continue
             if meta.app_id == AppId.CLAUDE:
                 if ws_source.has_mcp() and not _claude_project_mcp_exists(repo_path):
                     issues.append("missing or mismatched claude project mcp")
-                if (
-                    ws_source.has_rules()
-                    and not (repo_path / CLAUDE_LOCAL_FILENAME).exists()
-                ):
-                    issues.append("missing or mismatched claude local memory")
-                continue
-
-            needs_config_link = ws_source.has_mcp() or (
-                ws_source.has_rules() and meta.app_id == AppId.OPENCODE
-            )
-            if not needs_config_link:
-                continue
-
-            target = repo_path / meta.project_dir_name / filename
-            if not target.exists():
-                issues.append(f"missing or mismatched {meta.app_id.value} mcp link")
-
-        if ws_source.has_skills():
-            for meta in app_metas or []:
-                if meta.project_dir_name is None:
-                    continue
-                if meta.app_id == AppId.CURSOR:
-                    continue
-                target = repo_path / meta.project_dir_name / "skills"
-                if meta.app_id == AppId.CODEX:
-                    target = repo_path / AGENTS_PROJECT_DIRNAME / "skills"
-                if not target.exists():
-                    issues.append(
-                        f"missing or mismatched {meta.app_id.value} skills link"
-                    )
-
-        if ws_source.has_agents():
-            for meta in app_metas or []:
-                if not meta.supports_import_agents:
-                    continue
-                if meta.project_dir_name is None:
-                    continue
-                if meta.app_id == AppId.CURSOR:
-                    continue
-                target = repo_path / meta.project_dir_name / "agents"
-                if not target.exists():
-                    issues.append(
-                        f"missing or mismatched {meta.app_id.value} agents link"
-                    )
 
         return StatusService._repo_status_row(repo_path, issues)
 
