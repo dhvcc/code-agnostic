@@ -5,6 +5,7 @@ from rich.console import Console
 
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.errors import SyncAppError
 from code_agnostic.imports.models import ConflictPolicy
 from code_agnostic.mcp_service import MCPManagementService
 from code_agnostic.tui import SyncConsoleUI
@@ -36,7 +37,7 @@ def mcp_list(obj: dict[str, str], workspace: str | None) -> None:
     service = MCPManagementService(core)
     try:
         servers = service.list_servers(workspace=workspace)
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     scope = f"workspace:{workspace}" if workspace else "global"
     rows = [
@@ -116,7 +117,7 @@ def mcp_add(
             workspace=workspace,
             on_conflict=ConflictPolicy(on_conflict),
         )
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     click.echo(msg)
 
@@ -132,7 +133,7 @@ def mcp_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
     service = MCPManagementService(core)
     try:
         removed = service.remove_server(name, workspace=workspace)
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     if not removed:
         raise click.ClickException(f"Server not found: {name}")

@@ -46,8 +46,11 @@ def workspaces_add(obj: dict[str, str], name: str, path: Path) -> None:
 def workspaces_remove(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
-    existing = {item["name"]: item["path"] for item in core.load_workspaces()}
-    removed = core.remove_workspace(name)
+    try:
+        existing = {item["name"]: item["path"] for item in core.load_workspaces()}
+        removed = core.remove_workspace(name)
+    except SyncAppError as exc:
+        raise click.ClickException(str(exc))
     if not removed:
         raise click.ClickException(f"Workspace not found: {name}")
     ui.render_workspace_saved(name, existing.get(name, ""), removed=True)
@@ -61,7 +64,11 @@ def workspaces_list(obj: dict[str, str]) -> None:
     workspace_service = WorkspaceService()
 
     overview: list[dict] = []
-    for item in core.load_workspaces():
+    try:
+        workspaces = core.load_workspaces()
+    except SyncAppError as exc:
+        raise click.ClickException(str(exc))
+    for item in workspaces:
         workspace_path = Path(item["path"])
         repos: list[str] = []
         if workspace_path.exists() and workspace_path.is_dir():
@@ -101,11 +108,14 @@ def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
 
     enabled_apps = apps.enabled_apps()
 
-    ws_list = (
-        [require_workspace_entry(core, workspace)]
-        if workspace is not None
-        else core.load_workspaces()
-    )
+    try:
+        ws_list = (
+            [require_workspace_entry(core, workspace)]
+            if workspace is not None
+            else core.load_workspaces()
+        )
+    except SyncAppError as exc:
+        raise click.ClickException(str(exc))
 
     processed = 0
     touched = 0
@@ -144,7 +154,7 @@ def workspaces_exclude_add(obj: dict[str, str], pattern: str, workspace: str) ->
     service = GitExcludeService(core)
     try:
         service.add_pattern(workspace, pattern)
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     click.echo(f"Added pattern: {pattern}")
 
@@ -162,7 +172,7 @@ def workspaces_exclude_remove(
     service = GitExcludeService(core)
     try:
         removed = service.remove_pattern(workspace, pattern)
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     if not removed:
         raise click.ClickException(f"Pattern not found: {pattern}")
@@ -178,7 +188,7 @@ def workspaces_exclude_list(obj: dict[str, str], workspace: str) -> None:
     service = GitExcludeService(core)
     try:
         config = service.list_patterns(workspace)
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     ui.render_exclude_config(
         workspace=workspace,

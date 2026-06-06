@@ -132,13 +132,13 @@ code-agnostic validate              # check canonical source files
 code-agnostic plan -a cursor        # dry-run for one editor
 code-agnostic plan                   # dry-run for all
 code-agnostic apply                  # apply changes for all enabled editors
-code-agnostic status                 # check drift
+code-agnostic status                 # check drift and disabled app states
 code-agnostic explain-lossiness      # show fields omitted or rejected per editor
 ```
 
-Bare `plan`, `apply`, and `status` target every enabled editor. Use `-a codex`,
-`-a cursor`, `-a opencode`, or `-a claude` when you want to preview or apply one
-editor at a time.
+Bare `plan` and `apply` target every enabled editor; bare `status` also shows
+disabled app states. Use `-a codex`, `-a cursor`, `-a opencode`, or `-a claude`
+when you want one editor at a time.
 
 If managed outputs need repair after an apply, restore the active synced revision:
 

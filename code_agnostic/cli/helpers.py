@@ -6,6 +6,7 @@ import click
 
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.errors import SyncAppError
 from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
 
 
@@ -14,7 +15,10 @@ def _workspace_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]
 
 
 def require_workspace_entry(core: CoreRepository, workspace: str) -> dict[str, str]:
-    entry = _workspace_entries_by_name(core).get(workspace)
+    try:
+        entry = _workspace_entries_by_name(core).get(workspace)
+    except SyncAppError as exc:
+        raise click.ClickException(str(exc)) from exc
     if entry is None:
         raise click.ClickException(f"Workspace not found: {workspace}")
     return entry

@@ -73,6 +73,31 @@ def test_workspaces_add_preserves_corrupted_registry(
     assert registry.read_text(encoding="utf-8") == "{bad"
 
 
+def test_workspaces_list_reports_corrupted_registry(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "list"])
+
+    assert result.exit_code != 0
+    assert "Invalid JSON format" in result.output
+
+
+def test_workspaces_remove_reports_corrupted_registry(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "remove", "--name", "old"])
+
+    assert result.exit_code != 0
+    assert "Invalid JSON format" in result.output
+    assert registry.read_text(encoding="utf-8") == "{bad"
+
+
 def test_workspaces_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(cli, ["workspaces", "remove", "--name", "ghost"])
 

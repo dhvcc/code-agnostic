@@ -16,6 +16,7 @@ from code_agnostic.cli.commands.skills import skills
 from code_agnostic.cli.commands.status import status
 from code_agnostic.cli.commands.validate import validate
 from code_agnostic.cli.commands.workspaces import workspaces
+from code_agnostic.errors import SyncAppError
 
 
 @click.group(
@@ -52,6 +53,9 @@ def main() -> int:
     except click.exceptions.Exit as exc:
         code = exc.exit_code
         return code if isinstance(code, int) else 1
+    except SyncAppError as exc:
+        click.ClickException(str(exc)).show()
+        return 2
     except click.ClickException as exc:
         exc.show()
         return 2
