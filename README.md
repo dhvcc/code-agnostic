@@ -39,6 +39,21 @@ Legacy single-file rules, `skills/<name>/SKILL.md`, and markdown agents are stil
 
 Today the implementation is still mixed: some assets are compiled and some are symlinked. The active migration plan is to move to generated outputs everywhere with a strict compiler contract instead of implicit per-app behavior.
 
+## Scope model
+
+`code-agnostic` has two managed source scopes today:
+
+- global source config under `~/.config/code-agnostic/`, synced to enabled
+  user-level app config;
+- workspace source config under `~/.config/code-agnostic/workspaces/<name>/`,
+  propagated into repos inside a registered workspace.
+
+Project-local skill folders that users create directly inside a repo, such as
+`.agents/skills` or `.opencode/skills`, are app-native inputs but are not
+managed as source by `code-agnostic` yet. First-class project-scoped installs
+are planned so a single registered project can have managed local source config
+without bypassing the hub.
+
 ## Install
 
 ```bash
@@ -116,9 +131,14 @@ Plan-then-apply workflow. Preview every change before it touches disk.
 code-agnostic validate              # check canonical source files
 code-agnostic plan -a cursor        # dry-run for one editor
 code-agnostic plan                   # dry-run for all
-code-agnostic apply                  # apply changes
+code-agnostic apply                  # apply changes for all enabled editors
 code-agnostic status                 # check drift
+code-agnostic explain-lossiness      # show fields omitted or rejected per editor
 ```
+
+Bare `plan`, `apply`, and `status` target every enabled editor. Use `-a codex`,
+`-a cursor`, `-a opencode`, or `-a claude` when you want to preview or apply one
+editor at a time.
 
 If managed outputs need repair after an apply, restore the active synced revision:
 
@@ -238,6 +258,12 @@ code-agnostic import plan -a claude
 code-agnostic import apply -a cursor --include mcp --on-conflict overwrite
 code-agnostic import plan -a codex -i    # interactive TUI picker
 ```
+
+`import plan` previews what will be copied into the hub; `import apply` writes
+only the selected sections. Conflicts are skipped by default, so rerun with
+`--on-conflict overwrite` only after reviewing the preview. Use `--include`,
+`--exclude`, `--source-root`, and `--follow-symlinks` to narrow what gets
+imported.
 
 ### CLI conventions
 
