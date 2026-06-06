@@ -91,6 +91,31 @@ def test_entrypoint_plan_and_status_fail_on_invalid_mcp_source(
     assert "synced" not in status.stdout
 
 
+def test_entrypoint_apply_fails_on_generated_skill_conflict(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    enable = _run_cli(home, "apps", "enable", "-a", "codex")
+    assert enable.returncode == 0, enable.stderr
+
+    source_skill = home / ".config" / "code-agnostic" / "skills" / "reviewer"
+    source_skill.mkdir(parents=True)
+    (source_skill / "SKILL.md").write_text(
+        "---\n" "name: reviewer\n" "---\n" "\n" "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    target_skill_file = home / ".agents" / "skills" / "reviewer" / "SKILL.md"
+    target_skill_file.mkdir(parents=True)
+
+    apply = _run_cli(home, "apply", "-a", "codex")
+    assert apply.returncode != 0
+    assert "conflict" in apply.stdout
+    assert "failed" in apply.stdout
+    assert target_skill_file.is_dir()
+
+
 def test_entrypoint_status_scopes_app_config_errors(
     tmp_path: Path,
 ) -> None:

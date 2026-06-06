@@ -206,6 +206,9 @@ class SyncExecutor:
         failures: list[str] = []
         revision_records = self._prepare_revision_records(plan, persist_state)
         self._repair_pending_revisions(revision_records)
+        conflict_failures = self._planned_conflict_failures(plan)
+        if conflict_failures:
+            return 0, len(conflict_failures), conflict_failures
         previous_revisions = self._load_previous_revisions(revision_records)
         snapshots = self._capture_snapshots(
             plan=plan,
@@ -268,6 +271,13 @@ class SyncExecutor:
             return applied, failed, failures
         finally:
             self._cleanup_staging_dirs(staging_dirs)
+
+    def _planned_conflict_failures(self, plan: SyncPlan) -> list[str]:
+        return [
+            f"Conflict (not overwritten): {action.path} ({action.detail})"
+            for action in plan.actions
+            if action.status == ActionStatus.CONFLICT
+        ]
 
     def _ordered_staged_actions(
         self, staged_actions: list[StagedAction]
