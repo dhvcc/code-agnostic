@@ -222,6 +222,19 @@ class SyncConsoleUI:
                 style=workspace_style,
             )
         )
+        workspace_errors = [
+            item for item in workspaces if item.status == WorkspaceSyncStatus.ERROR
+        ]
+        if workspace_errors:
+            errors_text = "\n".join(
+                [
+                    f"- {item.name}: {compact_home_paths_in_text(item.detail)}"
+                    for item in workspace_errors
+                ]
+            )
+            self.console.print(
+                UISection.note("workspace errors", errors_text, style=UIStyle.RED.value)
+            )
         self.console.print(
             UISection.wrap(
                 "workspace repositories",
