@@ -10,6 +10,7 @@ from code_agnostic.cli.helpers import ensure_exclude_entries, require_workspace_
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
+from code_agnostic.errors import SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.workspaces import WorkspaceService
@@ -34,7 +35,7 @@ def workspaces_add(obj: dict[str, str], name: str, path: Path) -> None:
     core = CoreRepository()
     try:
         core.add_workspace(name, path)
-    except ValueError as exc:
+    except (ValueError, SyncAppError) as exc:
         raise click.ClickException(str(exc))
     ui.render_workspace_saved(name, str(path.expanduser().resolve()))
 
