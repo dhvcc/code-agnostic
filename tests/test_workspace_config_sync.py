@@ -528,7 +528,7 @@ def test_workspace_rules_sync_to_claude_local_memory_preserves_committed_claude(
     )
 
 
-def test_claude_owned_workspace_memory_conflicts_with_unmanaged_file(
+def test_claude_owned_workspace_memory_conflict_fails_apply(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -555,9 +555,12 @@ def test_claude_owned_workspace_memory_conflicts_with_unmanaged_file(
 
     applied, failed, failures = SyncExecutor(core=core).execute(plan)
 
-    assert failed == 0
-    assert failures == []
-    assert applied > 0
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Conflict (not overwritten): {repo / CLAUDE_LOCAL_FILENAME} "
+        "(non-managed path exists)"
+    ]
     assert (repo / CLAUDE_LOCAL_FILENAME).read_text(encoding="utf-8") == (
         "user local memory\n"
     )
@@ -858,7 +861,7 @@ def test_workspace_skills_and_agents_sync_claude_owned_paths(
     assert repo_agents[0].path == repo / ".claude" / "agents" / "planner.md"
 
 
-def test_workspace_claude_skips_unmanaged_existing_asset_files(
+def test_workspace_claude_unmanaged_existing_asset_conflict_fails_apply(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -888,9 +891,11 @@ def test_workspace_claude_skips_unmanaged_existing_asset_files(
 
     applied, failed, failures = SyncExecutor(core=core).execute(plan)
 
-    assert failed == 0
-    assert failures == []
-    assert applied > 0
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Conflict (not overwritten): {unmanaged} (non-managed path exists)"
+    ]
     assert unmanaged.read_text(encoding="utf-8") == "user skill\n"
 
 

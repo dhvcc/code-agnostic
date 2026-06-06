@@ -212,7 +212,7 @@ def test_execute_replaces_symlinked_skill_dir_with_compiled_file(
     assert source_skill_file.read_text(encoding="utf-8") == "legacy\n"
 
 
-def test_execute_skips_conflicting_write_actions(
+def test_execute_fails_conflicting_write_actions(
     minimal_shared_config: Path,
     core_root: Path,
     tmp_path: Path,
@@ -241,9 +241,12 @@ def test_execute_skips_conflicting_write_actions(
     )
 
     assert applied == 0
-    assert failed == 0
-    assert failures == []
+    assert failed == 1
+    assert failures == [
+        f"Conflict (not overwritten): {target} (non-managed path exists)"
+    ]
     assert target.read_text(encoding="utf-8") == "before\n"
+    assert not (core_root / ".sync-state.json").exists()
 
 
 def test_execute_persists_global_revision_manifest_on_success(
