@@ -17,12 +17,17 @@ def _parse_env_pair(raw: str) -> tuple[str, str]:
     return raw, f"${{{raw}}}"
 
 
-@click.group(help="Manage MCP server definitions in the hub config.")
+@click.group(
+    help=(
+        "Manage source MCP server definitions. Commands use global source by "
+        "default; pass -w/--workspace for workspace source."
+    )
+)
 def mcp() -> None:
     pass
 
 
-@mcp.command("list", help="List configured MCP servers.")
+@mcp.command("list", help="List global MCP servers, or workspace servers with -w.")
 @workspace_option()
 @click.pass_obj
 def mcp_list(obj: dict[str, str], workspace: str | None) -> None:
@@ -33,15 +38,25 @@ def mcp_list(obj: dict[str, str], workspace: str | None) -> None:
         servers = service.list_servers(workspace=workspace)
     except ValueError as exc:
         raise click.ClickException(str(exc))
+    scope = f"workspace:{workspace}" if workspace else "global"
     rows = [
-        [name, dto.command or dto.url or ""] for name, dto in sorted(servers.items())
+        [name, scope, dto.command or dto.url or ""]
+        for name, dto in sorted(servers.items())
     ]
+    empty_message = (
+        f"No workspace MCP servers configured for {workspace}."
+        if workspace
+        else "No global MCP servers configured."
+    )
     ui.render_list(
-        "mcp servers", ["Server", "Command / URL"], rows, "No MCP servers configured."
+        "mcp servers",
+        ["Server", "Scope", "Command / URL"],
+        rows,
+        empty_message,
     )
 
 
-@mcp.command("add", help="Add an MCP server definition.")
+@mcp.command("add", help="Add a global MCP server, or a workspace server with -w.")
 @click.argument("name")
 @click.option("--command", default=None, help="Command for stdio server.")
 @click.option(
@@ -106,7 +121,9 @@ def mcp_add(
     click.echo(msg)
 
 
-@mcp.command("remove", help="Remove an MCP server definition.")
+@mcp.command(
+    "remove", help="Remove a global MCP server, or a workspace server with -w."
+)
 @click.argument("name")
 @workspace_option()
 @click.pass_obj
@@ -119,4 +136,5 @@ def mcp_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
         raise click.ClickException(str(exc))
     if not removed:
         raise click.ClickException(f"Server not found: {name}")
-    click.echo(f"Removed: {name}")
+    scope = f"workspace:{workspace}" if workspace else "global"
+    click.echo(f"Removed {scope} MCP server: {name}")
