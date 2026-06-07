@@ -32,6 +32,19 @@ agents/<name>/
 - `x-opencode.*`
 - `x-claude.*`
 
+Tool permission fields are intentionally coarse in v1:
+
+```yaml
+tools:
+  read: true
+  write: true
+  mcp:
+    - server: filesystem
+```
+
+`tools.read` and `tools.write` are booleans. `tools.mcp` is a list of
+string-keyed tool references.
+
 Unknown keys fail validation outside app vendor blocks.
 
 App vendor blocks are the supported place for per-app overrides and passthrough settings. Shared fields remain the default layer, and a matching `x-*` block can override them for one app only.

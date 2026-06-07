@@ -22,6 +22,20 @@ skills/<name>/
 - `x-opencode.*`
 - `x-claude.*`
 
+Tool permission fields are intentionally coarse in v1:
+
+```yaml
+tools:
+  read: true
+  write: false
+  mcp:
+    - server: github
+      tool: create_pull_request_review
+```
+
+`tools.read` and `tools.write` are booleans. `tools.mcp` is a list of
+string-keyed tool references.
+
 Unknown keys fail validation.
 
 ## Capability matrix
