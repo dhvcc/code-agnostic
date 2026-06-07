@@ -13,8 +13,11 @@ from code_agnostic.utils import merge_dict_overlay, read_json_safe, write_json
 
 
 class OpenCodeConfigRepository(IAppConfigRepository):
-    def __init__(self, root: Path | None = None) -> None:
+    def __init__(
+        self, root: Path | None = None, config_path: Path | None = None
+    ) -> None:
         self._root = root or (Path.home() / ".config" / "opencode")
+        self._config_path = config_path
 
     @property
     def root(self) -> Path:
@@ -22,7 +25,7 @@ class OpenCodeConfigRepository(IAppConfigRepository):
 
     @property
     def config_path(self) -> Path:
-        return self.root / OPENCODE_CONFIG_FILENAME
+        return self._config_path or self.root / OPENCODE_CONFIG_FILENAME
 
     @property
     def skills_dir(self) -> Path:

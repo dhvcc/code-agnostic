@@ -85,7 +85,7 @@ def test_status_reports_workspace_repo_generated_config_content_drift(
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
 
-    (repo / ".opencode" / "opencode.json").write_text("{}\n", encoding="utf-8")
+    (repo / "opencode.json").write_text("{}\n", encoding="utf-8")
 
     result = cli_runner.invoke(cli, ["status"])
 

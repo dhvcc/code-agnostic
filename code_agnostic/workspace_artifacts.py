@@ -147,7 +147,7 @@ def _repo_config_path(
         )
     if app_id == AppId.OPENCODE:
         if ws_source.has_mcp() or ws_source.has_rules():
-            return Path(OPENCODE_PROJECT_DIRNAME) / OPENCODE_CONFIG_FILENAME
+            return Path(OPENCODE_CONFIG_FILENAME)
         return None
     if app_id == AppId.CODEX:
         if (
