@@ -116,6 +116,47 @@ def test_entrypoint_apply_fails_on_generated_skill_conflict(
     assert target_skill_file.is_dir()
 
 
+def test_entrypoint_import_apply_preflights_before_writing(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    codex_config = home / ".codex" / "config.toml"
+    codex_config.parent.mkdir(parents=True)
+    codex_config.write_text(
+        '[mcp_servers.demo]\ncommand = "uvx"\n',
+        encoding="utf-8",
+    )
+
+    source_skill = home / ".agents" / "skills" / "reviewer"
+    source_skill.mkdir(parents=True)
+    (source_skill / "SKILL.md").write_text(
+        "---\n" "name: reviewer\n" "---\n" "\n" "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    hub_root = home / ".config" / "code-agnostic"
+    (hub_root / "config").mkdir(parents=True)
+    (hub_root / "skills").write_text("not a directory\n", encoding="utf-8")
+
+    apply = _run_cli(
+        home,
+        "import",
+        "apply",
+        "-a",
+        "codex",
+        "--include",
+        "mcp",
+        "--include",
+        "skills",
+    )
+
+    assert apply.returncode != 0
+    assert "failed" in apply.stdout
+    assert not (hub_root / "config" / "mcp.base.json").exists()
+    assert (hub_root / "skills").read_text(encoding="utf-8") == "not a directory\n"
+
+
 def test_entrypoint_status_scopes_app_config_errors(
     tmp_path: Path,
 ) -> None:

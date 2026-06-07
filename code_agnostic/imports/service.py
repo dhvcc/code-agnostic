@@ -114,6 +114,14 @@ class ImportService:
                 applied=0, failed=len(plan.errors), failures=plan.errors
             )
 
+        preflight_failures = self._preflight_apply_actions(plan.actions)
+        if preflight_failures:
+            return ImportApplyResult(
+                applied=0,
+                failed=len(preflight_failures),
+                failures=preflight_failures,
+            )
+
         applied = 0
         failed = 0
         failures: list[str] = []
@@ -166,6 +174,64 @@ class ImportService:
                 failures.append(str(exc))
 
         return ImportApplyResult(applied=applied, failed=failed, failures=failures)
+
+    def _preflight_apply_actions(self, actions: list[ImportAction]) -> list[str]:
+        failures: list[str] = []
+        for action in actions:
+            if action.kind == ImportActionKind.NOTE:
+                continue
+            if action.status not in (
+                ImportActionStatus.CREATE,
+                ImportActionStatus.UPDATE,
+            ):
+                continue
+
+            if action.kind == ImportActionKind.WRITE_MCP_BASE:
+                if not isinstance(action.payload, dict):
+                    failures.append("invalid MCP payload")
+                    continue
+                failures.extend(self._preflight_write_target(self._core.mcp_base_path))
+                continue
+
+            if action.kind == ImportActionKind.WRITE_JSON:
+                if not isinstance(action.payload, dict) or action.target is None:
+                    failures.append("invalid JSON payload")
+                    continue
+                failures.extend(self._preflight_write_target(action.target))
+                continue
+
+            if action.kind == ImportActionKind.WRITE_TEXT:
+                if not isinstance(action.payload, str) or action.target is None:
+                    failures.append("invalid text payload")
+                    continue
+                failures.extend(self._preflight_write_target(action.target))
+                continue
+
+            if action.kind == ImportActionKind.COPY_PATH:
+                if action.source is None or action.target is None:
+                    failures.append("missing source/target")
+                    continue
+                if not action.source.exists() and not action.source.is_symlink():
+                    failures.append(f"Source path missing: {action.source}")
+                failures.extend(self._preflight_parent(action.target))
+                continue
+
+            failures.append(f"Unsupported action kind: {action.kind.value}")
+        return failures
+
+    @staticmethod
+    def _preflight_write_target(target: Path) -> list[str]:
+        failures = ImportService._preflight_parent(target)
+        if target.exists() and target.is_dir():
+            failures.append(f"Target path is a directory: {target}")
+        return failures
+
+    @staticmethod
+    def _preflight_parent(target: Path) -> list[str]:
+        parent = target.parent
+        if parent.exists() and not parent.is_dir():
+            return [f"Target parent is not a directory: {parent}"]
+        return []
 
     @staticmethod
     def _default_sections_for_app(source_app: str) -> list[ImportSection]:
