@@ -229,8 +229,12 @@ class ImportService:
     @staticmethod
     def _preflight_parent(target: Path) -> list[str]:
         parent = target.parent
-        if parent.exists() and not parent.is_dir():
-            return [f"Target parent is not a directory: {parent}"]
+        for ancestor in (parent, *parent.parents):
+            if not ancestor.exists() and not ancestor.is_symlink():
+                continue
+            if not ancestor.is_dir():
+                return [f"Target parent is not a directory: {ancestor}"]
+            return []
         return []
 
     @staticmethod

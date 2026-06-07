@@ -3,7 +3,14 @@ from pathlib import Path
 import json
 
 from code_agnostic.core.repository import CoreRepository
-from code_agnostic.imports.models import ConflictPolicy, ImportSection
+from code_agnostic.imports.models import (
+    ConflictPolicy,
+    ImportAction,
+    ImportActionKind,
+    ImportActionStatus,
+    ImportPlan,
+    ImportSection,
+)
 from code_agnostic.imports.service import ImportService
 
 
@@ -86,6 +93,52 @@ def test_codex_agents_import_copies_supported_app_assets(tmp_path: Path) -> None
     )
     codex_base = json.loads((core.config_dir / "codex.base.json").read_text())
     assert codex_base["agents"]["max_threads"] == 6
+
+
+def test_import_apply_preflights_blocked_target_ancestor_before_writes(
+    tmp_path: Path,
+) -> None:
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    source_skill = tmp_path / "source-skill"
+    source_skill.mkdir()
+    (source_skill / "SKILL.md").write_text("skill", encoding="utf-8")
+
+    blocked_ancestor = tmp_path / "blocked"
+    blocked_ancestor.write_text("not a directory\n", encoding="utf-8")
+
+    plan = ImportPlan(
+        source_app="codex",
+        sections=[ImportSection.MCP, ImportSection.SKILLS],
+        actions=[
+            ImportAction(
+                section=ImportSection.MCP,
+                kind=ImportActionKind.WRITE_MCP_BASE,
+                status=ImportActionStatus.CREATE,
+                detail="Write merged MCP base",
+                target=core.mcp_base_path,
+                payload={"mcpServers": {}},
+            ),
+            ImportAction(
+                section=ImportSection.SKILLS,
+                kind=ImportActionKind.COPY_PATH,
+                status=ImportActionStatus.CREATE,
+                detail="Import skill",
+                source=source_skill,
+                target=blocked_ancestor / "skills" / "demo",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    result = service.apply(plan)
+
+    assert result.applied == 0
+    assert result.failed == 1
+    assert str(blocked_ancestor) in result.failures[0]
+    assert not core.mcp_base_path.exists()
 
 
 def test_assets_import_is_idempotent(tmp_path: Path) -> None:

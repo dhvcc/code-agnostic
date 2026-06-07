@@ -70,6 +70,7 @@ def _create_workspace_project_service(
             repository=OpenCodeConfigRepository(
                 root=target_root,
                 config_path=target_root.parent / OPENCODE_CONFIG_FILENAME,
+                legacy_config_path=target_root / OPENCODE_CONFIG_FILENAME,
             ),
             mapper=OpenCodeMCPMapper(),
             schema_repository=OpenCodeSchemaRepository(),

@@ -14,10 +14,14 @@ from code_agnostic.utils import merge_dict_overlay, read_json_safe, write_json
 
 class OpenCodeConfigRepository(IAppConfigRepository):
     def __init__(
-        self, root: Path | None = None, config_path: Path | None = None
+        self,
+        root: Path | None = None,
+        config_path: Path | None = None,
+        legacy_config_path: Path | None = None,
     ) -> None:
         self._root = root or (Path.home() / ".config" / "opencode")
         self._config_path = config_path
+        self._legacy_config_path = legacy_config_path
 
     @property
     def root(self) -> Path:
@@ -42,13 +46,14 @@ class OpenCodeConfigRepository(IAppConfigRepository):
         return plural
 
     def load_config(self) -> dict[str, Any]:
-        payload, error = read_json_safe(self.config_path)
+        config_path = self._read_config_path()
+        payload, error = read_json_safe(config_path)
         if error is not None:
-            raise InvalidJsonFormatError(self.config_path, error)
+            raise InvalidJsonFormatError(config_path, error)
         if payload is None:
             return {}
         if not isinstance(payload, dict):
-            raise InvalidConfigSchemaError(self.config_path, "must be a JSON object")
+            raise InvalidConfigSchemaError(config_path, "must be a JSON object")
         return payload
 
     def save_config(self, payload: dict[str, Any]) -> None:
@@ -108,3 +113,8 @@ class OpenCodeConfigRepository(IAppConfigRepository):
 
         if tools:
             merged["tools"] = tools
+
+    def _read_config_path(self) -> Path:
+        if self.config_path.exists() or self._legacy_config_path is None:
+            return self.config_path
+        return self._legacy_config_path

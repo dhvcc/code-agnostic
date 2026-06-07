@@ -356,6 +356,53 @@ def test_workspace_opencode_config_includes_workspace_agents_file(
     )
 
 
+def test_workspace_opencode_config_migrates_legacy_project_config(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "rules").mkdir(parents=True, exist_ok=True)
+    (ws_config / "rules" / "shared.md").write_text("rules", encoding="utf-8")
+
+    write_json(
+        workspace_root / ".opencode" / "opencode.json",
+        {"username": "workspace-user"},
+    )
+    write_json(repo / ".opencode" / "opencode.json", {"share": "manual"})
+
+    opencode_root = tmp_path / ".config" / "opencode"
+    plan = SyncPlanner(
+        core=core, app_services=[_opencode_service(core, opencode_root)]
+    ).build()
+
+    payloads = {
+        action.path: action.payload
+        for action in plan.actions
+        if action.app == "workspace"
+        and action.kind == ActionKind.WRITE_JSON
+        and action.scope in {"ws:opencode:workspace_root_mcp", "ws:opencode:repo_mcp"}
+    }
+
+    assert payloads[workspace_root / "opencode.json"]["username"] == "workspace-user"
+    assert payloads[repo / "opencode.json"]["share"] == "manual"
+    assert payloads[workspace_root / "opencode.json"]["instructions"] == [
+        str(workspace_root / AGENTS_FILENAME)
+    ]
+    assert payloads[repo / "opencode.json"]["instructions"] == [
+        str(workspace_root / AGENTS_FILENAME)
+    ]
+
+
 def test_workspace_mcp_sync_to_codex_project_dirs(
     minimal_shared_config: Path,
     core_root: Path,

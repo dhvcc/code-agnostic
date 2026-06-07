@@ -37,6 +37,28 @@ def test_opencode_repository_can_separate_asset_root_from_config_path(
     assert repo.agents_dir == root / "agents"
 
 
+def test_opencode_repository_reads_legacy_config_path_when_new_path_is_missing(
+    write_json,
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".opencode"
+    config_path = tmp_path / "opencode.json"
+    legacy_config_path = root / "opencode.json"
+    write_json(legacy_config_path, {"share": "manual"})
+
+    repo = OpenCodeConfigRepository(
+        root=root,
+        config_path=config_path,
+        legacy_config_path=legacy_config_path,
+    )
+
+    assert repo.load_config() == {"share": "manual"}
+
+    repo.save_config({"share": "disabled"})
+
+    assert repo.load_config() == {"share": "disabled"}
+
+
 def test_cursor_repository_reads_and_writes_mcp(write_json, tmp_path: Path) -> None:
     root = tmp_path / ".cursor"
     write_json(root / "mcp.json", {"mcpServers": {"demo": {"command": "npx"}}})
