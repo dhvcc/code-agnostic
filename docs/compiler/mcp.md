@@ -65,6 +65,8 @@ Target markers are recognized only for known targetable app ids.
 - OpenCode's current schema allows `environment` only on local MCP servers.
   Remote OpenCode MCP servers can carry `headers` and OAuth config, but not
   per-server environment variables.
+- OpenCode project/workspace MCP config is generated as project-root
+  `opencode.json`. OpenCode skills and agents remain under `.opencode/`.
 - Claude workspace MCP is written into `~/.claude.json` under
   `projects[absolute_repo_path].mcpServers`; v1 does not generate committed
   `.mcp.json`.

@@ -24,6 +24,19 @@ def test_opencode_repository_reads_and_writes_mcp(write_json, tmp_path: Path) ->
     assert repo.load_mcp_payload() == {"new": {"type": "local", "command": ["npx"]}}
 
 
+def test_opencode_repository_can_separate_asset_root_from_config_path(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".opencode"
+    config_path = tmp_path / "opencode.json"
+
+    repo = OpenCodeConfigRepository(root=root, config_path=config_path)
+
+    assert repo.config_path == config_path
+    assert repo.skills_dir == root / "skills"
+    assert repo.agents_dir == root / "agents"
+
+
 def test_cursor_repository_reads_and_writes_mcp(write_json, tmp_path: Path) -> None:
     root = tmp_path / ".cursor"
     write_json(root / "mcp.json", {"mcpServers": {"demo": {"command": "npx"}}})

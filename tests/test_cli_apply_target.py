@@ -58,11 +58,11 @@ def test_apply_opencode_generates_workspace_root_and_repo_config_files(
     workspace_link = workspace_root / "service-a" / AGENTS_FILENAME
     assert not workspace_link.exists()
 
-    workspace_opencode_config = workspace_root / ".opencode" / "opencode.json"
+    workspace_opencode_config = workspace_root / "opencode.json"
     opencode_payload = json.loads(workspace_opencode_config.read_text(encoding="utf-8"))
     assert opencode_payload["instructions"] == [str(workspace_root / AGENTS_FILENAME)]
 
-    repo_opencode_config = workspace_root / "service-a" / ".opencode" / "opencode.json"
+    repo_opencode_config = workspace_root / "service-a" / "opencode.json"
     assert repo_opencode_config.is_file()
     assert not repo_opencode_config.is_symlink()
     assert (
@@ -318,8 +318,8 @@ def test_targeted_apply_preserves_other_app_workspace_outputs(
     apply_opencode = cli_runner.invoke(cli, ["apply", "-a", "opencode"])
     assert apply_opencode.exit_code == 0
 
-    opencode_repo_link = workspace_root / "repo-a" / ".opencode" / "opencode.json"
-    opencode_root_link = workspace_root / ".opencode" / "opencode.json"
+    opencode_repo_link = workspace_root / "repo-a" / "opencode.json"
+    opencode_root_link = workspace_root / "opencode.json"
     assert opencode_repo_link.is_file()
     assert opencode_root_link.is_file()
     assert codex_repo_link.is_file()

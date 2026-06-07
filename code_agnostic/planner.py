@@ -20,12 +20,17 @@ from code_agnostic.apps.codex.service import CodexConfigService
 from code_agnostic.apps.common.utils import common_mcp_to_dto, mcp_servers_for_app
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.claude.service import ClaudeConfigService
+from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
+from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
+from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
+from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.constants import (
     AGENTS_FILENAME,
     AGENTS_PROJECT_DIRNAME,
     CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
     MCP_SERVERS_KEY,
+    OPENCODE_CONFIG_FILENAME,
     SKILLS_DIRNAME,
 )
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
@@ -47,6 +52,7 @@ def _create_workspace_project_service(
     app_id: AppId,
     target_root: Path,
     ws_source: WorkspaceConfigRepository,
+    opencode_base_path: Path | None = None,
 ) -> IAppConfigService:
     if app_id == AppId.CODEX:
         return CodexConfigService(
@@ -58,6 +64,16 @@ def _create_workspace_project_service(
                 if ws_source.codex_base_path.exists()
                 else None
             ),
+        )
+    if app_id == AppId.OPENCODE:
+        return OpenCodeConfigService(
+            repository=OpenCodeConfigRepository(
+                root=target_root,
+                config_path=target_root.parent / OPENCODE_CONFIG_FILENAME,
+            ),
+            mapper=OpenCodeMCPMapper(),
+            schema_repository=OpenCodeSchemaRepository(),
+            base_config_path=opencode_base_path,
         )
     return create_registered_app_service(app_id, root=target_root)
 
@@ -495,6 +511,7 @@ class SyncPlanner:
                 svc.app_id,
                 workspace_path / meta.project_dir_name,
                 ws_source,
+                self.core.opencode_base_path,
             )
             if should_render_workspace_config:
                 scope = f"ws:{svc.app_id.value}:workspace_root_mcp"
@@ -569,6 +586,7 @@ class SyncPlanner:
                     svc.app_id,
                     repo / meta.project_dir_name,
                     ws_source,
+                    self.core.opencode_base_path,
                 )
                 if svc.app_id == AppId.CLAUDE and common_servers is not None:
                     self._claude_project_mcp[repo] = mcp_payload

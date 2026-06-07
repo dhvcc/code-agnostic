@@ -346,8 +346,8 @@ def test_workspace_opencode_config_includes_workspace_agents_file(
     ]
     assert len(config_actions) == 2
     assert {action.path for action in config_actions} == {
-        workspace_root / ".opencode" / "opencode.json",
-        workspace_root / "repo-a" / ".opencode" / "opencode.json",
+        workspace_root / "opencode.json",
+        workspace_root / "repo-a" / "opencode.json",
     }
     assert all(
         isinstance(action.payload, dict)
