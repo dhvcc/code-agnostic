@@ -228,6 +228,8 @@ code-agnostic skills install ./my-skill --apply
 ```
 
 That command should copy the skill into the source of truth and then run the normal compiler/apply flow.
+See [docs/project-scoped-skills.md](docs/project-scoped-skills.md) for the
+first implementation slice.
 
 ### Workspaces
 
