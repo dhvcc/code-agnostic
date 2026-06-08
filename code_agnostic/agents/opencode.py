@@ -7,14 +7,19 @@ from typing import Any
 import yaml
 
 from code_agnostic.agents.models import Agent
+from code_agnostic.errors import InvalidConfigSchemaError
 
 
 def serialize_opencode_agent(agent: Agent) -> str:
     fm: dict[str, Any] = {}
     if agent.metadata.name:
         fm["name"] = agent.metadata.name
-    if agent.metadata.description:
-        fm["description"] = agent.metadata.description
+    if not agent.metadata.description:
+        raise InvalidConfigSchemaError(
+            agent.source_path,
+            "OpenCode agents require a description",
+        )
+    fm["description"] = agent.metadata.description
     model = agent.metadata.effective_value("opencode", "model")
     if model:
         fm["model"] = model

@@ -291,7 +291,10 @@ def test_workspace_plan_never_writes_generated_app_dirs_to_source_of_truth(
     (ws_config / "skills" / "my-skill").mkdir(parents=True)
     (ws_config / "skills" / "my-skill" / "SKILL.md").write_text("s", encoding="utf-8")
     (ws_config / "agents").mkdir(parents=True)
-    (ws_config / "agents" / "planner.md").write_text("a", encoding="utf-8")
+    (ws_config / "agents" / "planner.md").write_text(
+        "---\ndescription: Plan repository changes\n---\n\na",
+        encoding="utf-8",
+    )
 
     plan = SyncPlanner(
         core=core,
@@ -1273,6 +1276,7 @@ def test_workspace_agents_synced_to_opencode(
     (ws_config / "agents").mkdir(parents=True)
     (ws_config / "agents" / "planner.md").write_text(
         "---\n"
+        "description: Plan repository changes\n"
         "model: openai/gpt-5\n"
         "model_reasoning_effort: high\n"
         "---\n"
@@ -1371,7 +1375,10 @@ def test_full_workspace_config_roundtrip(
     (ws_config / "skills" / "ws-skill").mkdir(parents=True)
     (ws_config / "skills" / "ws-skill" / "SKILL.md").write_text("s", encoding="utf-8")
     (ws_config / "agents").mkdir(parents=True)
-    (ws_config / "agents" / "ws-agent.md").write_text("a", encoding="utf-8")
+    (ws_config / "agents" / "ws-agent.md").write_text(
+        "---\ndescription: Run workspace automation\n---\n\na",
+        encoding="utf-8",
+    )
 
     plan = SyncPlanner(
         core=core,

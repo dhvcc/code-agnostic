@@ -83,7 +83,10 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
         "skill", encoding="utf-8"
     )
     (core_root / "agents").mkdir(parents=True)
-    (core_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
+    (core_root / "agents" / "planner.md").write_text(
+        "---\ndescription: Plan repository changes\n---\n\nagent",
+        encoding="utf-8",
+    )
 
     core = CoreRepository(core_root)
     core.add_workspace("workspace-example", workspace_root)
@@ -351,12 +354,7 @@ def test_codex_build_plan_creates_skill_under_symlinked_home_ancestor(
     skill_dir = core_root / "skills" / "reviewer"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        "---\n"
-        "name: reviewer\n"
-        "description: Review code\n"
-        "---\n"
-        "\n"
-        "Review carefully.\n",
+        "---\nname: reviewer\ndescription: Review code\n---\n\nReview carefully.\n",
         encoding="utf-8",
     )
 
@@ -399,7 +397,12 @@ def test_opencode_build_plan_includes_compiled_agent_files(
 ) -> None:
     (core_root / "agents").mkdir(parents=True)
     (core_root / "agents" / "planner.md").write_text(
-        "---\nmodel: openai/gpt-5\nmodel_reasoning_effort: high\n---\n\nAgent body.\n",
+        "---\n"
+        "description: Plan repository changes\n"
+        "model: openai/gpt-5\n"
+        "model_reasoning_effort: high\n"
+        "---\n\n"
+        "Agent body.\n",
         encoding="utf-8",
     )
 
@@ -427,7 +430,11 @@ def test_opencode_build_plan_includes_compiled_agent_files_for_bundle(
     bundle_dir = core_root / "agents" / "planner"
     bundle_dir.mkdir(parents=True)
     (bundle_dir / "meta.yaml").write_text(
-        "spec_version: v1\nkind: agent\nname: planner\n", encoding="utf-8"
+        "spec_version: v1\n"
+        "kind: agent\n"
+        "name: planner\n"
+        "description: Plan repository changes\n",
+        encoding="utf-8",
     )
     (bundle_dir / "prompt.md").write_text("Agent body.\n", encoding="utf-8")
 
@@ -458,6 +465,7 @@ def test_opencode_build_plan_uses_app_specific_model_override(
         "spec_version: v1\n"
         "kind: agent\n"
         "name: planner\n"
+        "description: Plan repository changes\n"
         "model: gpt-5.4-mini\n"
         "x-opencode:\n"
         "  model: opencode/big-pickle\n"

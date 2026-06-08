@@ -73,7 +73,7 @@ Legacy single-file markdown agents can express the same override with flat alias
 | Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
 | --- | --- | --- | --- | --- | --- |
 | `name` | supported | compiled | compiled | compiled | compiled |
-| `description` | supported | compiled | compiled | compiled | compiled |
+| `description` | supported | compiled | compiled | required | compiled |
 | `model` | supported | compiled | native | native | native |
 | `reasoning_effort` | supported | ignored or compiled | native | native | compiled to `effort` |
 | `sandbox_mode` | supported | ignored | native | ignored | ignored |
@@ -94,4 +94,6 @@ Legacy single-file markdown agents can express the same override with flat alias
 - Current Codex subagent TOML does not expose generic agent tool permissions;
   `tools.*` is omitted from generated Codex agent files and reported by
   `explain-lossiness`.
+- OpenCode requires agent `description`; OpenCode compilation rejects agents
+  without one instead of emitting an invalid target agent.
 - If a target cannot represent a field without changing behavior, the compiler should reject instead of silently dropping it.

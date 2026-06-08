@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatErro
 
 class CodexConfigRepository(IAppConfigRepository):
     def __init__(self, root: Path | None = None) -> None:
-        self._root = root or (Path.home() / CODEX_PROJECT_DIRNAME)
+        self._root = root or _default_codex_root()
 
     @property
     def root(self) -> Path:
@@ -81,3 +82,10 @@ class CodexConfigRepository(IAppConfigRepository):
         config = self.load_config()
         config["agents"] = payload
         self.save_config(config)
+
+
+def _default_codex_root() -> Path:
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        return Path(codex_home).expanduser()
+    return Path.home() / CODEX_PROJECT_DIRNAME

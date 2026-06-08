@@ -208,7 +208,10 @@ def test_skills_agents_symlink_e2e(
         "skill content", encoding="utf-8"
     )
     (core_root / "agents").mkdir(parents=True)
-    (core_root / "agents" / "planner.md").write_text("agent content", encoding="utf-8")
+    (core_root / "agents" / "planner.md").write_text(
+        "---\ndescription: Plan repository changes\n---\n\nagent content",
+        encoding="utf-8",
+    )
 
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
@@ -236,6 +239,7 @@ def test_opencode_agent_compiles_reasoning_effort_e2e(
     (core_root / "agents").mkdir(parents=True)
     (core_root / "agents" / "planner.md").write_text(
         "---\n"
+        "description: Plan repository changes\n"
         "model: openai/gpt-5\n"
         "model_reasoning_effort: high\n"
         "---\n"
@@ -368,7 +372,10 @@ def test_full_roundtrip_skills_agents_all_apps(
         "skill", encoding="utf-8"
     )
     (core_root / "agents").mkdir(parents=True)
-    (core_root / "agents" / "planner.md").write_text("agent", encoding="utf-8")
+    (core_root / "agents" / "planner.md").write_text(
+        "---\ndescription: Plan repository changes\n---\n\nagent",
+        encoding="utf-8",
+    )
 
     apply_result = cli_runner.invoke(cli, ["apply"])
     assert apply_result.exit_code == 0
