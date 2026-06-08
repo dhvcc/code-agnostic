@@ -1,6 +1,6 @@
 """Shared helper functions for CLI commands."""
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import click
 
@@ -29,6 +29,18 @@ def workspace_config_root(core: CoreRepository, workspace: str | None) -> Path:
         return core.root
     require_workspace_entry(core, workspace)
     return core.workspace_config_dir(workspace)
+
+
+def validate_resource_name(name: str, resource_type: str) -> None:
+    if (
+        not name.strip()
+        or name in {".", ".."}
+        or "/" in name
+        or "\\" in name
+        or Path(name).is_absolute()
+        or PureWindowsPath(name).drive
+    ):
+        raise click.ClickException(f"Invalid {resource_type} name: {name}")
 
 
 def status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRow:

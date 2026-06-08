@@ -78,6 +78,21 @@ def test_skills_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> N
     assert result.exit_code != 0
 
 
+def test_skills_remove_rejects_path_like_name(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    (core_root / "skills").mkdir(parents=True, exist_ok=True)
+    victim = core_root / "victim" / "keep.txt"
+    victim.parent.mkdir(parents=True)
+    victim.write_text("keep\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["skills", "remove", "--name", "../victim"])
+
+    assert result.exit_code != 0
+    assert "Invalid skill name" in result.output
+    assert victim.read_text(encoding="utf-8") == "keep\n"
+
+
 def test_skills_workspace_scoped(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
 ) -> None:
