@@ -8,6 +8,7 @@ from code_agnostic.imports.models import (
 from code_agnostic.models import (
     AppStatusRow,
     EditorStatusRow,
+    EditorSyncStatus,
     SyncPlan,
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
@@ -167,7 +168,8 @@ class SyncConsoleUI:
             self.console.print(
                 UISection.note(
                     "workspaces",
-                    "No workspaces configured.",
+                    "No workspaces configured.\n"
+                    "- code-agnostic workspaces add --name <name> --path <path>",
                     style=UIStyle.YELLOW.value,
                 )
             )
@@ -198,12 +200,18 @@ class SyncConsoleUI:
                 style=UIStyle.BLUE.value,
             )
         )
+        next_steps = self._status_next_steps(editors)
+        if next_steps:
+            self.console.print(
+                UISection.note("next", next_steps, style=UIStyle.DIM.value)
+            )
 
         if not workspaces:
             self.console.print(
                 UISection.note(
                     "workspace sync",
-                    "No workspaces configured.",
+                    "No workspaces configured.\n"
+                    "- code-agnostic workspaces add --name <name> --path <path>",
                     style=UIStyle.YELLOW.value,
                 )
             )
@@ -241,6 +249,29 @@ class SyncConsoleUI:
                 StatusTable.workspace_repos_group(workspaces),
                 style=UIStyle.CYAN.value,
             )
+        )
+
+    @staticmethod
+    def _status_next_steps(editors: list[EditorStatusRow]) -> str | None:
+        if not editors or any(
+            row.status != EditorSyncStatus.DISABLED for row in editors
+        ):
+            return None
+
+        if len(editors) == 1:
+            app = editors[0].name
+            return (
+                f"Enable {app}, then preview and apply it.\n"
+                f"- code-agnostic apps enable -a {app}\n"
+                f"- code-agnostic plan -a {app}\n"
+                f"- code-agnostic apply -a {app}"
+            )
+
+        return (
+            "Enable a target app, then preview and apply it.\n"
+            "- code-agnostic apps enable -a <app>\n"
+            "- code-agnostic plan -a <app>\n"
+            "- code-agnostic apply -a <app>"
         )
 
     def render_apps(self, items: list[AppStatusRow]) -> None:

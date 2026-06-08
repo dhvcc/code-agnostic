@@ -55,6 +55,9 @@ def test_workspaces_add_list_remove_commands(
     list_after_remove = cli_runner.invoke(cli, ["workspaces", "list"])
     assert list_after_remove.exit_code == 0
     assert "No workspaces configured" in list_after_remove.output
+    assert "code-agnostic workspaces add --name <name> --path <path>" in (
+        list_after_remove.output
+    )
     assert (minimal_shared_config / "workspaces" / "workspace-example").is_dir()
 
 

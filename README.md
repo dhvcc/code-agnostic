@@ -48,11 +48,12 @@ Today the implementation is still mixed: some assets are compiled and some are s
 - workspace source config under `~/.config/code-agnostic/workspaces/<name>/`,
   propagated into repos inside a registered workspace.
 
-Project-local skill folders that users create directly inside a repo, such as
-`.agents/skills` or `.opencode/skills`, are app-native inputs but are not
-managed as source by `code-agnostic` yet. First-class project-scoped installs
-are planned so a single registered project can have managed local source config
-without bypassing the hub.
+Workspace sync may generate repo-local outputs, but those outputs are not
+source. Project-local skill folders that users create directly inside a repo,
+such as `.agents/skills` or `.opencode/skills`, are app-native inputs but are
+not managed as source by `code-agnostic` yet. First-class project-scoped
+installs are planned so a single registered project can have managed local
+source config without bypassing the hub.
 
 ## Install
 
@@ -213,6 +214,9 @@ code-agnostic plan
 code-agnostic apply
 ```
 
+There is no `skills install` command yet; copy skills into managed source first,
+then use the normal `plan` / `apply` workflow.
+
 Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`. Codex generated skill outputs are written to `~/.agents/skills`, while Codex agents and config remain under `~/.codex`. Claude Code generated skills and agents are written under `~/.claude/skills` and `~/.claude/agents`, with workspace copies under repo-local `.claude/skills` and `.claude/agents`.
 
 Project-local skills are not first-class source inputs in `code-agnostic` yet. If a target app discovers repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or user-created `.claude/skills`, treat those as unmanaged app inputs. Workspace sync writes only the exact generated paths recorded in `.sync-state.json`.
@@ -291,12 +295,12 @@ The compiler migration is documented in:
 - [x] MCP add/remove/list commands
 - [x] Rules system with YAML frontmatter and per-editor compilation
 - [x] Cross-compilation for skills and agents
+- [x] Planner integration for cross-compiled skills and agents
 - [x] Per-workspace git-exclude customization
 - [x] Interactive TUI for import selection
 - [x] Claude Code support
 - [ ] Project-scoped skill installs and sync
 - [ ] `rules add` / `skills add` / `agents add` commands (open `$EDITOR` with template)
-- [ ] Planner integration for cross-compiled skills and agents
 - [ ] Shell auto-complete
 - [ ] Full TUI mode (command palette + menus)
 
