@@ -25,7 +25,7 @@ from code_agnostic.errors import SyncAppError
 )
 @click.pass_context
 def cli(ctx: click.Context) -> None:
-    """App-based config sync."""
+    """Manage one source of truth for AI coding-tool config."""
     ctx.obj = {}
 
 

@@ -11,7 +11,7 @@ def test_cli_importable_from_main(cli_runner) -> None:
     """CLI should be importable from code_agnostic.__main__."""
     result = cli_runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    assert "App-based config sync" in result.output
+    assert "Manage one source of truth for AI coding-tool config" in result.output
 
 
 def test_cli_group_importable_from_cli_package() -> None:

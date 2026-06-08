@@ -52,6 +52,18 @@ def test_status_reports_editor_and_workspace_repo_sync(
     assert "service-web" in synced_status.output
 
 
+def test_status_empty_state_suggests_enabling_app(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["status"])
+
+    assert result.exit_code == 0
+    assert "Enable a target app" in result.output
+    assert "code-agnostic apps enable -a <app>" in result.output
+    assert "code-agnostic plan -a <app>" in result.output
+    assert "code-agnostic apply -a <app>" in result.output
+
+
 def test_status_reports_workspace_repo_generated_config_content_drift(
     minimal_shared_config: Path,
     tmp_path: Path,
