@@ -88,7 +88,8 @@ def test_app_services_build_skill_and_agent_scopes(
     )
     core.agents_dir.mkdir(parents=True)
     (core.agents_dir / "planner.md").write_text(
-        "You are a planner.\n", encoding="utf-8"
+        "---\ndescription: Plan repository changes\n---\n\nYou are a planner.\n",
+        encoding="utf-8",
     )
 
     service = service_factory(core, tmp_path / target_root_name)
@@ -119,7 +120,8 @@ def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
     core = CoreRepository(core_root)
     core.agents_dir.mkdir(parents=True)
     (core.agents_dir / "planner.md").write_text(
-        "You are a planner.\n", encoding="utf-8"
+        "---\ndescription: Plan repository changes\n---\n\nYou are a planner.\n",
+        encoding="utf-8",
     )
 
     service = service_factory(core, tmp_path / target_root_name)

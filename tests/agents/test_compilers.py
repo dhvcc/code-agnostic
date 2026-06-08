@@ -8,6 +8,7 @@ except ModuleNotFoundError:  # pragma: no cover
     import tomli as tomllib  # type: ignore
 
 import yaml
+import pytest
 
 from code_agnostic.agents.compilers import (
     ClaudeAgentCompiler,
@@ -22,6 +23,7 @@ from code_agnostic.agents.models import (
     AgentSkillConfig,
     AgentToolPermissions,
 )
+from code_agnostic.errors import InvalidConfigSchemaError
 
 
 def _make_agent(
@@ -70,6 +72,16 @@ def test_opencode_compiler() -> None:
     assert payload["permission"] == {"read": "allow", "edit": "allow"}
     assert "model_reasoning_effort" not in payload
     assert body.strip() == "Agent body."
+
+
+def test_opencode_compiler_rejects_missing_description() -> None:
+    agent = _make_agent(description="")
+
+    compiler = OpenCodeAgentCompiler()
+    with pytest.raises(
+        InvalidConfigSchemaError, match="OpenCode agents require a description"
+    ):
+        compiler.compile(agent)
 
 
 def test_opencode_compiler_uses_app_override_and_passthrough() -> None:

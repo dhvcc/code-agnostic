@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
@@ -171,6 +173,19 @@ def test_codex_repository_agents_dir(tmp_path: Path) -> None:
     root = tmp_path / ".codex"
     repo = CodexConfigRepository(root=root)
     assert repo.agents_dir == root / "agents"
+
+
+def test_codex_repository_defaults_to_codex_home_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    codex_home = tmp_path / "custom-codex-home"
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    repo = CodexConfigRepository()
+
+    assert repo.root == codex_home
+    assert repo.config_path == codex_home / "config.toml"
+    assert repo.agents_dir == codex_home / "agents"
 
 
 def test_claude_repository_skills_and_agents_dirs(tmp_path: Path) -> None:

@@ -23,6 +23,7 @@ def isolated_home(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setenv("APPDATA", str(tmp_path / ".config"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / ".local" / "share"))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
 

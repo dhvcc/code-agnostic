@@ -21,6 +21,8 @@ The compiler must make cross-app lossiness explicit.
   permissions.
 - Agent `tools.*` is lossy for Codex agents because current Codex subagent TOML
   does not expose generic per-agent read, write, or MCP tool permissions.
+- Agent `description` is rejected for OpenCode agents when absent because
+  OpenCode requires that field for agent config.
 
 ## CLI follow-up
 
