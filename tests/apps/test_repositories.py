@@ -178,13 +178,14 @@ def test_codex_repository_agents_dir(tmp_path: Path) -> None:
 def test_codex_repository_defaults_to_codex_home_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    codex_home = tmp_path / "custom-codex-home"
+    codex_home = tmp_path / "custom" / "codex-home"
     monkeypatch.setenv("CODEX_HOME", str(codex_home))
 
     repo = CodexConfigRepository()
 
     assert repo.root == codex_home
     assert repo.config_path == codex_home / "config.toml"
+    assert repo.skills_dir == tmp_path / ".agents" / "skills"
     assert repo.agents_dir == codex_home / "agents"
 
 

@@ -59,7 +59,7 @@ Unknown keys fail validation.
 - New fields should not be added until at least one target mapping and one test exist.
 - Codex user/global skills are generated under `.agents/skills`, matching the
   current Codex skill discovery path. Codex agents and config remain under
-  `.codex`.
+  `.codex`, or `CODEX_HOME` when set.
 - Current Cursor, Codex, and OpenCode `SKILL.md` frontmatter does not represent
   per-skill tool permissions; `tools.*` is omitted from generated skill files
   and reported by `explain-lossiness`.

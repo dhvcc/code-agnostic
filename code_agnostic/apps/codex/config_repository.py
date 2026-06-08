@@ -23,6 +23,7 @@ from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatErro
 class CodexConfigRepository(IAppConfigRepository):
     def __init__(self, root: Path | None = None) -> None:
         self._root = root or _default_codex_root()
+        self._skills_dir = _default_codex_skills_dir(root)
 
     @property
     def root(self) -> Path:
@@ -34,7 +35,7 @@ class CodexConfigRepository(IAppConfigRepository):
 
     @property
     def skills_dir(self) -> Path:
-        return self.root.parent / AGENTS_PROJECT_DIRNAME / SKILLS_DIRNAME
+        return self._skills_dir
 
     @property
     def agents_dir(self) -> Path:
@@ -89,3 +90,9 @@ def _default_codex_root() -> Path:
     if codex_home:
         return Path(codex_home).expanduser()
     return Path.home() / CODEX_PROJECT_DIRNAME
+
+
+def _default_codex_skills_dir(root: Path | None) -> Path:
+    if root is not None:
+        return root.parent / AGENTS_PROJECT_DIRNAME / SKILLS_DIRNAME
+    return Path.home() / AGENTS_PROJECT_DIRNAME / SKILLS_DIRNAME
