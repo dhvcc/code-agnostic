@@ -204,3 +204,18 @@ def test_entrypoint_status_fails_on_missing_workspace_path(
     assert "missingws" in status.stdout
     assert "error" in status.stdout
     assert "workspace path" in status.stdout
+
+
+def test_entrypoint_skills_remove_rejects_path_like_name(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    source_root = home / ".config" / "code-agnostic"
+    (source_root / "skills").mkdir(parents=True)
+    victim = source_root / "victim" / "keep.txt"
+    victim.parent.mkdir(parents=True)
+    victim.write_text("keep\n", encoding="utf-8")
+
+    result = _run_cli(home, "skills", "remove", "--name", "../victim")
+
+    assert result.returncode != 0
+    assert "Invalid skill name" in result.stderr
+    assert victim.read_text(encoding="utf-8") == "keep\n"

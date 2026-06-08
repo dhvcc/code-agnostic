@@ -3,7 +3,7 @@
 import click
 from rich.console import Console
 
-from code_agnostic.cli.helpers import workspace_config_root
+from code_agnostic.cli.helpers import validate_resource_name, workspace_config_root
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.rules.repository import RulesRepository
@@ -37,6 +37,7 @@ def rules_list(obj: dict[str, str], workspace: str | None) -> None:
 @workspace_option()
 @click.pass_obj
 def rules_remove(obj: dict[str, str], name: str, workspace: str | None) -> None:
+    validate_resource_name(name, "rule")
     core = CoreRepository()
     root = workspace_config_root(core, workspace)
 

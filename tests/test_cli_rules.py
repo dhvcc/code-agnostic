@@ -41,6 +41,21 @@ def test_rules_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> No
     assert result.exit_code != 0
 
 
+def test_rules_remove_rejects_path_like_name(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    (core_root / "rules").mkdir(parents=True, exist_ok=True)
+    victim = core_root / "victim" / "keep.txt"
+    victim.parent.mkdir(parents=True)
+    victim.write_text("keep\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["rules", "remove", "--name", "../victim"])
+
+    assert result.exit_code != 0
+    assert "Invalid rule name" in result.output
+    assert victim.read_text(encoding="utf-8") == "keep\n"
+
+
 def test_rules_workspace_scoped_list(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
 ) -> None:
