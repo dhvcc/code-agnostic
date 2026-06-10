@@ -159,11 +159,22 @@ class CoreRepository(BaseSourceRepository):
         return self.config_dir / "workspaces.json"
 
     @property
+    def projects_path(self) -> Path:
+        return self.config_dir / "projects.json"
+
+    @property
     def workspaces_dir(self) -> Path:
         return self.root / "workspaces"
 
+    @property
+    def projects_dir(self) -> Path:
+        return self.root / "projects"
+
     def workspace_config_dir(self, name: str) -> Path:
         return self.workspaces_dir / name
+
+    def project_config_dir(self, name: str) -> Path:
+        return self.projects_dir / name
 
     def load_opencode_base(self) -> dict[str, Any]:
         if not self.opencode_base_path.exists():
@@ -250,4 +261,83 @@ class CoreRepository(BaseSourceRepository):
         if len(kept) == len(workspaces):
             return False
         self.save_workspaces(kept)
+        return True
+
+    def load_projects(self) -> list[dict[str, str]]:
+        payload, error = read_json_safe(self.projects_path)
+        if error is not None:
+            raise InvalidJsonFormatError(self.projects_path, error)
+        if payload is None:
+            return []
+        if not isinstance(payload, list):
+            raise InvalidConfigSchemaError(self.projects_path, "must be a JSON array")
+
+        result: list[dict[str, str]] = []
+        seen_names: set[str] = set()
+        seen_paths: set[Path] = set()
+        for item in payload:
+            if not isinstance(item, dict):
+                raise InvalidConfigSchemaError(
+                    self.projects_path, "entries must be JSON objects"
+                )
+            name = item.get("name")
+            path = item.get("path")
+            if not isinstance(name, str) or not isinstance(path, str):
+                raise InvalidConfigSchemaError(
+                    self.projects_path, "entries must contain string name and path"
+                )
+            normalized_name = name.strip()
+            if not normalized_name:
+                raise InvalidConfigSchemaError(
+                    self.projects_path, "project name cannot be empty"
+                )
+            normalized_path = Path(path).expanduser().resolve()
+            if normalized_name in seen_names:
+                raise InvalidConfigSchemaError(
+                    self.projects_path, f"duplicate project name: {normalized_name}"
+                )
+            if normalized_path in seen_paths:
+                raise InvalidConfigSchemaError(
+                    self.projects_path, f"duplicate project path: {normalized_path}"
+                )
+            result.append({"name": normalized_name, "path": str(normalized_path)})
+            seen_names.add(normalized_name)
+            seen_paths.add(normalized_path)
+        return result
+
+    def save_projects(self, projects: list[dict[str, str]]) -> None:
+        serialized = sorted(
+            [{"name": item["name"], "path": item["path"]} for item in projects],
+            key=lambda item: item["name"].lower(),
+        )
+        write_json(self.projects_path, serialized)
+
+    def add_project(self, name: str, path: Path) -> None:
+        normalized_name = name.strip()
+        if not normalized_name:
+            raise ValueError("Project name cannot be empty")
+        normalized_path = path.expanduser().resolve()
+        if not normalized_path.exists() or not normalized_path.is_dir():
+            raise ValueError(
+                f"Project path does not exist or is not a directory: {normalized_path}"
+            )
+
+        projects = self.load_projects()
+        for item in projects:
+            if item["name"] == normalized_name:
+                raise ValueError(f"Project name already exists: {normalized_name}")
+            if Path(item["path"]) == normalized_path:
+                raise ValueError(f"Project path already exists: {normalized_path}")
+
+        projects.append({"name": normalized_name, "path": str(normalized_path)})
+        self.save_projects(projects)
+        self.project_config_dir(normalized_name).mkdir(parents=True, exist_ok=True)
+
+    def remove_project(self, name: str) -> bool:
+        target_name = name.strip()
+        projects = self.load_projects()
+        kept = [item for item in projects if item["name"] != target_name]
+        if len(kept) == len(projects):
+            return False
+        self.save_projects(kept)
         return True

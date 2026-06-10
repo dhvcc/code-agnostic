@@ -13,6 +13,7 @@ from code_agnostic.constants import (
     SYNC_STAGING_DIRNAME,
     SYNC_STATE_FILENAME,
 )
+from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.utils import write_json
@@ -36,6 +37,7 @@ class PathSnapshot:
 class RevisionRecord:
     root: Path
     workspace: str | None
+    project: str | None
     revision_id: str
     manifest_path: Path
     active_path: Path
@@ -303,11 +305,15 @@ class SyncExecutor:
 
         records: list[RevisionRecord] = []
         revision_id = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-        if any(action.workspace is None for action in plan.actions):
+        if any(
+            action.workspace is None and action.project is None
+            for action in plan.actions
+        ):
             records.append(
                 self._build_revision_record(
                     root=self.context.core.root,
                     workspace=None,
+                    project=None,
                     revision_id=revision_id,
                 )
             )
@@ -324,6 +330,20 @@ class SyncExecutor:
                 self._build_revision_record(
                     root=workspace_root,
                     workspace=workspace_name,
+                    project=None,
+                    revision_id=revision_id,
+                )
+            )
+
+        for project_name in sorted(
+            {action.project for action in plan.actions if action.project is not None}
+        ):
+            project_root = self.context.core.project_config_dir(project_name)
+            records.append(
+                self._build_revision_record(
+                    root=project_root,
+                    workspace=None,
+                    project=project_name,
                     revision_id=revision_id,
                 )
             )
@@ -331,12 +351,18 @@ class SyncExecutor:
         return records
 
     def _build_revision_record(
-        self, *, root: Path, workspace: str | None, revision_id: str
+        self,
+        *,
+        root: Path,
+        workspace: str | None,
+        project: str | None,
+        revision_id: str,
     ) -> RevisionRecord:
         revisions_root = root / SYNC_REVISIONS_DIRNAME
         return RevisionRecord(
             root=root,
             workspace=workspace,
+            project=project,
             revision_id=revision_id,
             manifest_path=revisions_root / f"{revision_id}.json",
             active_path=revisions_root / "active.json",
@@ -393,7 +419,7 @@ class SyncExecutor:
             root = self.context.core.workspace_config_dir(workspace)
 
         revision_record = self._build_revision_record(
-            root=root, workspace=workspace, revision_id="restore"
+            root=root, workspace=workspace, project=None, revision_id="restore"
         )
         self._repair_pending_revisions([revision_record])
         records = self._load_previous_revisions([revision_record])
@@ -565,9 +591,18 @@ class SyncExecutor:
         staging_id: str,
     ) -> Path:
         for record in revision_records:
-            if record.workspace == action.workspace:
+            if (
+                record.workspace == action.workspace
+                and record.project == action.project
+            ):
                 return record.root / SYNC_STAGING_DIRNAME / record.revision_id
 
+        if action.project is not None:
+            return (
+                self.context.core.project_config_dir(action.project)
+                / SYNC_STAGING_DIRNAME
+                / staging_id
+            )
         if action.workspace is not None:
             return (
                 self.context.core.workspace_config_dir(action.workspace)
@@ -636,19 +671,10 @@ class SyncExecutor:
             self._capture_path_and_symlink_target(paths, action.path)
 
         if persist_state:
-            core = self.context.core
-            core_state_path = core.root / SYNC_STATE_FILENAME
-            self._capture_path_and_symlink_target(paths, core_state_path)
-            for workspace_name in {
-                action.workspace
-                for action in plan.actions
-                if action.workspace is not None
-            }:
-                workspace_state_path = WorkspaceConfigRepository(
-                    root=core.workspace_config_dir(workspace_name)
-                ).state_json
-                self._capture_path_and_symlink_target(paths, workspace_state_path)
             for record in revision_records:
+                self._capture_path_and_symlink_target(
+                    paths, record.root / SYNC_STATE_FILENAME
+                )
                 self._capture_path_and_symlink_target(paths, record.active_path)
                 self._capture_path_and_symlink_target(paths, record.manifest_path)
                 self._capture_path_and_symlink_target(paths, record.pending_path)
@@ -719,6 +745,9 @@ class SyncExecutor:
         workspace_links: dict[str, dict[str, list[str]]] = {}
         workspace_paths: dict[str, dict[str, list[str]]] = {}
         workspace_touched_scopes: dict[str, set[str]] = {}
+        project_links: dict[str, dict[str, list[str]]] = {}
+        project_paths: dict[str, dict[str, list[str]]] = {}
+        project_touched_scopes: dict[str, set[str]] = {}
 
         for action in plan.actions:
             if action.scope is None:
@@ -739,6 +768,21 @@ class SyncExecutor:
                     workspace_paths.setdefault(ws_name, {}).setdefault(
                         action.scope, []
                     ).append(str(action.path))
+            elif action.project is not None:
+                project_name = action.project
+                project_touched_scopes.setdefault(project_name, set()).add(action.scope)
+                if action.kind == ActionKind.SYMLINK and action.path.is_symlink():
+                    project_links.setdefault(project_name, {}).setdefault(
+                        action.scope, []
+                    ).append(str(action.path))
+                if (
+                    action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                    and action.status != ActionStatus.CONFLICT
+                    and action.path.exists()
+                ):
+                    project_paths.setdefault(project_name, {}).setdefault(
+                        action.scope, []
+                    ).append(str(action.path))
             else:
                 global_touched_scopes.add(action.scope)
                 if action.kind == ActionKind.SYMLINK and action.path.is_symlink():
@@ -754,28 +798,31 @@ class SyncExecutor:
 
         # Persist global state
         core = self.context.core
-        existing_global_state = core.load_state()
-        global_state = {
-            "updated_at": updated_at,
-            "managed_links": self._merge_managed_links(
-                existing=existing_global_state.get("managed_links"),
-                touched_scopes=global_touched_scopes,
-                current_links=global_links,
-            ),
-            "managed_paths": self._merge_managed_links(
-                existing=existing_global_state.get("managed_paths"),
-                touched_scopes=global_touched_scopes,
-                current_links=global_paths,
-            ),
-            "skipped": plan.skipped,
-        }
-        self._place_json_via_staging(
-            target=core.root / SYNC_STATE_FILENAME,
-            payload=global_state,
-            staging_root=core.root / SYNC_STAGING_DIRNAME / staging_id / "metadata",
-            staging_dirs=staging_dirs,
-            stage_name="global-state.json",
-        )
+        if global_touched_scopes:
+            existing_global_state = core.load_state()
+            global_state = {
+                "updated_at": updated_at,
+                "managed_links": self._merge_managed_links(
+                    existing=existing_global_state.get("managed_links"),
+                    touched_scopes=global_touched_scopes,
+                    current_links=global_links,
+                ),
+                "managed_paths": self._merge_managed_links(
+                    existing=existing_global_state.get("managed_paths"),
+                    touched_scopes=global_touched_scopes,
+                    current_links=global_paths,
+                ),
+                "skipped": plan.skipped,
+            }
+            self._place_json_via_staging(
+                target=core.root / SYNC_STATE_FILENAME,
+                payload=global_state,
+                staging_root=(
+                    core.root / SYNC_STAGING_DIRNAME / staging_id / "metadata"
+                ),
+                staging_dirs=staging_dirs,
+                stage_name="global-state.json",
+            )
 
         # Persist workspace state
         for ws_name in workspace_touched_scopes:
@@ -805,6 +852,36 @@ class SyncExecutor:
                 stage_name="workspace-state.json",
             )
 
+        # Persist project state
+        for project_name in project_touched_scopes:
+            project_repo = ProjectConfigRepository(
+                root=core.project_config_dir(project_name)
+            )
+            existing_project_state = project_repo.load_state()
+            project_state = {
+                "updated_at": updated_at,
+                "managed_links": self._merge_managed_links(
+                    existing=existing_project_state.get("managed_links"),
+                    touched_scopes=project_touched_scopes[project_name],
+                    current_links=project_links.get(project_name, {}),
+                ),
+                "managed_paths": self._merge_managed_links(
+                    existing=existing_project_state.get("managed_paths"),
+                    touched_scopes=project_touched_scopes[project_name],
+                    current_links=project_paths.get(project_name, {}),
+                ),
+            }
+            self._place_json_via_staging(
+                target=project_repo.state_json,
+                payload=project_state,
+                staging_root=project_repo.root
+                / SYNC_STAGING_DIRNAME
+                / staging_id
+                / "metadata",
+                staging_dirs=staging_dirs,
+                stage_name="project-state.json",
+            )
+
         self._persist_revision_manifests(
             plan=plan,
             revision_records=revision_records,
@@ -818,13 +895,15 @@ class SyncExecutor:
         revision_records: list[RevisionRecord],
         staging_dirs: set[Path],
     ) -> None:
-        actions_by_workspace: dict[str | None, list[Action]] = {}
+        actions_by_scope: dict[tuple[str | None, str | None], list[Action]] = {}
         for action in plan.actions:
-            actions_by_workspace.setdefault(action.workspace, []).append(action)
+            actions_by_scope.setdefault((action.workspace, action.project), []).append(
+                action
+            )
 
         for record in revision_records:
             actions = sorted(
-                actions_by_workspace.get(record.workspace, []),
+                actions_by_scope.get((record.workspace, record.project), []),
                 key=lambda action: (
                     str(action.path),
                     action.kind.value,
@@ -837,6 +916,7 @@ class SyncExecutor:
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
                 "root": str(record.root),
                 "workspace": record.workspace,
+                "project": record.project,
                 "state": self._serialize_manifest_file(
                     path=record.root / SYNC_STATE_FILENAME,
                     artifact_path=record.artifacts_root / "state.bin",
@@ -943,6 +1023,7 @@ class SyncExecutor:
             "kind": action.kind.value,
             "app": action.app,
             "scope": action.scope,
+            "project": action.project,
             "exists": payload["exists"],
             "checksum": payload["checksum"],
             "artifact_path": payload["artifact_path"],

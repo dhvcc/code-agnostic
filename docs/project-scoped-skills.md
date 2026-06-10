@@ -1,7 +1,6 @@
 # Project-Scoped Skill Installs
 
-This is the first implementation slice for managed project-local skills. It is a
-proposal, not current CLI behavior.
+This documents the first implementation slice for managed project-local skills.
 
 ## Goal
 
@@ -11,7 +10,7 @@ should still be produced by the normal `plan` / `apply` flow.
 
 ## Source Model
 
-Add a project registry under `~/.config/code-agnostic/config/projects.json`.
+Projects are registered under `~/.config/code-agnostic/config/projects.json`.
 Each project entry should have:
 
 - `name`
@@ -29,16 +28,15 @@ Scopes should be explicit:
 
 ## CLI Flow
 
-Add project-aware `plan`, `apply`, and `status` for project-local skills.
+Project-aware `plan`, `apply`, and `status` support project-local skills.
 
-Add `skills install` for local directories first:
+`skills install` supports local skill directories:
 
 ```bash
 code-agnostic skills install ./my-skill --project <name>
 ```
 
-When the scope is ambiguous, prompt for global, current project, or containing
-workspace. Explicit flags should skip prompts:
+Explicit flags choose the install scope:
 
 ```bash
 code-agnostic skills install ./my-skill --global
@@ -46,8 +44,10 @@ code-agnostic skills install ./my-skill --workspace <name>
 code-agnostic skills install ./my-skill --project <name>
 ```
 
-If the current directory is not registered and no explicit scope was provided,
-offer to register it as a project before installing.
+Without an explicit scope, install chooses the containing registered project
+when there is exactly one match, otherwise the containing workspace when there
+is exactly one match. When there is no unique scope, pass `--global`,
+`--project`, or `--workspace`.
 
 ## Safety
 
@@ -62,5 +62,7 @@ detection for generated files.
 ## Out of Scope
 
 - MCP install/add flows.
+- Remote skills.sh/GitHub package references.
+- Interactive scope prompts.
 - A general plugin marketplace.
 - Replacing workspaces. Workspaces remain the multi-repo propagation model.

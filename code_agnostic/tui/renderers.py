@@ -9,6 +9,8 @@ from code_agnostic.models import (
     AppStatusRow,
     EditorStatusRow,
     EditorSyncStatus,
+    ProjectStatusRow,
+    ProjectSyncStatus,
     SyncPlan,
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
@@ -32,7 +34,7 @@ class SyncConsoleUI:
         self.console = console or Console()
 
     def render_plan(self, plan: SyncPlan, mode: str, verbose: bool = False) -> None:
-        app_actions, workspace_actions = PlanTable.split_actions(plan)
+        app_actions, workspace_actions, project_actions = PlanTable.split_actions(plan)
 
         self.console.print(
             UISection.wrap(
@@ -58,7 +60,15 @@ class SyncConsoleUI:
                     style=UIStyle.MAGENTA.value,
                 )
             )
-        if not app_actions and not workspace_actions:
+        if project_actions:
+            self.console.print(
+                UISection.wrap(
+                    "project config sync",
+                    PlanTable.actions_table(project_actions, verbose=verbose),
+                    style=UIStyle.GREEN.value,
+                )
+            )
+        if not app_actions and not workspace_actions and not project_actions:
             self.console.print(
                 UISection.note(
                     "actions", "No actions required.", style=UIStyle.DIM.value
@@ -191,7 +201,10 @@ class SyncConsoleUI:
         )
 
     def render_status(
-        self, editors: list[EditorStatusRow], workspaces: list[WorkspaceStatusRow]
+        self,
+        editors: list[EditorStatusRow],
+        workspaces: list[WorkspaceStatusRow],
+        projects: list[ProjectStatusRow] | None = None,
     ) -> None:
         self.console.print(
             UISection.wrap(
@@ -215,39 +228,58 @@ class SyncConsoleUI:
                     style=UIStyle.YELLOW.value,
                 )
             )
+        else:
+            workspace_style = UIStyle.GREEN.value
+            if any(item.status == WorkspaceSyncStatus.DRIFT for item in workspaces):
+                workspace_style = UIStyle.YELLOW.value
+            if any(item.status == WorkspaceSyncStatus.ERROR for item in workspaces):
+                workspace_style = UIStyle.RED.value
+
+            self.console.print(
+                UISection.wrap(
+                    "workspace sync",
+                    StatusTable.workspace_overview(workspaces),
+                    style=workspace_style,
+                )
+            )
+            workspace_errors = [
+                item for item in workspaces if item.status == WorkspaceSyncStatus.ERROR
+            ]
+            if workspace_errors:
+                errors_text = "\n".join(
+                    [
+                        f"- {item.name}: {compact_home_paths_in_text(item.detail)}"
+                        for item in workspace_errors
+                    ]
+                )
+                self.console.print(
+                    UISection.note(
+                        "workspace errors", errors_text, style=UIStyle.RED.value
+                    )
+                )
+            self.console.print(
+                UISection.wrap(
+                    "workspace repositories",
+                    StatusTable.workspace_repos_group(workspaces),
+                    style=UIStyle.CYAN.value,
+                )
+            )
+
+        project_rows = projects or []
+        if not project_rows:
             return
 
-        workspace_style = UIStyle.GREEN.value
-        if any(item.status == WorkspaceSyncStatus.DRIFT for item in workspaces):
-            workspace_style = UIStyle.YELLOW.value
-        if any(item.status == WorkspaceSyncStatus.ERROR for item in workspaces):
-            workspace_style = UIStyle.RED.value
+        project_style = UIStyle.GREEN.value
+        if any(item.status == ProjectSyncStatus.DRIFT for item in project_rows):
+            project_style = UIStyle.YELLOW.value
+        if any(item.status == ProjectSyncStatus.ERROR for item in project_rows):
+            project_style = UIStyle.RED.value
 
         self.console.print(
             UISection.wrap(
-                "workspace sync",
-                StatusTable.workspace_overview(workspaces),
-                style=workspace_style,
-            )
-        )
-        workspace_errors = [
-            item for item in workspaces if item.status == WorkspaceSyncStatus.ERROR
-        ]
-        if workspace_errors:
-            errors_text = "\n".join(
-                [
-                    f"- {item.name}: {compact_home_paths_in_text(item.detail)}"
-                    for item in workspace_errors
-                ]
-            )
-            self.console.print(
-                UISection.note("workspace errors", errors_text, style=UIStyle.RED.value)
-            )
-        self.console.print(
-            UISection.wrap(
-                "workspace repositories",
-                StatusTable.workspace_repos_group(workspaces),
-                style=UIStyle.CYAN.value,
+                "project sync",
+                StatusTable.project_overview(project_rows),
+                style=project_style,
             )
         )
 

@@ -14,6 +14,8 @@ from code_agnostic.models import (
     AppSyncStatus,
     EditorStatusRow,
     EditorSyncStatus,
+    ProjectStatusRow,
+    ProjectSyncStatus,
     RepoSyncStatus,
     SyncPlan,
     WorkspaceStatusRow,
@@ -49,15 +51,20 @@ class PlanTable:
         return table
 
     @staticmethod
-    def split_actions(plan: SyncPlan) -> tuple[list[Action], list[Action]]:
+    def split_actions(
+        plan: SyncPlan,
+    ) -> tuple[list[Action], list[Action], list[Action]]:
         app_actions: list[Action] = []
         workspace_actions: list[Action] = []
+        project_actions: list[Action] = []
         for action in plan.actions:
-            if action.app == "workspace":
+            if action.project is not None:
+                project_actions.append(action)
+            elif action.app == "workspace":
                 workspace_actions.append(action)
             else:
                 app_actions.append(action)
-        return app_actions, workspace_actions
+        return app_actions, workspace_actions, project_actions
 
     @staticmethod
     def actions_table(actions: list[Action], verbose: bool = False) -> Table:
@@ -105,6 +112,8 @@ class PlanTable:
     def _source_label_for_action(action: Action) -> str:
         if action.app == "workspace":
             return "Workspace"
+        if action.project is not None:
+            return "Project"
         return app_label(AppId.CORE)
 
     @staticmethod
@@ -271,6 +280,33 @@ class StatusTable:
         if not blocks:
             return Text("No workspace details.", style=UIStyle.DIM.value)
         return Group(*blocks)
+
+    @staticmethod
+    def project_overview(items: list[ProjectStatusRow]) -> Table:
+        table = Table(
+            Column(header="Project", width=24),
+            Column(header="Status", width=12),
+            Column(header="Detail", overflow="fold"),
+            Column(header="Path", overflow="ellipsis"),
+            expand=True,
+            header_style="bold",
+        )
+        for item in items:
+            status = item.status
+            style = (
+                UIStyle.GREEN.value
+                if status == ProjectSyncStatus.SYNCED
+                else UIStyle.RED.value
+                if status == ProjectSyncStatus.ERROR
+                else UIStyle.YELLOW.value
+            )
+            table.add_row(
+                item.name,
+                f"[{style}]{status.value}[/{style}]",
+                item.detail,
+                compact_home_path(item.path),
+            )
+        return table
 
 
 class AppsTable:

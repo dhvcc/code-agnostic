@@ -41,19 +41,19 @@ Today the implementation is still mixed: some assets are compiled and some are s
 
 ## Scope model
 
-`code-agnostic` has two managed source scopes today:
+`code-agnostic` has three managed source scopes:
 
 - global source config under `~/.config/code-agnostic/`, synced to enabled
   user-level app config;
 - workspace source config under `~/.config/code-agnostic/workspaces/<name>/`,
-  propagated into repos inside a registered workspace.
+  propagated into repos inside a registered workspace;
+- project source config under `~/.config/code-agnostic/projects/<name>/`,
+  synced to exactly one registered project directory.
 
 Workspace sync may generate repo-local outputs, but those outputs are not
-source. Project-local skill folders that users create directly inside a repo,
-such as `.agents/skills` or `.opencode/skills`, are app-native inputs but are
-not managed as source by `code-agnostic` yet. First-class project-scoped
-installs are planned so a single registered project can have managed local
-source config without bypassing the hub.
+source. Project-local skill folders generated inside a repo, such as
+`.agents/skills` or `.opencode/skills`, are also generated outputs; install
+skills into managed project source first, then run `plan` / `apply`.
 
 ## Install
 
@@ -205,19 +205,27 @@ code-agnostic skills list
 code-agnostic agents list
 ```
 
-Manual skill install today:
+Install a local skill directory into managed source:
 
 ```bash
-mkdir -p ~/.config/code-agnostic/skills
-cp -R ./my-skill ~/.config/code-agnostic/skills/my-skill
+code-agnostic skills install ./my-skill --global
+code-agnostic skills install ./my-skill --workspace myworkspace
+code-agnostic projects add --name myproject --path .
+code-agnostic skills install ./my-skill --project myproject
 code-agnostic plan
 code-agnostic apply
 ```
 
-There is no `skills install` command yet; copy skills into managed source first,
-then use the normal `plan` / `apply` workflow.
-
-Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`. Codex generated skill outputs are written to `~/.agents/skills`, while Codex agents and config remain under `CODEX_HOME` when set, defaulting to `~/.codex`. Claude Code generated skills and agents are written under `~/.claude/skills` and `~/.claude/agents`, with workspace copies under repo-local `.claude/skills` and `.claude/agents`.
+Global skills live under `~/.config/code-agnostic/skills`. Workspace-local
+skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be
+inspected with `code-agnostic skills list -w <name>`. Project-local skills live
+under `~/.config/code-agnostic/projects/<name>/skills` and are generated into
+the registered project directory by `plan` / `apply`. Codex generated skill
+outputs are written to `~/.agents/skills`, while Codex agents and config remain
+under `CODEX_HOME` when set, defaulting to `~/.codex`. Claude Code generated
+skills and agents are written under `~/.claude/skills` and `~/.claude/agents`,
+with workspace/project copies under repo-local `.claude/skills` and
+`.claude/agents`.
 
 Project-local skills are not first-class source inputs in `code-agnostic` yet. If a target app discovers repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or user-created `.claude/skills`, treat those as unmanaged app inputs. Workspace sync writes only the exact generated paths recorded in `.sync-state.json`.
 
