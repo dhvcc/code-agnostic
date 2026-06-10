@@ -30,8 +30,10 @@ def apps_enable(obj: dict[str, str], app: str) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     service = AppsService(core)
-    service.enable(app.lower())
+    app = app.lower()
+    service.enable(app)
     ui.render_apps(service.list_status_rows())
+    ui.render_app_enabled_next_steps(app)
 
 
 @apps.command("disable", help="Disable app sync target.")
