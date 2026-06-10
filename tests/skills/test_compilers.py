@@ -82,6 +82,25 @@ def test_cursor_compiler_preserves_native_skill_overrides() -> None:
     assert payload["metadata"] == {"team": "frontend"}
 
 
+def test_cursor_compiler_preserves_legacy_globs_skill_override() -> None:
+    skill = Skill(
+        name="python-style",
+        source_path=Path("/fake/python-style/SKILL.md"),
+        metadata=SkillMetadata(
+            name="python-style",
+            description="Python style",
+            app_overrides={"cursor": {"globs": "**/*.py, scripts/**/*.py"}},
+        ),
+        content="Body.\n",
+    )
+
+    result = CursorSkillCompiler().compile(skill)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["globs"] == "**/*.py, scripts/**/*.py"
+
+
 def test_cursor_compiler_rejects_unsupported_skill_overrides() -> None:
     skill = Skill(
         name="react-patterns",

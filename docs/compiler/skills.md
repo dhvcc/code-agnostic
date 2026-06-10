@@ -63,7 +63,7 @@ Unknown keys fail validation.
 - Current Cursor, Codex, and OpenCode `SKILL.md` frontmatter does not represent
   per-skill tool permissions; `tools.*` is omitted from generated skill files
   and reported by `explain-lossiness`.
-- Cursor-native skill frontmatter fields such as `paths`,
+- Cursor-native skill frontmatter fields such as `paths`, legacy `globs`,
   `disable-model-invocation`, and `metadata` can be preserved through
   `x-cursor`.
 - Codex-native skill frontmatter currently supports `name` and `description`.
