@@ -18,6 +18,8 @@ def test_apps_enable_and_disable_updates_state(
 ) -> None:
     enable_result = cli_runner.invoke(cli, ["apps", "enable", "-a", "opencode"])
     assert enable_result.exit_code == 0
+    assert "code-agnostic plan -a opencode" in enable_result.output
+    assert "code-agnostic apply -a opencode" in enable_result.output
 
     list_after_enable = cli_runner.invoke(cli, ["apps", "list"])
     assert list_after_enable.exit_code == 0

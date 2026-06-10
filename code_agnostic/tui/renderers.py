@@ -281,6 +281,17 @@ class SyncConsoleUI:
             )
         )
 
+    def render_app_enabled_next_steps(self, app: str) -> None:
+        self.console.print(
+            UISection.note(
+                "next",
+                f"Preview and apply {app}.\n"
+                f"- code-agnostic plan -a {app}\n"
+                f"- code-agnostic apply -a {app}",
+                style=UIStyle.DIM.value,
+            )
+        )
+
     def render_list(
         self,
         title: str,

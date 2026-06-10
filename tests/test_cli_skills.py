@@ -9,6 +9,9 @@ def test_skills_list_empty(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(cli, ["skills", "list"])
     assert result.exit_code == 0
     assert "No global skills" in result.output
+    assert "Copy a skill into ~/.config/code-agnostic/skills/<name>" in result.output
+    assert "code-agnostic plan" in result.output
+    assert "code-agnostic apply" in result.output
 
 
 def test_skills_list_populated(
@@ -109,3 +112,22 @@ def test_skills_workspace_scoped(
     assert "ws-skill" in result.output
     assert "workspace:myws" in result.output
     assert "Source" in result.output
+
+
+def test_skills_workspace_list_empty(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    cli_runner.invoke(cli, ["workspaces", "add", "--name", "myws", "--path", str(ws)])
+
+    result = cli_runner.invoke(cli, ["skills", "list", "-w", "myws"])
+
+    assert result.exit_code == 0
+    assert "No workspace skills configured for myws" in result.output
+    assert (
+        "Copy a skill into ~/.config/code-agnostic/workspaces/myws/skills/<name>"
+        in result.output
+    )
+    assert "code-agnostic plan" in result.output
+    assert "code-agnostic apply" in result.output

@@ -41,11 +41,17 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
         ]
         for source in skill_sources
     ]
-    empty_message = (
-        f"No workspace skills configured for {workspace} in "
-        f"{compact_home_path(root / 'skills')}."
+    skill_dir = compact_home_path(root / "skills")
+    scope_message = (
+        f"No workspace skills configured for {workspace}"
         if workspace
-        else f"No global skills configured in {compact_home_path(root / 'skills')}."
+        else "No global skills configured"
+    )
+    empty_message = (
+        f"{scope_message} in {skill_dir}.\n"
+        f"- Copy a skill into {skill_dir}/<name>\n"
+        "- code-agnostic plan\n"
+        "- code-agnostic apply"
     )
     ui.render_list(
         "skills",
