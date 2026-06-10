@@ -10,15 +10,13 @@ from code_agnostic.cli.helpers import validate_resource_name, workspace_config_r
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.errors import SyncAppError
+from code_agnostic.skills.install_sources import (
+    SkillInstallSourceError,
+    cleanup_skill_install_resolution,
+    resolve_skill_install_source,
+)
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.utils import compact_home_path
-
-
-def _is_skill_source(path: Path) -> bool:
-    return path.is_dir() and (
-        (path / "SKILL.md").exists()
-        or ((path / "meta.yaml").exists() and (path / "prompt.md").exists())
-    )
 
 
 def _entries_containing_cwd(
@@ -85,6 +83,32 @@ def _install_root(
     )
 
 
+def _preflight_skill_destinations(
+    source_dirs: tuple[Path, ...], root: Path, scope: str
+) -> list[tuple[str, Path, Path]]:
+    installs: list[tuple[str, Path, Path]] = []
+    names = _validate_skill_source_names(source_dirs)
+    for name, source_dir in zip(names, source_dirs, strict=True):
+        destination = root / "skills" / name
+        if destination.exists():
+            raise click.ClickException(f"Skill already exists: {scope}:{name}")
+        installs.append((name, source_dir, destination))
+    return installs
+
+
+def _validate_skill_source_names(source_dirs: tuple[Path, ...]) -> list[str]:
+    names: list[str] = []
+    seen_names: set[str] = set()
+    for source_dir in source_dirs:
+        name = source_dir.name
+        validate_resource_name(name, "skill")
+        if name in seen_names:
+            raise click.ClickException(f"Duplicate skill name in source: {name}")
+        seen_names.add(name)
+        names.append(name)
+    return names
+
+
 @click.group(
     help=(
         "Manage source skill definitions. Commands use global source by default; "
@@ -95,28 +119,37 @@ def skills() -> None:
     pass
 
 
-@skills.command("install", help="Install a local skill directory into source config.")
-@click.argument("source", type=click.Path(path_type=Path))
+@skills.command("install", help="Install a skill source into source config.")
+@click.argument("source")
+@click.option(
+    "--skill",
+    "skill_selectors",
+    multiple=True,
+    help="Select a skill by name or source path; repeat to install multiple.",
+)
 @click.option("--global", "global_scope", is_flag=True, help="Install globally.")
 @workspace_option()
 @click.option("--project", help="Install into a registered project source.")
 @click.pass_obj
 def skills_install(
     obj: dict[str, str],
-    source: Path,
+    source: str,
+    skill_selectors: tuple[str, ...],
     global_scope: bool,
     workspace: str | None,
     project: str | None,
 ) -> None:
-    source = source.expanduser().resolve()
-    if not _is_skill_source(source):
-        raise click.ClickException(
-            "Invalid skill source: expected a directory containing SKILL.md "
-            "or meta.yaml and prompt.md."
-        )
-
-    name = source.name
-    validate_resource_name(name, "skill")
+    resolution = None
+    source_path = Path(source).expanduser()
+    if source_path.exists():
+        try:
+            resolution = resolve_skill_install_source(
+                source,
+                skill_selectors=skill_selectors,
+            )
+            _validate_skill_source_names(resolution.skill_dirs)
+        except SkillInstallSourceError as exc:
+            raise click.ClickException(str(exc)) from exc
 
     core = CoreRepository()
     root, scope, scope_note = _install_root(
@@ -125,17 +158,28 @@ def skills_install(
         workspace=workspace,
         project=project,
     )
-    destination = root / "skills" / name
-    if destination.exists():
-        raise click.ClickException(f"Skill already exists: {scope}:{name}")
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, destination)
-    if scope_note is not None:
-        click.echo(scope_note)
-    click.echo(f"Installed {scope} skill: {name}")
-    click.echo(f"Source: {compact_home_path(source)}")
-    click.echo(f"Destination: {compact_home_path(destination)}")
+    try:
+        if resolution is None:
+            resolution = resolve_skill_install_source(
+                source,
+                skill_selectors=skill_selectors,
+            )
+        installs = _preflight_skill_destinations(resolution.skill_dirs, root, scope)
+        for _name, _source_dir, destination in installs:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+        for name, source_dir, destination in installs:
+            shutil.copytree(source_dir, destination)
+            if scope_note is not None:
+                click.echo(scope_note)
+                scope_note = None
+            click.echo(f"Installed {scope} skill: {name}")
+            click.echo(f"Source: {compact_home_path(source_dir)}")
+            click.echo(f"Destination: {compact_home_path(destination)}")
+    except SkillInstallSourceError as exc:
+        raise click.ClickException(str(exc)) from exc
+    finally:
+        if resolution is not None:
+            cleanup_skill_install_resolution(resolution)
 
 
 @skills.command("list", help="List global skills, or workspace skills with -w.")

@@ -30,7 +30,8 @@ Scopes should be explicit:
 
 Project-aware `plan`, `apply`, and `status` support project-local skills.
 
-`skills install` supports local skill directories:
+`skills install` supports local skill directories and writes them into managed
+source first:
 
 ```bash
 code-agnostic skills install ./my-skill --project <name>
@@ -49,11 +50,34 @@ when there is exactly one match, otherwise the containing workspace when there
 is exactly one match. When there is no unique scope, pass `--global`,
 `--project`, or `--workspace`.
 
+Remote GitHub-style sources are also supported:
+
+```bash
+code-agnostic skills install owner/repo --global
+code-agnostic skills install https://github.com/owner/repo --workspace <name>
+code-agnostic skills install https://github.com/owner/repo/tree/main/path/to/skills --skill reviewer --skill triage --project <name>
+```
+
+Remote source forms:
+
+- `owner/repo`
+- `https://github.com/owner/repo`
+- `https://github.com/owner/repo/tree/<ref>/<path>`
+
+Remote resolution should find skill directories using the same source contract
+as local installs: `SKILL.md` or `meta.yaml` plus `prompt.md`. If more than one
+candidate is found, install fails closed unless one or more `--skill` values
+select the intended skills. `--skill` may be repeated.
+
 ## Safety
 
 `skills install` should write only to code-agnostic source first. It must not let
 third-party installers write directly into `.agents`, `.cursor`, `.opencode`, or
 `.claude` target directories as the managed source of truth.
+
+Remote installs are implemented as `code-agnostic` resolving a GitHub source and
+copying selected skills into the chosen managed source scope, not as a direct
+target-app install flow.
 
 `plan` should preview the generated repo-local outputs before any target files
 are written. `apply` should keep using managed path ownership and conflict
@@ -62,7 +86,6 @@ detection for generated files.
 ## Out of Scope
 
 - MCP install/add flows.
-- Remote skills.sh/GitHub package references.
 - Interactive scope prompts.
 - A general plugin marketplace.
 - Replacing workspaces. Workspaces remain the multi-repo propagation model.

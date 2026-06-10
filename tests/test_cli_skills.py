@@ -1,6 +1,7 @@
 """Tests for skills CLI commands."""
 
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -22,6 +23,28 @@ def _bundle_skill(path: Path) -> Path:
     )
     (path / "prompt.md").write_bytes(b"skill content\n")
     return path
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _committed_repo(repo: Path) -> Path:
+    repo.mkdir()
+    subprocess.run(
+        ["git", "init", str(repo)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    return repo
 
 
 def test_skills_list_empty(minimal_shared_config: Path, cli_runner) -> None:
@@ -171,7 +194,8 @@ def test_skills_install_rejects_invalid_source(
     result = cli_runner.invoke(cli, ["skills", "install", str(source)])
 
     assert result.exit_code != 0
-    assert "Invalid skill source" in result.output
+    assert "No skill directories found" in result.output
+    assert "not-a-skill" in result.output
 
 
 def test_skills_install_rejects_path_like_destination_name(
@@ -199,6 +223,69 @@ def test_skills_install_refuses_duplicate_destination(
     assert result.exit_code != 0
     assert "Skill already exists: global:my-skill" in result.output
     assert (existing / "SKILL.md").read_bytes() == b"existing\n"
+
+
+def test_skills_install_requires_selector_for_multiple_candidates(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    source = tmp_path / "source"
+    _legacy_skill(source / "skills" / "alpha")
+    _legacy_skill(source / "skills" / "beta")
+
+    result = cli_runner.invoke(cli, ["skills", "install", "--global", str(source)])
+
+    assert result.exit_code != 0
+    assert "Multiple skill candidates found" in result.output
+    assert "skills/alpha" in result.output
+    assert "skills/beta" in result.output
+    assert "--skill" in result.output
+    assert not (core_root / "skills" / "alpha").exists()
+    assert not (core_root / "skills" / "beta").exists()
+
+
+def test_skills_install_accepts_repeated_skill_selectors(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    source = tmp_path / "source"
+    _legacy_skill(source / "skills" / "alpha", b"alpha\n")
+    _legacy_skill(source / "skills" / "beta", b"beta\n")
+
+    result = cli_runner.invoke(
+        cli,
+        [
+            "skills",
+            "install",
+            "--global",
+            "--skill",
+            "beta",
+            "--skill",
+            "skills/alpha",
+            str(source),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Installed global skill: beta" in result.output
+    assert "Installed global skill: alpha" in result.output
+    assert (core_root / "skills" / "alpha" / "SKILL.md").read_bytes() == b"alpha\n"
+    assert (core_root / "skills" / "beta" / "SKILL.md").read_bytes() == b"beta\n"
+
+
+def test_skills_install_accepts_local_git_repository(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    repo = _committed_repo(tmp_path / "repo")
+    _legacy_skill(repo / "skills" / "reviewer", b"from git\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "add skill")
+
+    result = cli_runner.invoke(cli, ["skills", "install", "--global", str(repo)])
+
+    assert result.exit_code == 0
+    assert "Installed global skill: reviewer" in result.output
+    assert (core_root / "skills" / "reviewer" / "SKILL.md").read_bytes() == (
+        b"from git\n"
+    )
 
 
 def test_skills_install_does_not_write_direct_app_targets(
