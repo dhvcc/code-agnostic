@@ -107,7 +107,7 @@ code-agnostic apply
 | Workspace root `AGENTS.md` link | yes | yes | yes | yes |
 | Native repo config include for workspace `AGENTS.md` | yes | -- | -- | -- |
 | Repo/subdir gets shared workspace instructions today | yes | -- | yes | yes |
-| Nested `AGENTS.md` discovery | -- | -- | yes | -- |
+| Nested `AGENTS.md` discovery | -- | yes | yes | -- |
 | Workspace propagation | yes | yes | yes | yes |
 | Import from | yes | yes | yes | yes |
 | Interactive import (TUI) | yes | yes | yes | yes |
@@ -120,7 +120,7 @@ Cursor workspace propagation writes repo-local MCP, skills, and agents when thos
 
 OpenCode workspace configs write project-root `opencode.json` files that include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`. Claude Code receives workspace instructions through generated `CLAUDE.local.md` files, never by editing committed `CLAUDE.md`.
 
-Cursor documents `AGENTS.md` support in project roots, with nested support planned. `code-agnostic` does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load a root `AGENTS.md` file that already exists in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
+Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-agnostic` does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load `AGENTS.md` files that already exist in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
 
 ## Features
 

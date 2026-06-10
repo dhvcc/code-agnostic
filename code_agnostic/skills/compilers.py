@@ -12,7 +12,14 @@ from code_agnostic.skills.models import Skill
 
 _CODEX_SKILL_FRONTMATTER_KEYS = frozenset({"name", "description"})
 _CURSOR_SKILL_FRONTMATTER_KEYS = frozenset(
-    {"name", "description", "paths", "disable-model-invocation", "metadata"}
+    {
+        "name",
+        "description",
+        "paths",
+        "globs",
+        "disable-model-invocation",
+        "metadata",
+    }
 )
 _OPENCODE_SKILL_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "license", "compatibility", "metadata"}
