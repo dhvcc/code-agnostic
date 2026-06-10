@@ -1,6 +1,7 @@
 """Tests for skills CLI commands."""
 
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -176,6 +177,8 @@ def test_skills_install_rejects_invalid_source(
 def test_skills_install_rejects_path_like_destination_name(
     minimal_shared_config: Path, tmp_path: Path, cli_runner
 ) -> None:
+    if sys.platform == "win32":
+        pytest.skip("Windows parses drive-like names as paths before CLI validation.")
     source = _legacy_skill(tmp_path / "C:bad")
 
     result = cli_runner.invoke(cli, ["skills", "install", str(source)])

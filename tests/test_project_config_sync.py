@@ -230,11 +230,13 @@ def test_project_status_cli_renders_project_section(
     _write_project_skill(core)
     enable_app("codex")
 
+    rows = StatusService().build_project_status(
+        core, [_codex_service(tmp_path / ".codex")]
+    )
+    assert rows[0].detail == "missing .agents/skills/project-tool/SKILL.md"
+
     result = cli_runner.invoke(cli, ["status"])
 
     assert result.exit_code == 0
     assert "project sync" in result.output
     assert "service-api" in result.output
-    assert ".agents/skills" in result.output
-    assert "project-tool" in result.output
-    assert "SKILL.md" in result.output
