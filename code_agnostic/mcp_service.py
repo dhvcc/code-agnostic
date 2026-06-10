@@ -9,7 +9,9 @@ from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.utils import common_mcp_to_dto
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
+from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from code_agnostic.imports.models import ConflictPolicy
+from code_agnostic.spec.loaders import validate_schema_payload
 from code_agnostic.utils import read_json_safe, write_json
 
 
@@ -33,11 +35,16 @@ class MCPManagementService:
 
     def _load_raw(self, workspace: str | None = None) -> dict[str, Any]:
         path = self._mcp_path(workspace)
-        payload, _ = read_json_safe(path)
-        if not isinstance(payload, dict):
+        if not path.exists():
             return {"mcpServers": {}}
+        payload, error = read_json_safe(path)
+        if error is not None:
+            raise InvalidJsonFormatError(path, error)
+        if not isinstance(payload, dict):
+            raise InvalidConfigSchemaError(path, "must be a JSON object")
+        validate_schema_payload(path, "mcp.base.schema.json", payload)
         if not isinstance(payload.get("mcpServers"), dict):
-            payload["mcpServers"] = {}
+            raise InvalidConfigSchemaError(path, "must contain object key 'mcpServers'")
         return payload
 
     def _save_raw(self, payload: dict[str, Any], workspace: str | None = None) -> None:
