@@ -169,6 +169,20 @@ def test_mcp_add_conflict_overwrite(
     assert payload["mcpServers"]["demo"]["args"] == ["new"]
 
 
+def test_mcp_add_rejects_invalid_existing_source(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    source = core_root / "config" / "mcp.base.json"
+    original = '{"mcpServers": []}\n'
+    source.write_text(original, encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["mcp", "add", "demo", "--command", "uvx"])
+
+    assert result.exit_code != 0
+    assert "Invalid config schema" in result.output
+    assert source.read_text(encoding="utf-8") == original
+
+
 def test_mcp_remove_existing(minimal_shared_config: Path, cli_runner) -> None:
     cli_runner.invoke(cli, ["mcp", "add", "demo", "--command", "uvx"])
     result = cli_runner.invoke(cli, ["mcp", "remove", "demo"])
@@ -208,6 +222,25 @@ def test_mcp_workspace_scoped(
 
     global_list = cli_runner.invoke(cli, ["mcp", "list"])
     assert "local" not in global_list.output
+
+
+def test_mcp_workspace_add_rejects_invalid_existing_source(
+    minimal_shared_config: Path, core_root: Path, tmp_path: Path, cli_runner
+) -> None:
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    cli_runner.invoke(cli, ["workspaces", "add", "--name", "myws", "--path", str(ws)])
+    source = core_root / "workspaces" / "myws" / "mcp.base.json"
+    original = '{"mcpServers": []}\n'
+    source.write_text(original, encoding="utf-8")
+
+    result = cli_runner.invoke(
+        cli, ["mcp", "add", "local", "--command", "uvx", "-w", "myws"]
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid config schema" in result.output
+    assert source.read_text(encoding="utf-8") == original
 
 
 def test_mcp_list_workspace_not_found(minimal_shared_config: Path, cli_runner) -> None:
