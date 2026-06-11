@@ -565,6 +565,86 @@ def test_restore_active_revision_preflights_pending_repair_before_writes(
     assert pending_path.exists()
 
 
+def test_execute_reports_pending_repair_failure_without_writes(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    primary = tmp_path / "primary.txt"
+    sibling = tmp_path / "sibling.txt"
+    executor = SyncExecutor(core=CoreRepository(core_root))
+    first_plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=primary,
+                status=ActionStatus.CREATE,
+                detail="create primary",
+                payload="applied primary\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=sibling,
+                status=ActionStatus.CREATE,
+                detail="create sibling",
+                payload="applied sibling\n",
+                scope="app:test:text",
+                app="opencode",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+    applied, failed, failures = executor.execute(first_plan)
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+
+    active_revision = json.loads(
+        (core_root / ".sync-revisions" / "active.json").read_text(encoding="utf-8")
+    )
+    manifest_path = Path(active_revision["manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    primary_entry = next(
+        entry for entry in manifest["targets"] if entry["path"] == str(primary)
+    )
+    Path(primary_entry["artifact_path"]).unlink()
+    pending_path = core_root / ".sync-revisions" / "pending.json"
+    pending_path.write_text('{"revision_id": "pending"}\n', encoding="utf-8")
+    primary.write_text("local primary\n", encoding="utf-8")
+    sibling.write_text("local sibling\n", encoding="utf-8")
+
+    second_plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=tmp_path / "new.txt",
+                status=ActionStatus.CREATE,
+                detail="create new file",
+                payload="new\n",
+                scope="app:test:text",
+                app="opencode",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = executor.execute(second_plan)
+
+    assert applied == 0
+    assert failed == 1
+    assert len(failures) == 1
+    assert "pending revision repair failed" in failures[0]
+    assert "Missing revision artifact" in failures[0]
+    assert primary.read_text(encoding="utf-8") == "local primary\n"
+    assert sibling.read_text(encoding="utf-8") == "local sibling\n"
+    assert not (tmp_path / "new.txt").exists()
+    assert pending_path.exists()
+
+
 def test_execute_places_written_files_via_staging_replace(
     minimal_shared_config: Path,
     core_root: Path,

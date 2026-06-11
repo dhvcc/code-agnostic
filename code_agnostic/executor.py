@@ -205,7 +205,10 @@ class SyncExecutor:
         failed = 0
         failures: list[str] = []
         revision_records = self._prepare_revision_records(plan, persist_state)
-        self._repair_pending_revisions(revision_records)
+        try:
+            self._repair_pending_revisions(revision_records)
+        except Exception as exc:
+            return 0, 1, [f"pending revision repair failed: {exc}"]
         conflict_failures = self._planned_conflict_failures(plan)
         if conflict_failures:
             return 0, len(conflict_failures), conflict_failures
