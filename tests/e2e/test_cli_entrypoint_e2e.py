@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -219,3 +220,67 @@ def test_entrypoint_skills_remove_rejects_path_like_name(tmp_path: Path) -> None
     assert result.returncode != 0
     assert "Invalid skill name" in result.stderr
     assert victim.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_entrypoint_apply_reports_pending_repair_failure_without_writes(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    enable = _run_cli(home, "apps", "enable", "-a", "opencode")
+    assert enable.returncode == 0, enable.stderr
+
+    source_root = home / ".config" / "code-agnostic" / "skills"
+    reviewer = source_root / "reviewer"
+    reviewer.mkdir(parents=True)
+    (reviewer / "SKILL.md").write_text(
+        "---\n"
+        "name: reviewer\n"
+        "description: Review code\n"
+        "---\n"
+        "\n"
+        "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    first_apply = _run_cli(home, "apply", "-a", "opencode")
+    assert first_apply.returncode == 0, first_apply.stderr + first_apply.stdout
+
+    revisions_root = home / ".config" / "code-agnostic" / ".sync-revisions"
+    active_revision = json.loads(
+        (revisions_root / "active.json").read_text(encoding="utf-8")
+    )
+    manifest_path = Path(active_revision["manifest_path"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    generated_skill = home / ".config" / "opencode" / "skills" / "reviewer" / "SKILL.md"
+    skill_entry = next(
+        entry for entry in manifest["targets"] if entry["path"] == str(generated_skill)
+    )
+    Path(skill_entry["artifact_path"]).unlink()
+    pending_path = revisions_root / "pending.json"
+    pending_path.write_text('{"revision_id": "pending"}\n', encoding="utf-8")
+    generated_skill.write_text("local edits\n", encoding="utf-8")
+
+    triage = source_root / "triage"
+    triage.mkdir()
+    (triage / "SKILL.md").write_text(
+        "---\n"
+        "name: triage\n"
+        "description: Triage code\n"
+        "---\n"
+        "\n"
+        "Triage carefully.\n",
+        encoding="utf-8",
+    )
+
+    second_apply = _run_cli(home, "apply", "-a", "opencode")
+
+    assert second_apply.returncode != 0
+    assert "pending revision repair failed" in second_apply.stdout
+    assert "Missing revision artifact" in second_apply.stdout
+    assert "Traceback" not in second_apply.stderr
+    assert generated_skill.read_text(encoding="utf-8") == "local edits\n"
+    assert not (
+        home / ".config" / "opencode" / "skills" / "triage" / "SKILL.md"
+    ).exists()
+    assert pending_path.exists()
