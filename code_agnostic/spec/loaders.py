@@ -156,6 +156,7 @@ def load_mcp_base(path: Path) -> dict[str, MCPServerDTO]:
             type=MCPServerType(str(config["type"])),
             command=str(config["command"]) if config.get("command") else None,
             args=[str(item) for item in config.get("args", [])],
+            cwd=str(config["cwd"]) if config.get("cwd") else None,
             url=str(config["url"]) if config.get("url") else None,
             timeout_ms=(
                 int(config["timeout"])

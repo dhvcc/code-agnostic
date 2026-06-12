@@ -12,6 +12,7 @@ def test_claude_mapper_from_common_stdio_and_http() -> None:
                 type=MCPServerType.STDIO,
                 command="uvx",
                 args=["tool"],
+                cwd="/tmp/project",
                 env={"TOKEN": "${TOKEN}"},
                 timeout_ms=3000,
             ),
@@ -29,6 +30,7 @@ def test_claude_mapper_from_common_stdio_and_http() -> None:
         "type": "stdio",
         "command": "uvx",
         "args": ["tool"],
+        "cwd": "/tmp/project",
         "env": {"TOKEN": "${TOKEN}"},
         "timeout": 3000,
     }
@@ -49,6 +51,7 @@ def test_claude_mapper_to_common() -> None:
                 "type": "stdio",
                 "command": "uvx",
                 "args": ["tool"],
+                "cwd": "/tmp/project",
                 "env": {"TOKEN": "${TOKEN}"},
                 "timeout": 3000,
             },
@@ -66,6 +69,7 @@ def test_claude_mapper_to_common() -> None:
         type=MCPServerType.STDIO,
         command="uvx",
         args=["tool"],
+        cwd="/tmp/project",
         env={"TOKEN": "${TOKEN}"},
         timeout_ms=3000,
     )

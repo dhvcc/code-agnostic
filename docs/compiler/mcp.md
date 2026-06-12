@@ -21,6 +21,7 @@ Per-server fields for v1:
 - `type`
 - `command`
 - `args`
+- `cwd`
 - `url`
 - `timeout`
 - `headers`
@@ -48,6 +49,7 @@ Target markers are recognized only for known targetable app ids.
 | `type` | supported | compiled | compiled | compiled | compiled |
 | `command` | supported | native | native | native | native |
 | `args` | supported | native | native | native | native |
+| `cwd` | supported for local servers | ignored | native | native for local servers | native |
 | `url` | supported | native | native | native | native |
 | `headers` | supported | native | compiled | native | native |
 | `env` | supported | native | compiled | native for local servers; rejected for remote servers | native |
@@ -62,6 +64,9 @@ Target markers are recognized only for known targetable app ids.
 - If a property is not in this table, it is not part of the compiler contract.
 - Target-specific MCP extensions belong under `x-*` only after a concrete use case and test exist.
 - Canonical `timeout` is expressed in milliseconds.
+- Canonical `cwd` is expressed as a string and applies only to local/stdio MCP
+  servers. It is currently omitted for Cursor because the official Cursor MCP
+  docs checked in this run document `envFile` but did not establish `cwd`.
 - OpenCode's current schema allows `environment` only on local MCP servers.
   Remote OpenCode MCP servers can carry `headers` and OAuth config, but not
   per-server environment variables.

@@ -82,6 +82,7 @@ class CodexMCPMapper(IAppMCPMapper):
                 args=[str(item) for item in server.get("args", [])]
                 if isinstance(server.get("args"), list)
                 else [],
+                cwd=server.get("cwd") if isinstance(server.get("cwd"), str) else None,
                 url=url if isinstance(url, str) else None,
                 timeout_ms=_coerce_timeout_ms(server.get("tool_timeout_sec")),
                 headers=headers,
@@ -100,6 +101,8 @@ class CodexMCPMapper(IAppMCPMapper):
                 out["command"] = server.command
                 if server.args:
                     out["args"] = deepcopy(server.args)
+                if server.cwd is not None:
+                    out["cwd"] = server.cwd
             else:
                 if not server.url:
                     continue

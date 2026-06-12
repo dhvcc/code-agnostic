@@ -67,6 +67,7 @@ def test_codex_mapper_from_common_stdio_server() -> None:
                 type=MCPServerType.STDIO,
                 command="uvx",
                 args=["demo"],
+                cwd="/tmp/project",
             ),
         }
     )
@@ -74,6 +75,7 @@ def test_codex_mapper_from_common_stdio_server() -> None:
     server = mapped["local"]
     assert server["command"] == "uvx"
     assert server["args"] == ["demo"]
+    assert server["cwd"] == "/tmp/project"
     assert "url" not in server
 
 
@@ -133,6 +135,7 @@ def test_codex_mapper_to_common_stdio_server() -> None:
             "local": {
                 "command": "npx",
                 "args": ["-y", "demo"],
+                "cwd": "/tmp/project",
             }
         }
     )
@@ -141,6 +144,7 @@ def test_codex_mapper_to_common_stdio_server() -> None:
     assert server.type == MCPServerType.STDIO
     assert server.command == "npx"
     assert server.args == ["-y", "demo"]
+    assert server.cwd == "/tmp/project"
 
 
 def test_codex_mapper_to_common_with_tool_timeout() -> None:

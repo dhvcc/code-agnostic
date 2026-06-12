@@ -94,6 +94,26 @@ def test_add_with_timeout(service: MCPManagementService) -> None:
     assert servers["github"].timeout_ms == 900000
 
 
+def test_add_with_cwd(service: MCPManagementService) -> None:
+    service.add_server(
+        name="github",
+        command="npx",
+        args=["mcp-github"],
+        cwd="/tmp/project",
+    )
+    servers = service.list_servers()
+    assert servers["github"].cwd == "/tmp/project"
+
+
+def test_add_rejects_cwd_for_http(service: MCPManagementService) -> None:
+    with pytest.raises(ValueError, match="cwd is only supported"):
+        service.add_server(
+            name="remote",
+            url="https://example.com/mcp",
+            cwd="/tmp/project",
+        )
+
+
 def test_add_conflict_fail(service: MCPManagementService) -> None:
     service.add_server(name="demo", command="uvx", args=["tool"])
     with pytest.raises(ValueError, match="already exists"):

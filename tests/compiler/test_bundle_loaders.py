@@ -246,6 +246,7 @@ def test_load_mcp_base(tmp_path: Path) -> None:
         "    args:\n"
         "      - -y\n"
         "      - '@modelcontextprotocol/server-github'\n"
+        "    cwd: /tmp/project\n"
         "    timeout: 900000\n"
         "    env:\n"
         "      GITHUB_TOKEN: ${GITHUB_TOKEN}\n",
@@ -258,6 +259,7 @@ def test_load_mcp_base(tmp_path: Path) -> None:
     assert github.type == MCPServerType.STDIO
     assert github.command == "npx"
     assert github.args == ["-y", "@modelcontextprotocol/server-github"]
+    assert github.cwd == "/tmp/project"
     assert github.timeout_ms == 900000
     assert github.env == {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
 

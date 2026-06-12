@@ -40,6 +40,7 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "cwd": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "minLength": 1 },
         "timeout": { "type": "integer", "minimum": 0 },
         "headers": { "$ref": "#/$defs/stringMap" },
@@ -50,6 +51,17 @@
       "anyOf": [
         { "required": ["command"] },
         { "required": ["url"] }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["url"],
+            "not": { "required": ["command"] }
+          },
+          "then": {
+            "not": { "required": ["cwd"] }
+          }
+        }
       ]
     }
   }

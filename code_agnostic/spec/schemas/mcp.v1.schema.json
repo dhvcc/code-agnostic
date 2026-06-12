@@ -42,6 +42,7 @@
           "type": "array",
           "items": { "type": "string" }
         },
+        "cwd": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "minLength": 1 },
         "timeout": { "type": "integer", "minimum": 0 },
         "headers": {
@@ -74,7 +75,8 @@
             }
           },
           "then": {
-            "required": ["url"]
+            "required": ["url"],
+            "not": { "required": ["cwd"] }
           }
         }
       ]

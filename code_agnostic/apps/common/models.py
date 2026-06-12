@@ -22,6 +22,7 @@ class MCPServerDTO:
     type: MCPServerType
     command: str | None = None
     args: list[str] = field(default_factory=list)
+    cwd: str | None = None
     url: str | None = None
     timeout_ms: int | None = None
     headers: dict[str, str] = field(default_factory=dict)

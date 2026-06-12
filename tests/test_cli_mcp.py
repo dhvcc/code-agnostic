@@ -87,6 +87,48 @@ def test_mcp_add_with_timeout(
     assert payload["mcpServers"]["github"]["timeout"] == 900000
 
 
+def test_mcp_add_with_cwd(
+    minimal_shared_config: Path, core_root: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(
+        cli,
+        [
+            "mcp",
+            "add",
+            "github",
+            "--command",
+            "npx",
+            "--args",
+            "mcp-github",
+            "--cwd",
+            "/tmp/project",
+        ],
+    )
+    assert result.exit_code == 0
+
+    payload = json.loads(
+        (core_root / "config" / "mcp.base.json").read_text(encoding="utf-8")
+    )
+    assert payload["mcpServers"]["github"]["cwd"] == "/tmp/project"
+
+
+def test_mcp_add_rejects_cwd_for_http(minimal_shared_config: Path, cli_runner) -> None:
+    result = cli_runner.invoke(
+        cli,
+        [
+            "mcp",
+            "add",
+            "remote",
+            "--url",
+            "https://example.com/mcp",
+            "--cwd",
+            "/tmp/project",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "cwd is only supported" in result.output
+
+
 def test_mcp_add_with_env(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(
         cli,

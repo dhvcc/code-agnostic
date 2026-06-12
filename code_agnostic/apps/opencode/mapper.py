@@ -32,6 +32,9 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                     type=MCPServerType.STDIO,
                     command=command,
                     args=args,
+                    cwd=server.get("cwd")
+                    if isinstance(server.get("cwd"), str)
+                    else None,
                     timeout_ms=(
                         int(server["timeout"])
                         if isinstance(server.get("timeout"), int)
@@ -90,6 +93,8 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                     continue
                 out["type"] = "local"
                 out["command"] = [server.command, *server.args]
+                if server.cwd is not None:
+                    out["cwd"] = server.cwd
             else:
                 if not server.url:
                     continue

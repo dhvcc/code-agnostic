@@ -564,6 +564,10 @@
           },
           "description": "Command and arguments to run the MCP server"
         },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the MCP server process. Relative paths resolve from the workspace directory."
+        },
         "environment": {
           "type": "object",
           "additionalProperties": {

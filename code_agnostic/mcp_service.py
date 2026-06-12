@@ -61,6 +61,7 @@ class MCPManagementService:
         *,
         command: str | None = None,
         args: list[str] | None = None,
+        cwd: str | None = None,
         url: str | None = None,
         timeout_ms: int | None = None,
         headers: dict[str, str] | None = None,
@@ -86,7 +87,11 @@ class MCPManagementService:
             entry["command"] = command
             if args:
                 entry["args"] = args
+            if cwd:
+                entry["cwd"] = cwd
         elif url is not None:
+            if cwd:
+                raise ValueError("cwd is only supported for stdio MCP servers")
             entry["url"] = url
 
         if timeout_ms is not None:
