@@ -6,7 +6,36 @@ from rich.console import Console
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.cli.options import app_option, verbose_option
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.models import SyncPlan
 from code_agnostic.tui import SyncConsoleUI
+
+
+def _apply_next_steps(plan: SyncPlan, target: str) -> str | None:
+    if not plan.actions:
+        return None
+
+    normalized_target = target.lower()
+    target_flag = "" if normalized_target == "all" else f" -a {normalized_target}"
+    lines = [
+        (
+            "Managed outputs were written. Check drift or repair active synced "
+            "outputs if target files change later."
+        ),
+        f"- code-agnostic status{target_flag}",
+    ]
+
+    if any(action.workspace is None for action in plan.actions):
+        lines.append("- code-agnostic restore")
+
+    workspace_names = sorted(
+        {action.workspace for action in plan.actions if action.workspace}
+    )
+    for workspace_name in workspace_names[:3]:
+        lines.append(f"- code-agnostic restore -w {workspace_name}")
+    if len(workspace_names) > 3:
+        lines.append("- code-agnostic restore -w <workspace>")
+
+    return "\n".join(lines)
 
 
 @click.command(help="Apply planned sync changes.")
@@ -36,7 +65,10 @@ def apply(obj: dict[str, str], app: str, verbose: bool) -> None:
         )
 
     applied, failed, failures = apps.execute_plan(scoped_plan)
-    ui.render_apply_result(applied, failed, failures)
+    next_steps = (
+        _apply_next_steps(scoped_plan, target) if applied > 0 and failed == 0 else None
+    )
+    ui.render_apply_result(applied, failed, failures, next_steps=next_steps)
 
     if failed:
         raise click.exceptions.Exit(1)
