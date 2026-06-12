@@ -211,7 +211,7 @@ class ImportService:
                 if action.source is None or action.target is None:
                     failures.append("missing source/target")
                     continue
-                if not action.source.exists() and not action.source.is_symlink():
+                if not action.source.exists():
                     failures.append(f"Source path missing: {action.source}")
                 failures.extend(self._preflight_parent(action.target))
                 continue

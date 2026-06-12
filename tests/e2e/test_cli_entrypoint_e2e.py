@@ -158,6 +158,44 @@ def test_entrypoint_import_apply_preflights_before_writing(
     assert (hub_root / "skills").read_text(encoding="utf-8") == "not a directory\n"
 
 
+def test_entrypoint_import_apply_preflights_broken_symlink_before_writing(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    codex_config = home / ".codex" / "config.toml"
+    codex_config.parent.mkdir(parents=True)
+    codex_config.write_text(
+        '[mcp_servers.demo]\ncommand = "uvx"\n',
+        encoding="utf-8",
+    )
+
+    source_skills = home / ".agents" / "skills"
+    source_skills.mkdir(parents=True)
+    broken_skill = source_skills / "reviewer"
+    broken_skill.symlink_to(home / "missing-skill")
+
+    apply = _run_cli(
+        home,
+        "import",
+        "apply",
+        "-a",
+        "codex",
+        "--include",
+        "mcp",
+        "--include",
+        "skills",
+        "--follow-symlinks",
+    )
+
+    hub_mcp = home / ".config" / "code-agnostic" / "config" / "mcp.base.json"
+    assert apply.returncode != 0
+    assert "failed" in apply.stdout
+    assert "Source path missing" in apply.stdout
+    assert broken_skill.name in apply.stdout
+    assert not hub_mcp.exists()
+
+
 def test_entrypoint_status_scopes_app_config_errors(
     tmp_path: Path,
 ) -> None:
