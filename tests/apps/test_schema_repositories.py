@@ -154,8 +154,10 @@ def test_opencode_schema_repository_fallback_matches_current_agent_and_permissio
     permission_properties = schema["$defs"]["PermissionConfig"]["anyOf"][1][
         "properties"
     ]
+    mcp_local_properties = schema["$defs"]["McpLocalConfig"]["properties"]
     assert "scout" not in agent_properties
     assert agent_config_properties["variant"]["type"] == "string"
+    assert mcp_local_properties["cwd"]["type"] == "string"
     assert "repo_clone" not in permission_properties
     assert "repo_overview" not in permission_properties
 

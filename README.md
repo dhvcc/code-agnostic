@@ -154,6 +154,7 @@ Add, remove, and list MCP servers without editing JSON by hand.
 
 ```bash
 code-agnostic mcp add github --command npx --args @modelcontextprotocol/server-github --env GITHUB_TOKEN
+code-agnostic mcp add local-docs --command uvx --args docs-mcp --cwd ~/code/docs
 code-agnostic mcp list
 code-agnostic mcp remove github
 ```

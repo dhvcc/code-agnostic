@@ -11,6 +11,7 @@ def test_opencode_mapper_from_common() -> None:
                 type=MCPServerType.STDIO,
                 command="npx",
                 args=["-y", "demo"],
+                cwd="/tmp/project",
                 timeout_ms=900000,
             ),
             "remote": MCPServerDTO(
@@ -30,6 +31,7 @@ def test_opencode_mapper_from_common() -> None:
     assert mapped["local"] == {
         "type": "local",
         "command": ["npx", "-y", "demo"],
+        "cwd": "/tmp/project",
         "timeout": 900000,
         "enabled": True,
     }
@@ -50,7 +52,11 @@ def test_opencode_mapper_to_common() -> None:
     mapper = OpenCodeMCPMapper()
     mapped = mapper.to_common(
         {
-            "stdio": {"type": "local", "command": ["python", "-m", "server"]},
+            "stdio": {
+                "type": "local",
+                "command": ["python", "-m", "server"],
+                "cwd": "/tmp/project",
+            },
             "http": {"type": "remote", "url": "https://example.com/http"},
             "oauth": {
                 "type": "remote",
@@ -69,6 +75,7 @@ def test_opencode_mapper_to_common() -> None:
         type=MCPServerType.STDIO,
         command="python",
         args=["-m", "server"],
+        cwd="/tmp/project",
     )
     assert mapped["http"].type == MCPServerType.HTTP
     assert mapped["oauth"].type == MCPServerType.OAUTH

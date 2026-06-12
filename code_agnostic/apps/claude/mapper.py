@@ -40,6 +40,9 @@ class ClaudeMCPMapper(IAppMCPMapper):
                     type=MCPServerType.STDIO,
                     command=command,
                     args=_as_list(server.get("args")),
+                    cwd=server.get("cwd")
+                    if isinstance(server.get("cwd"), str)
+                    else None,
                     env=_as_str_dict(server.get("env")),
                     headers=_as_str_dict(server.get("headers")),
                     timeout_ms=_timeout(server.get("timeout")),
@@ -70,6 +73,8 @@ class ClaudeMCPMapper(IAppMCPMapper):
                 out["command"] = server.command
                 if server.args:
                     out["args"] = deepcopy(server.args)
+                if server.cwd is not None:
+                    out["cwd"] = server.cwd
             else:
                 if not server.url:
                     continue

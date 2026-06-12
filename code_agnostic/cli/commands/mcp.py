@@ -63,6 +63,7 @@ def mcp_list(obj: dict[str, str], workspace: str | None) -> None:
 @click.option(
     "--args", "args_str", default=None, help="Comma-separated args for stdio server."
 )
+@click.option("--cwd", default=None, help="Working directory for stdio server.")
 @click.option("--url", default=None, help="URL for HTTP/SSE server.")
 @click.option(
     "--timeout-ms",
@@ -92,6 +93,7 @@ def mcp_add(
     name: str,
     command: str | None,
     args_str: str | None,
+    cwd: str | None,
     url: str | None,
     timeout_ms: int | None,
     env_pairs: tuple[str, ...],
@@ -110,6 +112,7 @@ def mcp_add(
             name=name,
             command=command,
             args=args or None,
+            cwd=cwd,
             url=url,
             timeout_ms=timeout_ms,
             env=env or None,
