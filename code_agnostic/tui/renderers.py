@@ -139,7 +139,11 @@ class SyncConsoleUI:
         return "No changes needed.\n- code-agnostic status"
 
     def render_apply_result(
-        self, applied: int, failed: int, failures: list[str]
+        self,
+        applied: int,
+        failed: int,
+        failures: list[str],
+        next_steps: str | None = None,
     ) -> None:
         self.console.print(ApplyTable.stats_panel(applied=applied, failed=failed))
         if failures:
@@ -148,6 +152,10 @@ class SyncConsoleUI:
             )
             self.console.print(
                 UISection.note("failures", failure_text, style=UIStyle.RED.value)
+            )
+        if next_steps:
+            self.console.print(
+                UISection.note("next", next_steps, style=UIStyle.DIM.value)
             )
 
     def render_workspace_saved(

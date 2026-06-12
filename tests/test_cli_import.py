@@ -74,6 +74,7 @@ def test_import_apply_codex_imports_mcp_skills_and_agents(
     result = cli_runner.invoke(cli, ["import", "apply", "-a", "codex"])
 
     assert result.exit_code == 0
+    assert "code-agnostic restore" not in result.output
     mcp_base = json.loads(
         (tmp_path / ".config" / "code-agnostic" / "config" / "mcp.base.json").read_text(
             encoding="utf-8"

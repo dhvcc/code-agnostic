@@ -52,6 +52,8 @@ def test_apply_syncs_enabled_cursor_app(
 
     assert result.exit_code == 0
     assert "cursor" in result.output
+    assert "code-agnostic status" in result.output
+    assert "code-agnostic restore" in result.output
     assert (tmp_path / ".cursor" / "mcp.json").exists()
 
 
