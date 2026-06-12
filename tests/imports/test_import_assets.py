@@ -141,6 +141,48 @@ def test_import_apply_preflights_blocked_target_ancestor_before_writes(
     assert not core.mcp_base_path.exists()
 
 
+def test_import_apply_preflights_broken_source_symlink_before_writes(
+    tmp_path: Path,
+) -> None:
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    broken_source = tmp_path / "broken-skill"
+    broken_source.symlink_to(tmp_path / "missing-skill")
+
+    plan = ImportPlan(
+        source_app="codex",
+        sections=[ImportSection.MCP, ImportSection.SKILLS],
+        actions=[
+            ImportAction(
+                section=ImportSection.MCP,
+                kind=ImportActionKind.WRITE_MCP_BASE,
+                status=ImportActionStatus.CREATE,
+                detail="Write merged MCP base",
+                target=core.mcp_base_path,
+                payload={"mcpServers": {}},
+            ),
+            ImportAction(
+                section=ImportSection.SKILLS,
+                kind=ImportActionKind.COPY_PATH,
+                status=ImportActionStatus.CREATE,
+                detail="Import skill",
+                source=broken_source,
+                target=core.skills_dir / "demo",
+            ),
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    result = service.apply(plan)
+
+    assert result.applied == 0
+    assert result.failed == 1
+    assert f"Source path missing: {broken_source}" in result.failures
+    assert not core.mcp_base_path.exists()
+
+
 def test_assets_import_is_idempotent(tmp_path: Path) -> None:
     source = tmp_path / ".codex"
     skill_dir = tmp_path / ".agents" / "skills" / "demo"
