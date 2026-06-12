@@ -4,16 +4,23 @@ from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.constants import CLAUDE_CONFIG_FILENAME
+from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
     Action,
     ActionStatus,
+    ProjectStatusRow,
+    ProjectSyncStatus,
     RepoSyncStatus,
     WorkspaceRepoStatusRow,
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
 )
 from code_agnostic.planner import SyncPlanner
+from code_agnostic.project_artifacts import (
+    load_project_entries,
+    project_config_dir,
+)
 from code_agnostic.utils import is_under, read_json_safe
 from code_agnostic.workspace_artifacts import repo_artifact_paths
 from code_agnostic.workspaces import WorkspaceService
@@ -109,6 +116,79 @@ class StatusService:
 
         return status_rows
 
+    def build_project_status(
+        self,
+        source_repo: ISourceRepository,
+        app_services: list[IAppConfigService] | None = None,
+        planned_actions: list[Action] | None = None,
+    ) -> list[ProjectStatusRow]:
+        if not app_services:
+            return []
+
+        actions = (
+            planned_actions
+            if planned_actions is not None
+            else self._workspace_actions(source_repo, app_services)
+        )
+        project_actions = [
+            action
+            for action in actions
+            if action.scope is not None and action.scope.startswith("project:")
+        ]
+
+        rows: list[ProjectStatusRow] = []
+        for project in load_project_entries(source_repo):
+            project_name = project["name"]
+            project_path = Path(project["path"])
+
+            if not project_path.exists() or not project_path.is_dir():
+                rows.append(
+                    ProjectStatusRow(
+                        name=project_name,
+                        path=str(project_path),
+                        status=ProjectSyncStatus.ERROR,
+                        detail="project path missing",
+                    )
+                )
+                continue
+
+            project_source = ProjectConfigRepository(
+                root=project_config_dir(source_repo, project_name)
+            )
+            state = project_source.load_state()
+            has_managed_paths = bool(state.get("managed_paths"))
+            has_managed_links = bool(state.get("managed_links"))
+            has_project_actions = any(
+                f":{project_name}:" in (action.scope or "")
+                for action in project_actions
+            )
+            if (
+                not project_source.has_skills()
+                and not has_managed_paths
+                and not has_managed_links
+                and not has_project_actions
+            ):
+                continue
+
+            issues = [
+                self._project_action_issue(action, project_path)
+                for action in project_actions
+                if f":{project_name}:" in (action.scope or "")
+                and action.status != ActionStatus.NOOP
+            ]
+            rows.append(
+                ProjectStatusRow(
+                    name=project_name,
+                    path=str(project_path),
+                    status=(
+                        ProjectSyncStatus.DRIFT if issues else ProjectSyncStatus.SYNCED
+                    ),
+                    detail=("; ".join(issues) if issues else "project skills synced"),
+                )
+            )
+
+        return rows
+
     @staticmethod
     def _workspace_actions(
         source_repo: ISourceRepository,
@@ -117,7 +197,11 @@ class StatusService:
         if not app_services:
             return []
         plan = SyncPlanner(core=source_repo, app_services=app_services).build()
-        return [action for action in plan.actions if action.workspace is not None]
+        return [
+            action
+            for action in plan.actions
+            if action.workspace is not None or action.project is not None
+        ]
 
     @staticmethod
     def _repo_sync_status(
@@ -167,6 +251,19 @@ class StatusService:
     @staticmethod
     def _repo_action_issue(action: Action, repo_path: Path) -> str:
         rel_path = StatusService._relative_repo_path(action.path, repo_path)
+        if action.status == ActionStatus.CREATE:
+            return f"missing {rel_path}"
+        if action.status in {ActionStatus.UPDATE, ActionStatus.FIX}:
+            return f"mismatched {rel_path}"
+        if action.status == ActionStatus.CONFLICT:
+            return f"conflict at {rel_path}"
+        if action.status == ActionStatus.REMOVE:
+            return f"stale {rel_path}"
+        return f"{action.status.value} {rel_path}"
+
+    @staticmethod
+    def _project_action_issue(action: Action, project_path: Path) -> str:
+        rel_path = StatusService._relative_repo_path(action.path, project_path)
         if action.status == ActionStatus.CREATE:
             return f"missing {rel_path}"
         if action.status in {ActionStatus.UPDATE, ActionStatus.FIX}:

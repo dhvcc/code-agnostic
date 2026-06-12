@@ -45,6 +45,12 @@ class WorkspaceSyncStatus(str, Enum):
     ERROR = "error"
 
 
+class ProjectSyncStatus(str, Enum):
+    SYNCED = "synced"
+    DRIFT = "drift"
+    ERROR = "error"
+
+
 class RepoSyncStatus(str, Enum):
     SYNCED = "synced"
     NEEDS_SYNC = "needs_sync"
@@ -66,6 +72,7 @@ class Action:
     app: str | None = None
     scope: str | None = None
     workspace: str | None = None
+    project: str | None = None
 
 
 @dataclass
@@ -162,6 +169,14 @@ class WorkspaceStatusRow:
     status: WorkspaceSyncStatus
     detail: str
     repos: list[WorkspaceRepoStatusRow]
+
+
+@dataclass(frozen=True)
+class ProjectStatusRow:
+    name: str
+    path: str
+    status: ProjectSyncStatus
+    detail: str
 
 
 @dataclass(frozen=True)

@@ -11,6 +11,8 @@ from code_agnostic.errors import SyncAppError
 from code_agnostic.models import (
     EditorStatusRow,
     EditorSyncStatus,
+    ProjectStatusRow,
+    ProjectSyncStatus,
     WorkspaceStatusRow,
     WorkspaceSyncStatus,
 )
@@ -70,12 +72,28 @@ def status(obj: dict[str, str], app: str, verbose: bool) -> None:
                 repos=[],
             )
         ]
+    try:
+        project_rows = status_service.build_project_status(
+            core, app_services=enabled_services
+        )
+    except SyncAppError as exc:
+        project_rows = [
+            ProjectStatusRow(
+                name="projects",
+                path=str(core.projects_path),
+                status=ProjectSyncStatus.ERROR,
+                detail=str(exc),
+            )
+        ]
     ui.render_status(
         editor_rows,
         workspace_rows,
+        project_rows,
     )
 
-    if any(row.status == EditorSyncStatus.ERROR for row in editor_rows) or any(
-        row.status == WorkspaceSyncStatus.ERROR for row in workspace_rows
+    if (
+        any(row.status == EditorSyncStatus.ERROR for row in editor_rows)
+        or any(row.status == WorkspaceSyncStatus.ERROR for row in workspace_rows)
+        or any(row.status == ProjectSyncStatus.ERROR for row in project_rows)
     ):
         raise click.exceptions.Exit(1)

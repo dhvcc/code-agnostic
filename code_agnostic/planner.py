@@ -33,10 +33,16 @@ from code_agnostic.constants import (
     OPENCODE_CONFIG_FILENAME,
     SKILLS_DIRNAME,
 )
+from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.project_artifacts import (
+    load_project_entries,
+    project_config_dir,
+    project_skills_dir,
+)
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
 from code_agnostic.rules.repository import RulesRepository
 from code_agnostic.workspaces import WorkspaceService
@@ -217,6 +223,15 @@ def _workspace_scope_matches_app(scope: str, app_ids: set[str]) -> bool:
     return any(scope.startswith(f"ws:{app_id}:") for app_id in app_ids)
 
 
+def _project_scope_matches_app(scope: str, app_ids: set[str]) -> bool:
+    return any(scope.startswith(f"project:{app_id}:") for app_id in app_ids)
+
+
+def _prepare_project_action(action: Action, *, project_name: str) -> Action:
+    action.project = project_name
+    return action
+
+
 class SyncPlanner:
     def __init__(
         self,
@@ -237,7 +252,10 @@ class SyncPlanner:
         workspace_plan = (
             self._plan_workspaces() if self.include_workspace else SyncPlan([], [], [])
         )
-        return self._merge_claude_project_mcp(_merge_plans(app_plan, workspace_plan))
+        project_plan = self._plan_projects()
+        return self._merge_claude_project_mcp(
+            _merge_plans(app_plan, workspace_plan, project_plan)
+        )
 
     def _merge_claude_project_mcp(self, plan: SyncPlan) -> SyncPlan:
         if not self._claude_project_mcp:
@@ -309,6 +327,111 @@ class SyncPlanner:
         for workspace in self.core.load_workspaces():
             plans.append(self._plan_single_workspace(workspace))
         return _merge_plans(*plans) if plans else SyncPlan([], [], [])
+
+    def _plan_projects(self) -> SyncPlan:
+        plans = []
+        for project in load_project_entries(self.core):
+            plans.append(self._plan_single_project(project))
+        return _merge_plans(*plans) if plans else SyncPlan([], [], [])
+
+    def _plan_single_project(self, project: dict[str, str]) -> SyncPlan:
+        project_name = project["name"]
+        project_root = Path(project["path"])
+
+        if not project_root.exists() or not project_root.is_dir():
+            return SyncPlan(
+                [],
+                [],
+                [f"Project path missing: {project_name} ({project_root})"],
+            )
+
+        project_source = ProjectConfigRepository(
+            root=project_config_dir(self.core, project_name)
+        )
+        skill_sources = project_source.list_skill_sources()
+
+        state = project_source.load_state()
+        managed_links = state.get("managed_links", {})
+        if not isinstance(managed_links, dict):
+            managed_links = {}
+        managed_paths = state.get("managed_paths", {})
+        if not isinstance(managed_paths, dict):
+            managed_paths = {}
+
+        actions: list[Action] = []
+        skipped: list[str] = []
+        desired_paths_by_scope: dict[str, list[Path]] = {}
+
+        for svc in self.app_services:
+            meta = app_metadata(svc.app_id)
+            if meta.project_dir_name is None or not hasattr(svc, "plan_skill_actions"):
+                continue
+
+            target_service = _create_workspace_project_service(
+                svc.app_id,
+                project_root / meta.project_dir_name,
+                project_source,
+                self.core.opencode_base_path,
+            )
+            scope = f"project:{svc.app_id.value}:{project_name}:skills_dir"
+            plan_skill_actions = getattr(target_service, "plan_skill_actions")
+            skill_actions, desired_paths, skill_skipped = plan_skill_actions(
+                skill_sources,
+                project_skills_dir(svc.app_id, project_root),
+                scope,
+                svc.app_id.value,
+                load_state_paths(managed_paths, scope),
+                load_state_links(managed_links, scope),
+            )
+            for action in skill_actions:
+                _prepare_project_action(action, project_name=project_name)
+            actions.extend(skill_actions)
+            desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
+            skipped.extend(skill_skipped)
+
+        for scope, desired in desired_paths_by_scope.items():
+            app_name = scope.split(":", 2)[1]
+            stale_actions = plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, scope),
+                desired_paths=desired,
+                remove_detail=f"remove stale project {scope} file",
+                conflict_detail=f"stale project {scope} path is not a file",
+                noop_detail=f"stale project {scope} file already absent",
+                app=app_name,
+                scope=scope,
+                skipped=skipped,
+                skipped_message="Stale project cleanup skipped (not file): {path}",
+            )
+            for action in stale_actions:
+                _prepare_project_action(action, project_name=project_name)
+            actions.extend(stale_actions)
+
+        selected_project_apps = {svc.app_id.value for svc in self.app_services}
+        all_stale_path_scopes = {
+            scope
+            for scope in managed_paths.keys()
+            if scope not in desired_paths_by_scope
+            and _project_scope_matches_app(scope, selected_project_apps)
+            and f":{project_name}:" in scope
+        }
+        for scope in sorted(all_stale_path_scopes):
+            app_name = scope.split(":", 2)[1]
+            stale_actions = plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, scope),
+                desired_paths=[],
+                remove_detail=f"remove stale project {scope} file",
+                conflict_detail=f"stale project {scope} path is not a file",
+                noop_detail=f"stale project {scope} file already absent",
+                app=app_name,
+                scope=scope,
+                skipped=skipped,
+                skipped_message="Stale project cleanup skipped (not file): {path}",
+            )
+            for action in stale_actions:
+                _prepare_project_action(action, project_name=project_name)
+            actions.extend(stale_actions)
+
+        return SyncPlan(actions=actions, errors=[], skipped=skipped)
 
     def _plan_single_workspace(self, workspace: dict) -> SyncPlan:
         workspace_name = workspace["name"]

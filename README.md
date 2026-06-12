@@ -41,19 +41,19 @@ Today the implementation is still mixed: some assets are compiled and some are s
 
 ## Scope model
 
-`code-agnostic` has two managed source scopes today:
+`code-agnostic` has three managed source scopes:
 
 - global source config under `~/.config/code-agnostic/`, synced to enabled
   user-level app config;
 - workspace source config under `~/.config/code-agnostic/workspaces/<name>/`,
-  propagated into repos inside a registered workspace.
+  propagated into repos inside a registered workspace;
+- project source config under `~/.config/code-agnostic/projects/<name>/`,
+  synced to exactly one registered project directory.
 
 Workspace sync may generate repo-local outputs, but those outputs are not
-source. Project-local skill folders that users create directly inside a repo,
-such as `.agents/skills` or `.opencode/skills`, are app-native inputs but are
-not managed as source by `code-agnostic` yet. First-class project-scoped
-installs are planned so a single registered project can have managed local
-source config without bypassing the hub.
+source. Project-local skill folders generated inside a repo, such as
+`.agents/skills` or `.opencode/skills`, are also generated outputs; install
+skills into managed project source first, then run `plan` / `apply`.
 
 ## Install
 
@@ -206,21 +206,44 @@ code-agnostic skills list
 code-agnostic agents list
 ```
 
-Manual skill install today:
+Install copies a skill into managed source first for the chosen scope. Run
+`plan` / `apply` afterward to generate target app files.
 
 ```bash
-mkdir -p ~/.config/code-agnostic/skills
-cp -R ./my-skill ~/.config/code-agnostic/skills/my-skill
+code-agnostic skills install ./my-skill --global
+code-agnostic skills install ./my-skill --workspace myworkspace
+code-agnostic projects add --name myproject --path .
+code-agnostic skills install ./my-skill --project myproject
 code-agnostic plan
 code-agnostic apply
 ```
 
-There is no `skills install` command yet; copy skills into managed source first,
-then use the normal `plan` / `apply` workflow.
+Remote GitHub-style sources are also supported:
 
-Global skills live under `~/.config/code-agnostic/skills`. Workspace-local skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be inspected with `code-agnostic skills list -w <name>`. Codex generated skill outputs are written to `~/.agents/skills`, while Codex agents and config remain under `CODEX_HOME` when set, defaulting to `~/.codex`. Claude Code generated skills and agents are written under `~/.claude/skills` and `~/.claude/agents`, with workspace copies under repo-local `.claude/skills` and `.claude/agents`.
+```bash
+code-agnostic skills install owner/repo --global
+code-agnostic skills install https://github.com/owner/repo --workspace myworkspace
+code-agnostic skills install https://github.com/owner/repo/tree/main/path/to/skills --skill reviewer --skill triage --project myproject
+```
 
-Project-local skills are not first-class source inputs in `code-agnostic` yet. If a target app discovers repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or user-created `.claude/skills`, treat those as unmanaged app inputs. Workspace sync writes only the exact generated paths recorded in `.sync-state.json`.
+Remote sources may be an `owner/repo` shorthand, a GitHub repository URL, or a
+GitHub tree URL. When a remote source contains multiple skill candidates,
+repeat `--skill` to select the intended skills; otherwise install fails instead
+of guessing. Remote installs still copy the selected skill into the
+`code-agnostic` source of truth before any generated target outputs are written.
+
+Global skills live under `~/.config/code-agnostic/skills`. Workspace-local
+skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be
+inspected with `code-agnostic skills list -w <name>`. Project-local skills live
+under `~/.config/code-agnostic/projects/<name>/skills` and are generated into
+the registered project directory by `plan` / `apply`. Codex generated skill
+outputs are written to `~/.agents/skills`, while Codex agents and config remain
+under `CODEX_HOME` when set, defaulting to `~/.codex`. Claude Code generated
+skills and agents are written under `~/.claude/skills` and `~/.claude/agents`,
+with workspace/project copies under repo-local `.claude/skills` and
+`.claude/agents`.
+
+If a target app discovers user-created repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or `.claude/skills`, treat those as unmanaged app inputs unless they were generated from `code-agnostic` project source. Workspace and project sync write only the exact generated paths recorded in their `.sync-state.json` files.
 
 Planned convenience command:
 
@@ -234,7 +257,7 @@ first implementation slice.
 
 ### Workspaces
 
-Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs write project-root `opencode.json` files that reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Workspace source config, skills, and agents are propagated into repo-local generated paths for OpenCode, Cursor, Codex, and Claude; user-created project-local skill folders remain unmanaged until project-scoped installs are supported.
+Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs write project-root `opencode.json` files that reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Workspace source config, skills, and agents are propagated into repo-local generated paths for OpenCode, Cursor, Codex, and Claude; user-created target app skill folders remain unmanaged unless they were generated from managed source.
 
 Cursor propagation intentionally stays to repo-local MCP, skills, and agents; it does not copy the shared workspace `AGENTS.md` into child repos.
 

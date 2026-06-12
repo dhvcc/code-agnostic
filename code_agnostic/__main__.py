@@ -10,6 +10,7 @@ from code_agnostic.cli.commands.explain_lossiness import explain_lossiness
 from code_agnostic.cli.commands.import_ import import_group
 from code_agnostic.cli.commands.mcp import mcp
 from code_agnostic.cli.commands.plan import plan
+from code_agnostic.cli.commands.projects import projects
 from code_agnostic.cli.commands.restore import restore
 from code_agnostic.cli.commands.rules import rules
 from code_agnostic.cli.commands.skills import skills
@@ -40,6 +41,7 @@ cli.add_command(explain_lossiness)
 # Register command groups
 cli.add_command(apps)
 cli.add_command(workspaces)
+cli.add_command(projects)
 cli.add_command(rules)
 cli.add_command(skills)
 cli.add_command(agents_group)
