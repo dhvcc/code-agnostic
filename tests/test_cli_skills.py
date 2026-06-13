@@ -51,7 +51,7 @@ def test_skills_list_empty(minimal_shared_config: Path, cli_runner) -> None:
     result = cli_runner.invoke(cli, ["skills", "list"])
     assert result.exit_code == 0
     assert "No global skills" in result.output
-    assert "Copy a skill into ~/.config/code-agnostic/skills/<name>" in result.output
+    assert "code-agnostic skills install <source> --global" in result.output
     assert "code-agnostic plan" in result.output
     assert "code-agnostic apply" in result.output
 
@@ -65,6 +65,8 @@ def test_skills_install_global_explicit(
 
     assert result.exit_code == 0
     assert "Installed global skill: my-skill" in result.output
+    assert "code-agnostic plan" in result.output
+    assert "code-agnostic apply" in result.output
     assert (core_root / "skills" / "my-skill" / "SKILL.md").read_bytes() == (
         b"\x00raw bytes\n"
     )
@@ -413,9 +415,6 @@ def test_skills_workspace_list_empty(
 
     assert result.exit_code == 0
     assert "No workspace skills configured for myws" in result.output
-    assert (
-        "Copy a skill into ~/.config/code-agnostic/workspaces/myws/skills/<name>"
-        in result.output
-    )
+    assert "code-agnostic skills install <source> --workspace myws" in result.output
     assert "code-agnostic plan" in result.output
     assert "code-agnostic apply" in result.output

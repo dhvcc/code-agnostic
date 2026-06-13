@@ -295,7 +295,8 @@ code-agnostic import plan -a codex -i    # interactive TUI picker
 only the selected sections. Conflicts are skipped by default, so rerun with
 `--on-conflict overwrite` only after reviewing the preview. Use `--include`,
 `--exclude`, `--source-root`, and `--follow-symlinks` to narrow what gets
-imported.
+imported. `--source-root` means the source app config root to read from, not the
+`code-agnostic` hub root.
 
 ### CLI conventions
 
@@ -327,7 +328,7 @@ The compiler migration is documented in:
 - [x] Per-workspace git-exclude customization
 - [x] Interactive TUI for import selection
 - [x] Claude Code support
-- [ ] Project-scoped skill installs and sync
+- [x] Project-scoped skill installs and sync
 - [ ] `rules add` / `skills add` / `agents add` commands (open `$EDITOR` with template)
 - [ ] Shell auto-complete
 - [ ] Full TUI mode (command palette + menus)

@@ -45,7 +45,11 @@ def import_group() -> None:
     default=ConflictPolicy.SKIP.value,
     show_default=True,
 )
-@click.option("--source-root", type=click.Path(path_type=Path))
+@click.option(
+    "--source-root",
+    type=click.Path(path_type=Path),
+    help="Source app config root to read from.",
+)
 @click.option("--follow-symlinks", is_flag=True, default=False)
 @click.option(
     "-i",
@@ -125,7 +129,11 @@ def import_plan(
     default=ConflictPolicy.SKIP.value,
     show_default=True,
 )
-@click.option("--source-root", type=click.Path(path_type=Path))
+@click.option(
+    "--source-root",
+    type=click.Path(path_type=Path),
+    help="Source app config root to read from.",
+)
 @click.option("--follow-symlinks", is_flag=True, default=False)
 @click.option(
     "-i",
