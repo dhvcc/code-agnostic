@@ -13,6 +13,7 @@ def test_claude_mapper_from_common_stdio_and_http() -> None:
                 command="uvx",
                 args=["tool"],
                 cwd="/tmp/project",
+                env_file=".env",
                 env={"TOKEN": "${TOKEN}"},
                 timeout_ms=3000,
             ),

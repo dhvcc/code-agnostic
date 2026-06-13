@@ -247,6 +247,7 @@ def test_load_mcp_base(tmp_path: Path) -> None:
         "      - -y\n"
         "      - '@modelcontextprotocol/server-github'\n"
         "    cwd: /tmp/project\n"
+        "    envFile: .env\n"
         "    timeout: 900000\n"
         "    env:\n"
         "      GITHUB_TOKEN: ${GITHUB_TOKEN}\n",
@@ -260,6 +261,7 @@ def test_load_mcp_base(tmp_path: Path) -> None:
     assert github.command == "npx"
     assert github.args == ["-y", "@modelcontextprotocol/server-github"]
     assert github.cwd == "/tmp/project"
+    assert github.env_file == ".env"
     assert github.timeout_ms == 900000
     assert github.env == {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
 
@@ -343,6 +345,23 @@ def test_load_mcp_base_rejects_invalid_server_shape(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True)
     path.write_text(
         "spec_version: v1\nmcp_servers:\n  github:\n    type: stdio\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(InvalidConfigSchemaError):
+        load_mcp_base(path)
+
+
+def test_load_mcp_base_rejects_env_file_for_remote_servers(tmp_path: Path) -> None:
+    path = tmp_path / "config" / "mcp.base.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "spec_version: v1\n"
+        "mcp_servers:\n"
+        "  remote:\n"
+        "    type: http\n"
+        "    url: https://example.com/mcp\n"
+        "    envFile: .env\n",
         encoding="utf-8",
     )
 

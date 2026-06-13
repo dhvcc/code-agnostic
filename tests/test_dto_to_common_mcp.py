@@ -11,6 +11,7 @@ def test_dto_to_common_mcp_stdio_and_http() -> None:
                 command="uvx",
                 args=["demo"],
                 cwd="/tmp/project",
+                env_file=".env",
                 timeout_ms=900000,
                 env={"TOKEN": "${TOKEN}"},
                 headers={},
@@ -28,5 +29,6 @@ def test_dto_to_common_mcp_stdio_and_http() -> None:
     assert payload["stdio"]["command"] == "uvx"
     assert payload["stdio"]["args"] == ["demo"]
     assert payload["stdio"]["cwd"] == "/tmp/project"
+    assert payload["stdio"]["envFile"] == ".env"
     assert payload["stdio"]["timeout"] == 900000
     assert payload["http"]["url"] == "https://example.com/mcp"

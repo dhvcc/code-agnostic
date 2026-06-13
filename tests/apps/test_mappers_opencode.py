@@ -12,6 +12,7 @@ def test_opencode_mapper_from_common() -> None:
                 command="npx",
                 args=["-y", "demo"],
                 cwd="/tmp/project",
+                env_file=".env",
                 timeout_ms=900000,
             ),
             "remote": MCPServerDTO(

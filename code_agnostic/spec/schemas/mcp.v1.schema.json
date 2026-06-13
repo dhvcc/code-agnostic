@@ -43,6 +43,7 @@
           "items": { "type": "string" }
         },
         "cwd": { "type": "string", "minLength": 1 },
+        "envFile": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "minLength": 1 },
         "timeout": { "type": "integer", "minimum": 0 },
         "headers": {
@@ -76,7 +77,12 @@
           },
           "then": {
             "required": ["url"],
-            "not": { "required": ["cwd"] }
+            "not": {
+              "anyOf": [
+                { "required": ["cwd"] },
+                { "required": ["envFile"] }
+              ]
+            }
           }
         }
       ]

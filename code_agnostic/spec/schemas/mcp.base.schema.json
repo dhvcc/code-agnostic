@@ -41,6 +41,7 @@
           "items": { "type": "string" }
         },
         "cwd": { "type": "string", "minLength": 1 },
+        "envFile": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "minLength": 1 },
         "timeout": { "type": "integer", "minimum": 0 },
         "headers": { "$ref": "#/$defs/stringMap" },
@@ -60,6 +61,15 @@
           },
           "then": {
             "not": { "required": ["cwd"] }
+          }
+        },
+        {
+          "if": {
+            "required": ["url"],
+            "not": { "required": ["command"] }
+          },
+          "then": {
+            "not": { "required": ["envFile"] }
           }
         }
       ]

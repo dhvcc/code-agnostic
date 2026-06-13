@@ -160,6 +160,8 @@ code-agnostic mcp remove github
 ```
 
 Env vars without a value (`--env GITHUB_TOKEN`) are stored as `${GITHUB_TOKEN}` references.
+Cursor-local MCP `envFile` can be represented in source config and is reported
+as lossy for targets that do not support environment files.
 
 ### Rules with metadata
 

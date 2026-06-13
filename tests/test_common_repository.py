@@ -140,6 +140,7 @@ def test_load_mcp_base_reads_yaml_bundle_when_json_missing(
         "    args:\n"
         "      - -y\n"
         "      - '@modelcontextprotocol/server-github'\n"
+        "    envFile: .env\n"
         "    timeout: 900000\n"
         "    env:\n"
         "      GITHUB_TOKEN: ${GITHUB_TOKEN}\n",
@@ -153,6 +154,7 @@ def test_load_mcp_base_reads_yaml_bundle_when_json_missing(
             "github": {
                 "command": "npx",
                 "args": ["-y", "@modelcontextprotocol/server-github"],
+                "envFile": ".env",
                 "timeout": 900000,
                 "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"},
             }

@@ -126,6 +126,28 @@ def test_explain_lossiness_reports_skill_tool_mappings(
     ]
 
 
+def test_explain_lossiness_reports_mcp_env_file_mappings(
+    minimal_shared_config: Path,
+    core_root: Path,
+    cli_runner,
+) -> None:
+    source = core_root / "config" / "mcp.base.json"
+    source.write_text(
+        '{"mcpServers": {"local": {"command": "npx", "envFile": ".env"}}}\n',
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["explain-lossiness"])
+
+    assert result.exit_code == 0
+    assert result.output.splitlines() == [
+        "resource_path\tapp\tproperty\tstatus\treason",
+        "config/mcp.base.json\tclaude\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
+        "config/mcp.base.json\tcodex\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
+        "config/mcp.base.json\topencode\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
+    ]
+
+
 def test_explain_lossiness_reports_codex_agent_tool_mappings(
     minimal_shared_config: Path,
     core_root: Path,

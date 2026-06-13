@@ -16,6 +16,9 @@ The compiler must make cross-app lossiness explicit.
 - MCP `timeout` is no longer speculative: it is part of the canonical contract and maps to app-native timeout fields.
 - MCP `env` is rejected for OpenCode remote MCP servers because current
   OpenCode schema only supports `environment` on local MCP servers.
+- MCP `envFile` is compiled only for Cursor local MCP servers. It is lossy for
+  Codex, OpenCode, and Claude Code because current target configs do not model
+  a native environment-file field.
 - Skill `tools.*` is lossy for Cursor, Codex, OpenCode, and Claude Code skills because
   current target `SKILL.md` frontmatter does not represent per-skill tool
   permissions.

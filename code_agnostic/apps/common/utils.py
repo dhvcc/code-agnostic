@@ -68,6 +68,7 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
         command = raw.get("command")
         args = raw.get("args")
         cwd = raw.get("cwd")
+        env_file = raw.get("envFile")
         url = raw.get("url")
         timeout_ms = _coerce_timeout_ms(raw.get("timeout"))
 
@@ -98,6 +99,7 @@ def common_mcp_to_dto(mcp_servers: dict[str, Any]) -> dict[str, MCPServerDTO]:
                 command=command,
                 args=[str(item) for item in args] if isinstance(args, list) else [],
                 cwd=cwd if isinstance(cwd, str) else None,
+                env_file=env_file if isinstance(env_file, str) else None,
                 timeout_ms=timeout_ms,
                 headers={str(k): str(v) for k, v in headers.items()}
                 if isinstance(headers, dict)
@@ -137,6 +139,8 @@ def dto_to_common_mcp(servers: dict[str, MCPServerDTO]) -> dict[str, Any]:
             item["args"] = [str(arg) for arg in server.args]
             if server.cwd is not None:
                 item["cwd"] = server.cwd
+            if server.env_file is not None:
+                item["envFile"] = server.env_file
         elif server.url:
             item["url"] = server.url
         else:

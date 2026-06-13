@@ -22,6 +22,9 @@ class CursorMCPMapper(IAppMCPMapper):
                         for item in server.get("args", [])
                         if isinstance(item, (str, int, float, bool))
                     ],
+                    env_file=server.get("envFile")
+                    if isinstance(server.get("envFile"), str)
+                    else None,
                     timeout_ms=(
                         int(server["timeout"])
                         if isinstance(server.get("timeout"), int)
@@ -85,6 +88,8 @@ class CursorMCPMapper(IAppMCPMapper):
                 out["command"] = server.command
                 if server.args:
                     out["args"] = deepcopy(server.args)
+                if server.env_file is not None:
+                    out["envFile"] = server.env_file
             else:
                 if not server.url:
                     continue

@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from code_agnostic.agents.parser import parse_agent
+from code_agnostic.apps.common.utils import common_mcp_to_dto
+from code_agnostic.core.repository import CoreRepository
+from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
+from code_agnostic.errors import MissingConfigFileError
 from code_agnostic.rules.parser import parse_rule
 from code_agnostic.skills.parser import parse_skill
 from code_agnostic.spec.loaders import load_rule_bundle, load_skill_bundle
@@ -35,6 +39,7 @@ class LossinessExplainer:
         self, root: Path, app: str, prefix: Path | None
     ) -> list[LossinessFinding]:
         findings: list[LossinessFinding] = []
+        findings.extend(self._explain_mcp(root=root, app=app, prefix=prefix))
         findings.extend(self._explain_rules(root / "rules", app=app, prefix=prefix))
         findings.extend(self._explain_skills(root / "skills", app=app, prefix=prefix))
         findings.extend(self._explain_agents(root / "agents", app=app, prefix=prefix))
@@ -48,6 +53,48 @@ class LossinessExplainer:
                 item.reason,
             ),
         )
+
+    def _explain_mcp(
+        self, root: Path, app: str, prefix: Path | None
+    ) -> list[LossinessFinding]:
+        repo = (
+            CoreRepository(root=root)
+            if prefix is None
+            else WorkspaceConfigRepository(root)
+        )
+        source_path = (
+            repo.mcp_base_path
+            if repo.mcp_base_path.exists()
+            else repo.mcp_base_yaml_path
+        )
+        try:
+            payload = repo.load_mcp_base()
+        except MissingConfigFileError:
+            return []
+
+        servers = payload.get("mcpServers")
+        if not isinstance(servers, dict):
+            return []
+
+        findings: list[LossinessFinding] = []
+        resource_path = self._resource_path(
+            root=repo.root,
+            child=source_path,
+            prefix=prefix,
+        )
+        for name, server in common_mcp_to_dto(servers).items():
+            if server.env_file:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name=f"mcpServers.{name}.envFile",
+                        targets=("codex", "opencode", "claude"),
+                        app=app,
+                        reason="target does not support MCP envFile",
+                    )
+                )
+
+        return findings
 
     def _explain_rules(
         self, rules_dir: Path, app: str, prefix: Path | None
