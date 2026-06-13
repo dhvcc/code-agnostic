@@ -28,6 +28,7 @@ def test_import_plan_accepts_interactive_flag(cli_runner, tmp_path: Path) -> Non
     assert result.exit_code == 0
     assert "--interactive" in result.output
     assert "-i" in result.output
+    assert "Source app config root to read from" in result.output
 
 
 def test_import_apply_accepts_interactive_flag(cli_runner, tmp_path: Path) -> None:
@@ -38,3 +39,4 @@ def test_import_apply_accepts_interactive_flag(cli_runner, tmp_path: Path) -> No
     assert result.exit_code == 0
     assert "--interactive" in result.output
     assert "-i" in result.output
+    assert "Source app config root to read from" in result.output

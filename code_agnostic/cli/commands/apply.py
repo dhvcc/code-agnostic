@@ -17,23 +17,32 @@ def _apply_next_steps(plan: SyncPlan, target: str) -> str | None:
     normalized_target = target.lower()
     target_flag = "" if normalized_target == "all" else f" -a {normalized_target}"
     lines = [
-        (
-            "Managed outputs were written. Check drift or repair active synced "
-            "outputs if target files change later."
-        ),
+        "Managed outputs were written. Check drift after target files change.",
         f"- code-agnostic status{target_flag}",
     ]
 
-    if any(action.workspace is None for action in plan.actions):
-        lines.append("- code-agnostic restore")
+    restore_lines = []
+    if any(
+        action.workspace is None and action.project is None for action in plan.actions
+    ):
+        restore_lines.append("- code-agnostic restore")
 
     workspace_names = sorted(
         {action.workspace for action in plan.actions if action.workspace}
     )
     for workspace_name in workspace_names[:3]:
-        lines.append(f"- code-agnostic restore -w {workspace_name}")
+        restore_lines.append(f"- code-agnostic restore -w {workspace_name}")
     if len(workspace_names) > 3:
-        lines.append("- code-agnostic restore -w <workspace>")
+        restore_lines.append("- code-agnostic restore -w <workspace>")
+
+    if restore_lines:
+        lines.append("Repair global/workspace outputs from the active synced revision.")
+        lines.extend(restore_lines)
+
+    if any(action.project is not None for action in plan.actions):
+        lines.append(
+            "Project outputs are checked by status; project restore is not available yet."
+        )
 
     return "\n".join(lines)
 

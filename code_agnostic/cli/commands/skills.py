@@ -111,15 +111,14 @@ def _validate_skill_source_names(source_dirs: tuple[Path, ...]) -> list[str]:
 
 @click.group(
     help=(
-        "Manage source skill definitions. Commands use global source by default; "
-        "pass -w/--workspace for workspace source."
+        "Manage source skill definitions across global, workspace, and project scopes."
     )
 )
 def skills() -> None:
     pass
 
 
-@skills.command("install", help="Install a skill source into source config.")
+@skills.command("install", help="Install a skill source into managed source config.")
 @click.argument("source")
 @click.option(
     "--skill",
@@ -167,14 +166,20 @@ def skills_install(
         installs = _preflight_skill_destinations(resolution.skill_dirs, root, scope)
         for _name, _source_dir, destination in installs:
             destination.parent.mkdir(parents=True, exist_ok=True)
+        installed = False
         for name, source_dir, destination in installs:
             shutil.copytree(source_dir, destination)
+            installed = True
             if scope_note is not None:
                 click.echo(scope_note)
                 scope_note = None
             click.echo(f"Installed {scope} skill: {name}")
             click.echo(f"Source: {compact_home_path(source_dir)}")
             click.echo(f"Destination: {compact_home_path(destination)}")
+        if installed:
+            click.echo("Next:")
+            click.echo("  code-agnostic plan")
+            click.echo("  code-agnostic apply")
     except SkillInstallSourceError as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -206,9 +211,10 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
         if workspace
         else "No global skills configured"
     )
+    install_scope = f"--workspace {workspace}" if workspace else "--global"
     empty_message = (
         f"{scope_message} in {skill_dir}.\n"
-        f"- Copy a skill into {skill_dir}/<name>\n"
+        f"- code-agnostic skills install <source> {install_scope}\n"
         "- code-agnostic plan\n"
         "- code-agnostic apply"
     )

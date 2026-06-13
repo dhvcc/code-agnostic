@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from code_agnostic.__main__ import cli
+from code_agnostic.cli.commands.apply import _apply_next_steps
+from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 
 
 def test_apps_list_shows_all_disabled_by_default(
@@ -55,6 +59,32 @@ def test_apply_syncs_enabled_cursor_app(
     assert "code-agnostic status" in result.output
     assert "code-agnostic restore" in result.output
     assert (tmp_path / ".cursor" / "mcp.json").exists()
+
+
+def test_apply_next_steps_do_not_offer_global_restore_for_project_outputs() -> None:
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=Path("/tmp/project/.agents/skills/review/SKILL.md"),
+                status=ActionStatus.CREATE,
+                detail="create compiled codex skill",
+                payload="review\n",
+                scope="project:demo:codex:skills",
+                app="codex",
+                project="demo",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    next_steps = _apply_next_steps(plan, "codex")
+
+    assert next_steps is not None
+    assert "code-agnostic status -a codex" in next_steps
+    assert "code-agnostic restore" not in next_steps
+    assert "project restore is not available yet" in next_steps
 
 
 def test_status_reports_cursor_enabled_and_sync_state(
