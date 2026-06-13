@@ -86,6 +86,32 @@ def test_projects_add_empty_name(
     assert "empty" in result.output.lower()
 
 
+def test_projects_add_rejects_path_like_name_before_writes(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner
+) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    registry = minimal_shared_config / "config" / "projects.json"
+    victim = minimal_shared_config.parent / "victim"
+
+    result = cli_runner.invoke(
+        cli,
+        [
+            "projects",
+            "add",
+            "--name",
+            "../../victim",
+            "--path",
+            str(project_root),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid project name: ../../victim" in result.output
+    assert not registry.exists()
+    assert not victim.exists()
+
+
 def test_projects_add_duplicate_name(
     minimal_shared_config: Path, tmp_path: Path, cli_runner
 ) -> None:

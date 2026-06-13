@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
@@ -15,6 +15,16 @@ from code_agnostic.spec.loaders import (
     validate_schema_payload,
 )
 from code_agnostic.utils import read_json_safe, write_json
+
+
+def _is_path_like_config_name(name: str) -> bool:
+    return (
+        name in {".", ".."}
+        or "/" in name
+        or "\\" in name
+        or Path(name).is_absolute()
+        or bool(PureWindowsPath(name).drive)
+    )
 
 
 class BaseSourceRepository(ISourceRepository):
@@ -220,7 +230,11 @@ class CoreRepository(BaseSourceRepository):
                 continue
             normalized_name = name.strip()
             normalized_path = str(Path(path).expanduser().resolve())
-            if not normalized_name or normalized_name in seen_names:
+            if (
+                not normalized_name
+                or _is_path_like_config_name(normalized_name)
+                or normalized_name in seen_names
+            ):
                 continue
             result.append({"name": normalized_name, "path": normalized_path})
             seen_names.add(normalized_name)
@@ -237,6 +251,8 @@ class CoreRepository(BaseSourceRepository):
         normalized_name = name.strip()
         if not normalized_name:
             raise ValueError("Workspace name cannot be empty")
+        if _is_path_like_config_name(normalized_name):
+            raise ValueError(f"Invalid workspace name: {name}")
         normalized_path = path.expanduser().resolve()
         if not normalized_path.exists() or not normalized_path.is_dir():
             raise ValueError(
@@ -291,6 +307,10 @@ class CoreRepository(BaseSourceRepository):
                 raise InvalidConfigSchemaError(
                     self.projects_path, "project name cannot be empty"
                 )
+            if _is_path_like_config_name(normalized_name):
+                raise InvalidConfigSchemaError(
+                    self.projects_path, f"invalid project name: {normalized_name}"
+                )
             normalized_path = Path(path).expanduser().resolve()
             if normalized_name in seen_names:
                 raise InvalidConfigSchemaError(
@@ -316,6 +336,8 @@ class CoreRepository(BaseSourceRepository):
         normalized_name = name.strip()
         if not normalized_name:
             raise ValueError("Project name cannot be empty")
+        if _is_path_like_config_name(normalized_name):
+            raise ValueError(f"Invalid project name: {name}")
         normalized_path = path.expanduser().resolve()
         if not normalized_path.exists() or not normalized_path.is_dir():
             raise ValueError(

@@ -137,6 +137,32 @@ def test_workspaces_add_empty_name(
     assert "empty" in result.output.lower()
 
 
+def test_workspaces_add_rejects_path_like_name_before_writes(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner
+) -> None:
+    workspace_root = tmp_path / "ws"
+    workspace_root.mkdir()
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    victim = minimal_shared_config.parent / "victim"
+
+    result = cli_runner.invoke(
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "../../victim",
+            "--path",
+            str(workspace_root),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid workspace name: ../../victim" in result.output
+    assert not registry.exists()
+    assert not victim.exists()
+
+
 def test_workspaces_add_duplicate_name(
     minimal_shared_config: Path, tmp_path: Path, cli_runner
 ) -> None:
