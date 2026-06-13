@@ -22,6 +22,7 @@ Per-server fields for v1:
 - `command`
 - `args`
 - `cwd`
+- `envFile`
 - `url`
 - `timeout`
 - `headers`
@@ -50,6 +51,7 @@ Target markers are recognized only for known targetable app ids.
 | `command` | supported | native | native | native | native |
 | `args` | supported | native | native | native | native |
 | `cwd` | supported for local servers | ignored | native | native for local servers | native |
+| `envFile` | supported for local servers | native | ignored | ignored | ignored |
 | `url` | supported | native | native | native | native |
 | `headers` | supported | native | compiled | native | native |
 | `env` | supported | native | compiled | native for local servers; rejected for remote servers | native |
@@ -67,6 +69,9 @@ Target markers are recognized only for known targetable app ids.
 - Canonical `cwd` is expressed as a string and applies only to local/stdio MCP
   servers. It is currently omitted for Cursor because the official Cursor MCP
   docs checked in this run document `envFile` but did not establish `cwd`.
+- Canonical `envFile` is expressed as a string and applies only to local/stdio
+  MCP servers. It is emitted only for Cursor, whose official MCP docs document
+  `envFile` for STDIO servers and explicitly exclude it for remote servers.
 - OpenCode's current schema allows `environment` only on local MCP servers.
   Remote OpenCode MCP servers can carry `headers` and OAuth config, but not
   per-server environment variables.

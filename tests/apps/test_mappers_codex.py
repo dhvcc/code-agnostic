@@ -68,6 +68,7 @@ def test_codex_mapper_from_common_stdio_server() -> None:
                 command="uvx",
                 args=["demo"],
                 cwd="/tmp/project",
+                env_file=".env",
             ),
         }
     )
@@ -76,6 +77,7 @@ def test_codex_mapper_from_common_stdio_server() -> None:
     assert server["command"] == "uvx"
     assert server["args"] == ["demo"]
     assert server["cwd"] == "/tmp/project"
+    assert "envFile" not in server
     assert "url" not in server
 
 

@@ -54,6 +54,23 @@ def test_cursor_mapper_from_common_writes_expected_keys() -> None:
     }
 
 
+def test_cursor_mapper_preserves_stdio_env_file() -> None:
+    mapper = CursorMCPMapper()
+
+    mapped = mapper.to_common(
+        {
+            "local": {
+                "command": "npx",
+                "args": ["demo"],
+                "envFile": "${workspaceFolder}/.env",
+            }
+        }
+    )
+
+    assert mapped["local"].env_file == "${workspaceFolder}/.env"
+    assert mapper.from_common(mapped)["local"]["envFile"] == "${workspaceFolder}/.env"
+
+
 def test_cursor_mapper_from_common_empty_servers() -> None:
     mapper = CursorMCPMapper()
     mapped = mapper.from_common({})

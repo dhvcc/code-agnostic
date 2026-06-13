@@ -4,7 +4,14 @@ from code_agnostic.apps.common.utils import common_mcp_to_dto, mcp_servers_for_a
 
 def test_stdio_server() -> None:
     result = common_mcp_to_dto(
-        {"local": {"command": "npx", "args": ["-y", "demo"], "cwd": "/tmp/project"}}
+        {
+            "local": {
+                "command": "npx",
+                "args": ["-y", "demo"],
+                "cwd": "/tmp/project",
+                "envFile": ".env",
+            }
+        }
     )
 
     assert "local" in result
@@ -13,6 +20,7 @@ def test_stdio_server() -> None:
     assert server.command == "npx"
     assert server.args == ["-y", "demo"]
     assert server.cwd == "/tmp/project"
+    assert server.env_file == ".env"
 
 
 def test_http_server() -> None:

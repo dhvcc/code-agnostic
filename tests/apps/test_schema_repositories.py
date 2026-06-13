@@ -109,6 +109,18 @@ def test_codex_schema_repository_fallback_includes_current_app_config(
     assert "approvals_reviewer" in app_config
 
 
+def test_codex_schema_repository_fallback_includes_realtime_webrtc_base_url(
+    monkeypatch,
+) -> None:
+    def _fail(*args, **kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr("code_agnostic.apps.common.schema.urlopen", _fail)
+
+    schema = CodexSchemaRepository(ttl_seconds=0).load_schema()
+    assert "experimental_realtime_webrtc_call_base_url" in schema["properties"]
+
+
 def test_cursor_schema_repository_uses_local_only(monkeypatch) -> None:
     def _fail(*args, **kwargs):
         raise AssertionError("urlopen should not be called for local-only schema")
@@ -117,6 +129,7 @@ def test_cursor_schema_repository_uses_local_only(monkeypatch) -> None:
     schema = CursorSchemaRepository(ttl_seconds=0).load_schema()
     assert schema.get("type") == "object"
     assert "mcpServers" in schema.get("properties", {})
+    assert schema["$defs"]["localServer"]["properties"]["envFile"]["type"] == "string"
 
 
 def test_remote_returns_invalid_json_falls_back_to_local(monkeypatch) -> None:
