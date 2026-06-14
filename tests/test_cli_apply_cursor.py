@@ -35,6 +35,7 @@ def test_cursor_schema_accepts_documented_mcp_examples() -> None:
     local_payload = {
         "mcpServers": {
             "server-name": {
+                "type": "stdio",
                 "command": "npx",
                 "args": ["-y", "mcp-server"],
                 "env": {"API_KEY": "value"},

@@ -85,6 +85,7 @@ class CursorMCPMapper(IAppMCPMapper):
             if server.type == MCPServerType.STDIO:
                 if not server.command:
                     continue
+                out["type"] = "stdio"
                 out["command"] = server.command
                 if server.args:
                     out["args"] = deepcopy(server.args)

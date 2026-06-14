@@ -23,6 +23,7 @@
       "type": "object",
       "required": ["command"],
       "properties": {
+        "type": { "const": "stdio" },
         "command": { "type": "string", "minLength": 1 },
         "args": {
           "type": "array",
