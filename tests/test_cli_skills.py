@@ -184,6 +184,7 @@ def test_skills_install_without_unique_scope_requires_explicit_scope(
 
     assert result.exit_code != 0
     assert "No unique project/workspace scope detected" in result.output
+    assert "code-agnostic projects add --name <name> --path ." in result.output
 
 
 def test_skills_install_rejects_invalid_source(
