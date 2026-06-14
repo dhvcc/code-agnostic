@@ -14,6 +14,10 @@ def _workspace_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]
     return {item["name"]: item for item in core.load_workspaces()}
 
 
+def _project_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]]:
+    return {item["name"]: item for item in core.load_projects()}
+
+
 def require_workspace_entry(core: CoreRepository, workspace: str) -> dict[str, str]:
     try:
         entry = _workspace_entries_by_name(core).get(workspace)
@@ -21,6 +25,16 @@ def require_workspace_entry(core: CoreRepository, workspace: str) -> dict[str, s
         raise click.ClickException(str(exc)) from exc
     if entry is None:
         raise click.ClickException(f"Workspace not found: {workspace}")
+    return entry
+
+
+def require_project_entry(core: CoreRepository, project: str) -> dict[str, str]:
+    try:
+        entry = _project_entries_by_name(core).get(project)
+    except SyncAppError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if entry is None:
+        raise click.ClickException(f"Project not found: {project}")
     return entry
 
 

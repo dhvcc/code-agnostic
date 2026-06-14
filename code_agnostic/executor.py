@@ -415,19 +415,31 @@ class SyncExecutor:
             )
         return stored
 
-    def restore_active_revision(self, workspace: str | None = None) -> RestoreResult:
-        if workspace is None:
+    def restore_active_revision(
+        self, workspace: str | None = None, project: str | None = None
+    ) -> RestoreResult:
+        if workspace is not None and project is not None:
+            raise ValueError("Choose only one scope: workspace or project.")
+
+        if workspace is None and project is None:
             root = self.context.core.root
-        else:
+        elif workspace is not None:
             root = self.context.core.workspace_config_dir(workspace)
+        else:
+            root = self.context.core.project_config_dir(project)
 
         revision_record = self._build_revision_record(
-            root=root, workspace=workspace, project=None, revision_id="restore"
+            root=root, workspace=workspace, project=project, revision_id="restore"
         )
         self._repair_pending_revisions([revision_record])
         records = self._load_previous_revisions([revision_record])
         if not records:
-            label = f"workspace {workspace}" if workspace is not None else "global root"
+            if workspace is not None:
+                label = f"workspace {workspace}"
+            elif project is not None:
+                label = f"project {project}"
+            else:
+                label = "global root"
             raise FileNotFoundError(f"No active revision found for {label}.")
 
         record = records[0]

@@ -89,6 +89,64 @@ def test_restore_replays_active_workspace_revision(
     )["managed_paths"]["rules"] == [str(target)]
 
 
+def test_restore_replays_active_project_revision(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+) -> None:
+    core = CoreRepository(core_root)
+    project_root = tmp_path / "service-api"
+    project_root.mkdir()
+    core.add_project("service-api", project_root)
+
+    target = project_root / ".agents" / "skills" / "project-tool" / "SKILL.md"
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=target,
+                status=ActionStatus.CREATE,
+                detail="create project skill",
+                payload="project\n",
+                scope="project:service-api:codex:skill:project-tool",
+                app="codex",
+                project="service-api",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+    SyncExecutor(core=core).execute(plan)
+    target.write_text("broken\n", encoding="utf-8")
+    (core_root / "projects" / "service-api" / ".sync-state.json").write_text(
+        '{"broken": true}\n', encoding="utf-8"
+    )
+
+    result = cli_runner.invoke(cli, ["restore", "--project", "service-api"])
+
+    assert result.exit_code == 0
+    assert result.output.startswith("Restored revision ")
+    assert target.read_text(encoding="utf-8") == "project\n"
+    assert json.loads(
+        (core_root / "projects" / "service-api" / ".sync-state.json").read_text(
+            encoding="utf-8"
+        )
+    )["managed_paths"]["project:service-api:codex:skill:project-tool"] == [str(target)]
+
+
+def test_restore_rejects_workspace_and_project_together(
+    minimal_shared_config: Path,
+    cli_runner,
+) -> None:
+    result = cli_runner.invoke(
+        cli, ["restore", "--workspace", "team", "--project", "service-api"]
+    )
+
+    assert result.exit_code != 0
+    assert "Choose only one scope" in result.output
+
+
 def test_restore_repairs_pending_global_revision(
     minimal_shared_config: Path,
     core_root: Path,

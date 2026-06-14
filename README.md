@@ -146,6 +146,7 @@ If managed outputs need repair after an apply, restore the active synced revisio
 ```bash
 code-agnostic restore
 code-agnostic restore -w myproject
+code-agnostic restore --project myproject
 ```
 
 ### MCP management
