@@ -48,6 +48,7 @@ def test_cursor_mapper_from_common_writes_expected_keys() -> None:
 
     assert mapped["http"] == {"url": "https://example.com"}
     assert mapped["local"] == {
+        "type": "stdio",
         "command": "uvx",
         "args": ["demo"],
         "timeout": 900000,
@@ -69,6 +70,17 @@ def test_cursor_mapper_preserves_stdio_env_file() -> None:
 
     assert mapped["local"].env_file == "${workspaceFolder}/.env"
     assert mapper.from_common(mapped)["local"]["envFile"] == "${workspaceFolder}/.env"
+
+
+def test_cursor_mapper_reads_documented_stdio_type() -> None:
+    mapper = CursorMCPMapper()
+
+    mapped = mapper.to_common(
+        {"local": {"type": "stdio", "command": "npx", "args": ["demo"]}}
+    )
+
+    assert mapped["local"].type == MCPServerType.STDIO
+    assert mapped["local"].command == "npx"
 
 
 def test_cursor_mapper_from_common_empty_servers() -> None:
