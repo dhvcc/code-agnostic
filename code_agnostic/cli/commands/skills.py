@@ -79,7 +79,8 @@ def _install_root(
 
     raise click.ClickException(
         "No unique project/workspace scope detected. Use --global, --project, "
-        "or --workspace."
+        "or --workspace. To use this directory as a project, run: "
+        "code-agnostic projects add --name <name> --path ."
     )
 
 
