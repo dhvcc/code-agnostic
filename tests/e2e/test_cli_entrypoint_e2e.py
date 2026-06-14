@@ -260,6 +260,63 @@ def test_entrypoint_skills_remove_rejects_path_like_name(tmp_path: Path) -> None
     assert victim.read_text(encoding="utf-8") == "keep\n"
 
 
+def test_entrypoint_restore_project_repairs_generated_skill(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    project_root = tmp_path / "service-api"
+    project_root.mkdir()
+
+    enable = _run_cli(home, "apps", "enable", "-a", "codex")
+    assert enable.returncode == 0, enable.stderr
+
+    add_project = _run_cli(
+        home,
+        "projects",
+        "add",
+        "--name",
+        "service-api",
+        "--path",
+        str(project_root),
+    )
+    assert add_project.returncode == 0, add_project.stderr
+
+    skill = (
+        home
+        / ".config"
+        / "code-agnostic"
+        / "projects"
+        / "service-api"
+        / "skills"
+        / "project-tool"
+        / "SKILL.md"
+    )
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "---\n"
+        "name: project-tool\n"
+        "description: Project tool\n"
+        "---\n"
+        "\n"
+        "Use project context.\n",
+        encoding="utf-8",
+    )
+
+    apply = _run_cli(home, "apply", "-a", "codex")
+    assert apply.returncode == 0, apply.stderr + apply.stdout
+
+    generated_skill = project_root / ".agents" / "skills" / "project-tool" / "SKILL.md"
+    generated_skill.write_text("local damage\n", encoding="utf-8")
+
+    restore = _run_cli(home, "restore", "--project", "service-api")
+
+    assert restore.returncode == 0, restore.stderr + restore.stdout
+    assert "Restored revision" in restore.stdout
+    assert generated_skill.read_text(encoding="utf-8") == skill.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_entrypoint_apply_reports_pending_repair_failure_without_writes(
     tmp_path: Path,
 ) -> None:

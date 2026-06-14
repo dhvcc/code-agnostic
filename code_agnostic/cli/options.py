@@ -79,5 +79,14 @@ def workspace_option(required: bool = False) -> Callable:
     )
 
 
+def project_option(required: bool = False) -> Callable:
+    return click.option(
+        "--project",
+        required=required,
+        default=None,
+        help="Project name.",
+    )
+
+
 def verbose_option() -> Callable:
     return click.option("-v", "--verbose", is_flag=True, default=False)
