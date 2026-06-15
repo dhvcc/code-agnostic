@@ -1,9 +1,11 @@
 import re
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
+from code_agnostic.errors import InvalidConfigSchemaError
 
 _ENV_PATTERN = re.compile(r"^\$\{(?:env:)?([A-Z_][A-Z0-9_]*)\}$")
 _BEARER_PATTERN = re.compile(r"^Bearer\s+\$\{(?:env:)?([A-Z_][A-Z0-9_]*)\}$")
@@ -34,6 +36,29 @@ def _encode_tool_timeout(timeout_ms: int) -> int | float:
     return int(seconds) if timeout_ms % 1000 == 0 else seconds
 
 
+def _codex_env_var_name(server_name: str, entry: Any) -> str | None:
+    if isinstance(entry, str):
+        return entry
+    if not isinstance(entry, dict):
+        return None
+
+    name = entry.get("name")
+    if not isinstance(name, str):
+        return None
+
+    source = entry.get("source", "local")
+    if source in (None, "local"):
+        return name
+
+    detail = (
+        "Codex env_vars entries with source = 'remote' cannot be imported "
+        "into common MCP config without losing remote-executor semantics"
+        if source == "remote"
+        else f"Unsupported Codex env_vars source: {source!r}"
+    )
+    raise InvalidConfigSchemaError(Path(f"mcp_servers.{server_name}.env_vars"), detail)
+
+
 class CodexMCPMapper(IAppMCPMapper):
     def to_common(self, payload: dict[str, Any]) -> dict[str, MCPServerDTO]:
         mapped: dict[str, MCPServerDTO] = {}
@@ -49,8 +74,9 @@ class CodexMCPMapper(IAppMCPMapper):
             env: dict[str, str] = {}
             env_vars = server.get("env_vars")
             if isinstance(env_vars, list):
-                for key in env_vars:
-                    if isinstance(key, str):
+                for entry in env_vars:
+                    key = _codex_env_var_name(name, entry)
+                    if key is not None:
                         env[key] = f"${{{key}}}"
             env_table = server.get("env")
             if isinstance(env_table, dict):

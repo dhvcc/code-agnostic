@@ -72,6 +72,10 @@ Target markers are recognized only for known targetable app ids.
 - Canonical `envFile` is expressed as a string and applies only to local/stdio
   MCP servers. It is emitted only for Cursor, whose official MCP docs document
   `envFile` for STDIO servers and explicitly exclude it for remote servers.
+- Codex `env_vars` string entries and object entries with `source = "local"`
+  import as canonical environment references. Codex `env_vars` entries with
+  `source = "remote"` are rejected during import because the canonical MCP
+  contract does not represent Codex remote-executor environment sourcing.
 - OpenCode's current schema allows `environment` only on local MCP servers.
   Remote OpenCode MCP servers can carry `headers` and OAuth config, but not
   per-server environment variables.

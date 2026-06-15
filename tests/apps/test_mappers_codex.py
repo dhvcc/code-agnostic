@@ -1,5 +1,8 @@
+import pytest
+
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
+from code_agnostic.errors import InvalidConfigSchemaError
 
 
 def test_codex_mapper_to_common_parses_env_and_headers() -> None:
@@ -200,3 +203,39 @@ def test_codex_mapper_to_common_env_table() -> None:
 
     server = mapped["demo"]
     assert server.env["KEY"] == "value"
+
+
+def test_codex_mapper_to_common_env_vars_object_with_local_source() -> None:
+    mapper = CodexMCPMapper()
+    mapped = mapper.to_common(
+        {
+            "demo": {
+                "command": "uvx",
+                "env_vars": [
+                    {"name": "LOCAL_TOKEN", "source": "local"},
+                    {"name": "IMPLICIT_LOCAL"},
+                ],
+            }
+        }
+    )
+
+    server = mapped["demo"]
+    assert server.env["LOCAL_TOKEN"] == "${LOCAL_TOKEN}"
+    assert server.env["IMPLICIT_LOCAL"] == "${IMPLICIT_LOCAL}"
+
+
+def test_codex_mapper_to_common_rejects_remote_env_vars_source() -> None:
+    mapper = CodexMCPMapper()
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        mapper.to_common(
+            {
+                "demo": {
+                    "command": "uvx",
+                    "env_vars": [{"name": "REMOTE_TOKEN", "source": "remote"}],
+                }
+            }
+        )
+
+    assert "mcp_servers.demo.env_vars" in str(exc_info.value)
+    assert "source = 'remote'" in exc_info.value.detail
