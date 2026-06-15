@@ -31,6 +31,68 @@ def test_mcp_import_creates_new_entries(tmp_path: Path) -> None:
     assert payload["mcpServers"]["demo"] == {"command": "uvx", "args": []}
 
 
+def test_mcp_import_codex_env_vars_object_local_source(tmp_path: Path) -> None:
+    _write_codex_config(
+        tmp_path / ".codex",
+        "\n".join(
+            [
+                "[mcp_servers.demo]",
+                'command = "uvx"',
+                'env_vars = [{ name = "LOCAL_TOKEN", source = "local" }]',
+                "",
+            ]
+        ),
+    )
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app="codex",
+        include=[ImportSection.MCP],
+        conflict_policy=ConflictPolicy.SKIP,
+    )
+    result = service.apply(plan)
+
+    assert result.failed == 0
+    payload = json.loads(core.mcp_base_path.read_text(encoding="utf-8"))
+    assert payload["mcpServers"]["demo"] == {
+        "command": "uvx",
+        "args": [],
+        "env": {"LOCAL_TOKEN": "${LOCAL_TOKEN}"},
+    }
+
+
+def test_mcp_import_codex_remote_env_vars_object_fails_closed(
+    tmp_path: Path,
+) -> None:
+    _write_codex_config(
+        tmp_path / ".codex",
+        "\n".join(
+            [
+                "[mcp_servers.demo]",
+                'command = "uvx"',
+                'env_vars = [{ name = "REMOTE_TOKEN", source = "remote" }]',
+                "",
+            ]
+        ),
+    )
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    plan = service.plan(
+        source_app="codex",
+        include=[ImportSection.MCP],
+        conflict_policy=ConflictPolicy.SKIP,
+    )
+    result = service.apply(plan)
+
+    assert plan.actions == []
+    assert any("source = 'remote'" in error for error in plan.errors)
+    assert result.applied == 0
+    assert result.failed == 1
+    assert not core.mcp_base_path.exists()
+
+
 def test_mcp_import_is_noop_for_identical_server(tmp_path: Path) -> None:
     _write_codex_config(
         tmp_path / ".codex",
