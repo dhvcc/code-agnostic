@@ -92,6 +92,29 @@ def test_entrypoint_plan_and_status_fail_on_invalid_mcp_source(
     assert "synced" not in status.stdout
 
 
+def test_entrypoint_workspaces_remove_preserves_invalid_registry(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    registry = home / ".config" / "code-agnostic" / "config" / "workspaces.json"
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    registry.parent.mkdir(parents=True)
+    registry_text = json.dumps(
+        [
+            {"name": "demo", "path": str(workspace)},
+            {"name": "bad/name", "path": str(tmp_path / "bad")},
+        ]
+    )
+    registry.write_text(registry_text, encoding="utf-8")
+
+    result = _run_cli(home, "workspaces", "remove", "--name", "demo")
+
+    assert result.returncode != 0
+    assert "invalid workspace name" in result.stdout + result.stderr
+    assert registry.read_text(encoding="utf-8") == registry_text
+
+
 def test_entrypoint_apply_fails_on_generated_skill_conflict(
     tmp_path: Path,
 ) -> None:

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from code_agnostic.__main__ import cli
@@ -114,6 +115,46 @@ def test_workspaces_remove_reports_corrupted_registry(
     assert result.exit_code != 0
     assert "Invalid JSON format" in result.output
     assert registry.read_text(encoding="utf-8") == "{bad"
+
+
+def test_workspaces_list_rejects_invalid_registry_without_rewrite(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    payload = [
+        {"name": "demo", "path": str(workspace_root)},
+        {"name": "demo", "path": str(tmp_path / "other")},
+    ]
+    registry_text = json.dumps(payload)
+    registry.write_text(registry_text, encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "list"])
+
+    assert result.exit_code != 0
+    assert "duplicate workspace name" in result.output
+    assert registry.read_text(encoding="utf-8") == registry_text
+
+
+def test_workspaces_remove_rejects_invalid_registry_without_rewrite(
+    minimal_shared_config: Path, tmp_path: Path, cli_runner
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    registry = minimal_shared_config / "config" / "workspaces.json"
+    payload = [
+        {"name": "demo", "path": str(workspace_root)},
+        {"name": "bad/name", "path": str(tmp_path / "bad")},
+    ]
+    registry_text = json.dumps(payload)
+    registry.write_text(registry_text, encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["workspaces", "remove", "--name", "demo"])
+
+    assert result.exit_code != 0
+    assert "invalid workspace name" in result.output
+    assert registry.read_text(encoding="utf-8") == registry_text
 
 
 def test_workspaces_remove_nonexistent(minimal_shared_config: Path, cli_runner) -> None:

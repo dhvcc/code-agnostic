@@ -64,7 +64,7 @@ def test_add_workspace_rejects_duplicates(
         repo.add_workspace("second", workspace_dir)
 
 
-def test_load_workspaces_ignores_malformed_entries(
+def test_load_workspaces_rejects_malformed_entries(
     tmp_path: Path, core_repo: CoreRepository
 ) -> None:
     repo = core_repo
@@ -80,9 +80,8 @@ def test_load_workspaces_ignores_malformed_entries(
     (tmp_path / "ok").mkdir()
     repo.workspaces_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    assert repo.load_workspaces() == [
-        {"name": "ok", "path": str((tmp_path / "ok").resolve())}
-    ]
+    with pytest.raises(InvalidConfigSchemaError, match="duplicate workspace name"):
+        repo.load_workspaces()
 
 
 def test_load_workspaces_rejects_invalid_json(core_repo: CoreRepository) -> None:

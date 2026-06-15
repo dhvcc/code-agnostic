@@ -221,23 +221,39 @@ class CoreRepository(BaseSourceRepository):
 
         result: list[dict[str, str]] = []
         seen_names: set[str] = set()
+        seen_paths: set[Path] = set()
         for item in payload:
             if not isinstance(item, dict):
-                continue
+                raise InvalidConfigSchemaError(
+                    self.workspaces_path, "entries must be JSON objects"
+                )
             name = item.get("name")
             path = item.get("path")
             if not isinstance(name, str) or not isinstance(path, str):
-                continue
+                raise InvalidConfigSchemaError(
+                    self.workspaces_path, "entries must contain string name and path"
+                )
             normalized_name = name.strip()
             normalized_path = str(Path(path).expanduser().resolve())
-            if (
-                not normalized_name
-                or _is_path_like_config_name(normalized_name)
-                or normalized_name in seen_names
-            ):
-                continue
+            if not normalized_name:
+                raise InvalidConfigSchemaError(
+                    self.workspaces_path, "workspace name cannot be empty"
+                )
+            if _is_path_like_config_name(normalized_name):
+                raise InvalidConfigSchemaError(
+                    self.workspaces_path, f"invalid workspace name: {normalized_name}"
+                )
+            if normalized_name in seen_names:
+                raise InvalidConfigSchemaError(
+                    self.workspaces_path, f"duplicate workspace name: {normalized_name}"
+                )
+            if Path(normalized_path) in seen_paths:
+                raise InvalidConfigSchemaError(
+                    self.workspaces_path, f"duplicate workspace path: {normalized_path}"
+                )
             result.append({"name": normalized_name, "path": normalized_path})
             seen_names.add(normalized_name)
+            seen_paths.add(Path(normalized_path))
         return result
 
     def save_workspaces(self, workspaces: list[dict[str, str]]) -> None:
