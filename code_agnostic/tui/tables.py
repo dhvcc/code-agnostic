@@ -111,9 +111,11 @@ class PlanTable:
     @staticmethod
     def _source_label_for_action(action: Action) -> str:
         if action.app == "workspace":
+            if action.workspace:
+                return f"Workspace: {action.workspace}"
             return "Workspace"
         if action.project is not None:
-            return "Project"
+            return f"Project: {action.project}"
         return app_label(AppId.CORE)
 
     @staticmethod
