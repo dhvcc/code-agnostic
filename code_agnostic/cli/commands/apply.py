@@ -35,14 +35,17 @@ def _apply_next_steps(plan: SyncPlan, target: str) -> str | None:
     if len(workspace_names) > 3:
         restore_lines.append("- code-agnostic restore -w <workspace>")
 
-    if restore_lines:
-        lines.append("Repair global/workspace outputs from the active synced revision.")
-        lines.extend(restore_lines)
+    project_names = sorted(
+        {action.project for action in plan.actions if action.project}
+    )
+    for project_name in project_names[:3]:
+        restore_lines.append(f"- code-agnostic restore --project {project_name}")
+    if len(project_names) > 3:
+        restore_lines.append("- code-agnostic restore --project <project>")
 
-    if any(action.project is not None for action in plan.actions):
-        lines.append(
-            "Project outputs are checked by status; project restore is not available yet."
-        )
+    if restore_lines:
+        lines.append("Repair managed outputs from the active synced revision.")
+        lines.extend(restore_lines)
 
     return "\n".join(lines)
 

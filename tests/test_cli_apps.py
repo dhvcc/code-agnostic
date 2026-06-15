@@ -61,7 +61,7 @@ def test_apply_syncs_enabled_cursor_app(
     assert (tmp_path / ".cursor" / "mcp.json").exists()
 
 
-def test_apply_next_steps_do_not_offer_global_restore_for_project_outputs() -> None:
+def test_apply_next_steps_offer_project_restore_for_project_outputs() -> None:
     plan = SyncPlan(
         actions=[
             Action(
@@ -83,8 +83,9 @@ def test_apply_next_steps_do_not_offer_global_restore_for_project_outputs() -> N
 
     assert next_steps is not None
     assert "code-agnostic status -a codex" in next_steps
-    assert "code-agnostic restore" not in next_steps
-    assert "project restore is not available yet" in next_steps
+    assert "- code-agnostic restore\n" not in f"{next_steps}\n"
+    assert "- code-agnostic restore --project demo" in next_steps
+    assert "project restore is not available yet" not in next_steps
 
 
 def test_status_reports_cursor_enabled_and_sync_state(
