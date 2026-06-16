@@ -75,12 +75,12 @@ Legacy single-file markdown agents can express the same override with flat alias
 | `name` | supported | compiled | compiled | compiled | compiled |
 | `description` | supported | compiled | compiled | required | compiled |
 | `model` | supported | compiled | native | native | native |
-| `reasoning_effort` | supported | ignored or compiled | native | native | compiled to `effort` |
+| `reasoning_effort` | supported | ignored | native | native | compiled to `effort` |
 | `sandbox_mode` | supported | ignored | native | ignored | ignored |
 | `nickname_candidates` | supported | ignored | native | ignored | ignored |
-| `tools.read` | supported | compiled | ignored | compiled to `permission.read` | ignored |
-| `tools.write` | supported | compiled | ignored | compiled to `permission.edit` | ignored |
-| `tools.mcp` | supported | compiled | ignored | compiled to MCP tool permissions | ignored |
+| `tools.read` | supported | ignored | ignored | compiled to `permission.read` | ignored |
+| `tools.write` | supported | compiled to `readonly` when false | ignored | compiled to `permission.edit` | ignored |
+| `tools.mcp` | supported | ignored | ignored | compiled to MCP tool permissions | ignored |
 | `codex.mcp_servers` | supported | ignored | native | ignored | ignored |
 | `codex.skills.config` | supported | ignored | native | ignored | ignored |
 | `prompt.md` body | supported | compiled | compiled | compiled | compiled |
@@ -91,6 +91,10 @@ Legacy single-file markdown agents can express the same override with flat alias
 
 ## Notes
 
+- Cursor subagent frontmatter currently supports `name`, `description`, `model`,
+  `readonly`, and `is_background`. Canonical `tools.write: false` maps to
+  `readonly: true`; canonical `tools.read`, `tools.mcp`, and
+  `reasoning_effort` are omitted and reported by `explain-lossiness`.
 - Current Codex subagent TOML does not expose generic agent tool permissions;
   `tools.*` is omitted from generated Codex agent files and reported by
   `explain-lossiness`.
