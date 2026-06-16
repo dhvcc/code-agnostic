@@ -274,6 +274,51 @@ def test_skills_install_accepts_repeated_skill_selectors(
     assert (core_root / "skills" / "beta" / "SKILL.md").read_bytes() == b"beta\n"
 
 
+def test_skills_install_rolls_back_multi_skill_copy_failure(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    _legacy_skill(source / "skills" / "alpha", b"alpha\n")
+    _legacy_skill(source / "skills" / "beta", b"beta\n")
+
+    from code_agnostic.cli.commands import skills as skills_command
+
+    original_copytree = skills_command.shutil.copytree
+    copy_calls = 0
+
+    def failing_second_copytree(source_dir: Path, destination: Path) -> None:
+        nonlocal copy_calls
+        copy_calls += 1
+        if copy_calls == 2:
+            raise OSError("simulated copy failure")
+        original_copytree(source_dir, destination)
+
+    monkeypatch.setattr(skills_command.shutil, "copytree", failing_second_copytree)
+
+    result = cli_runner.invoke(
+        cli,
+        [
+            "skills",
+            "install",
+            "--global",
+            "--skill",
+            "alpha",
+            "--skill",
+            "beta",
+            str(source),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "simulated copy failure" in result.output
+    assert not (core_root / "skills" / "alpha").exists()
+    assert not (core_root / "skills" / "beta").exists()
+
+
 def test_skills_install_accepts_local_git_repository(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
 ) -> None:
