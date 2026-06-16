@@ -239,12 +239,14 @@ Global skills live under `~/.config/code-agnostic/skills`. Workspace-local
 skills live under `~/.config/code-agnostic/workspaces/<name>/skills` and can be
 inspected with `code-agnostic skills list -w <name>`. Project-local skills live
 under `~/.config/code-agnostic/projects/<name>/skills` and are generated into
-the registered project directory by `plan` / `apply`. Codex generated skill
-outputs are written to `~/.agents/skills`, while Codex agents and config remain
-under `CODEX_HOME` when set, defaulting to `~/.codex`. Claude Code generated
-skills and agents are written under `~/.claude/skills` and `~/.claude/agents`,
-with workspace/project copies under repo-local `.claude/skills` and
-`.claude/agents`.
+the registered project directory by `plan` / `apply`. The current first-class
+list/remove commands cover global and workspace scopes; project skill inventory
+and removal are not supported yet, and `code-agnostic projects list` only shows
+a coarse `[skills]` marker today. Codex generated skill outputs are written to
+`~/.agents/skills`, while Codex agents and config remain under `CODEX_HOME` when
+set, defaulting to `~/.codex`. Claude Code generated skills and agents are
+written under `~/.claude/skills` and `~/.claude/agents`, with workspace/project
+copies under repo-local `.claude/skills` and `.claude/agents`.
 
 If a target app discovers user-created repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or `.claude/skills`, treat those as unmanaged app inputs unless they were generated from `code-agnostic` project source. Workspace and project sync write only the exact generated paths recorded in their `.sync-state.json` files.
 
@@ -330,6 +332,7 @@ The compiler migration is documented in:
 - [x] Interactive TUI for import selection
 - [x] Claude Code support
 - [x] Project-scoped skill installs and sync
+- [ ] Project-scoped skill inventory and remove commands
 - [ ] `rules add` / `skills add` / `agents add` commands (open `$EDITOR` with template)
 - [ ] Shell auto-complete
 - [ ] Full TUI mode (command palette + menus)

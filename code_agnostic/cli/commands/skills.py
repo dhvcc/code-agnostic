@@ -195,6 +195,11 @@ def skills_install(
             click.echo("Next:")
             click.echo("  code-agnostic plan")
             click.echo("  code-agnostic apply")
+            if scope.startswith("project:"):
+                click.echo(
+                    "Note: project skills are separate; bare "
+                    "`code-agnostic skills list` shows only global skills."
+                )
     except SkillInstallSourceError as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -202,7 +207,13 @@ def skills_install(
             cleanup_skill_install_resolution(resolution)
 
 
-@skills.command("list", help="List global skills, or workspace skills with -w.")
+@skills.command(
+    "list",
+    help=(
+        "List global skills, or workspace skills with -w. Project skills are "
+        "not listed here yet; use projects list for a project marker."
+    ),
+)
 @workspace_option()
 @click.pass_obj
 def skills_list(obj: dict[str, str], workspace: str | None) -> None:
@@ -233,6 +244,11 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
         "- code-agnostic plan\n"
         "- code-agnostic apply"
     )
+    if workspace is None:
+        empty_message += (
+            "\n- Project skills are separate; run "
+            "code-agnostic projects list to see which projects contain skills."
+        )
     ui.render_list(
         "skills",
         ["Skill", "Scope", "Format", "Source"],
@@ -241,7 +257,13 @@ def skills_list(obj: dict[str, str], workspace: str | None) -> None:
     )
 
 
-@skills.command("remove", help="Remove a global skill, or a workspace skill with -w.")
+@skills.command(
+    "remove",
+    help=(
+        "Remove a global skill, or a workspace skill with -w. Project skill "
+        "removal is not supported yet."
+    ),
+)
 @click.option("--name", required=True, help="Skill name to remove.")
 @workspace_option()
 @click.pass_obj

@@ -54,6 +54,8 @@ def test_skills_list_empty(minimal_shared_config: Path, cli_runner) -> None:
     assert "code-agnostic skills install <source> --global" in result.output
     assert "code-agnostic plan" in result.output
     assert "code-agnostic apply" in result.output
+    assert "Project skills are separate" in result.output
+    assert "code-agnostic projects list" in result.output
 
 
 def test_skills_install_global_explicit(
@@ -86,6 +88,7 @@ def test_skills_install_project_explicit(
 
     assert result.exit_code == 0
     assert "Installed project:app skill: bundle-skill" in result.output
+    assert "bare `code-agnostic skills list` shows only global skills" in result.output
     assert (
         core_root / "projects" / "app" / "skills" / "bundle-skill" / "meta.yaml"
     ).read_bytes() == (source / "meta.yaml").read_bytes()
@@ -464,3 +467,25 @@ def test_skills_workspace_list_empty(
     assert "code-agnostic skills install <source> --workspace myws" in result.output
     assert "code-agnostic plan" in result.output
     assert "code-agnostic apply" in result.output
+    assert "Project skills are separate" not in result.output
+
+
+def test_skills_list_help_names_project_listing_gap(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["skills", "list", "--help"])
+
+    assert result.exit_code == 0
+    assert "Project skills are" in result.output
+    assert "not listed" in result.output
+    assert "here yet" in result.output
+
+
+def test_skills_remove_help_names_project_removal_gap(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["skills", "remove", "--help"])
+
+    assert result.exit_code == 0
+    assert "Project skill removal is" in result.output
+    assert "not supported yet" in result.output
