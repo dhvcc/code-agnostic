@@ -75,6 +75,7 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "resize_all_images" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
+        assert "sleep_tool" in features
         assert "responses_websocket_response_processed" not in features
 
     code_mode = global_features["code_mode"]

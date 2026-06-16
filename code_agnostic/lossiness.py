@@ -248,6 +248,16 @@ class LossinessExplainer:
                         reason="target does not support agent nickname_candidates",
                     )
                 )
+            if agent.metadata.model_reasoning_effort:
+                findings.extend(
+                    self._findings_for_targets(
+                        resource_path=resource_path,
+                        property_name="reasoning_effort",
+                        targets=("cursor",),
+                        app=app,
+                        reason="target does not support agent reasoning_effort",
+                    )
+                )
             if agent.metadata.sandbox_mode:
                 findings.extend(
                     self._findings_for_targets(
@@ -263,7 +273,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.read",
-                        targets=("codex",),
+                        targets=("cursor", "codex"),
                         app=app,
                         reason="target does not support agent read permissions",
                     )
@@ -283,7 +293,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.mcp",
-                        targets=("codex",),
+                        targets=("cursor", "codex"),
                         app=app,
                         reason="target does not support agent MCP permissions",
                     )

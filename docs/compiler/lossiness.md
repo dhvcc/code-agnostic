@@ -25,6 +25,9 @@ The compiler must make cross-app lossiness explicit.
 - Skill `tools.*` is lossy for Cursor, Codex, OpenCode, and Claude Code skills because
   current target `SKILL.md` frontmatter does not represent per-skill tool
   permissions.
+- Agent `tools.read`, `tools.mcp`, and `reasoning_effort` are lossy for Cursor
+  agents because current Cursor subagent frontmatter supports `readonly`, but not
+  those controls. Agent `tools.write: false` maps to Cursor `readonly: true`.
 - Agent `tools.*` is lossy for Codex agents because current Codex subagent TOML
   does not expose generic per-agent read, write, or MCP tool permissions.
 - Agent `description` is rejected for OpenCode agents when absent because

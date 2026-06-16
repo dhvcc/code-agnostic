@@ -166,12 +166,52 @@ def test_opencode_compiler_merges_explicit_permission_override() -> None:
     }
 
 
-def test_cursor_compiler() -> None:
-    agent = _make_agent()
+def test_cursor_compiler_uses_current_frontmatter() -> None:
+    agent = _make_agent(tools=AgentToolPermissions(read=False, write=False))
     compiler = CursorAgentCompiler()
     result = compiler.compile(agent)
-    assert "test-agent" in result
-    assert "Agent body." in result
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload == {
+        "name": "test-agent",
+        "description": "Test agent",
+        "model": "claude-sonnet-4-20250514",
+        "readonly": True,
+    }
+    assert body.strip() == "Agent body."
+
+
+def test_cursor_compiler_uses_supported_app_overrides() -> None:
+    agent = _make_agent(
+        model="gpt-5.4-mini",
+        app_overrides={
+            "cursor": {
+                "model": "inherit",
+                "is_background": True,
+                "readonly": False,
+            }
+        },
+        tools=AgentToolPermissions(read=True, write=False),
+    )
+
+    compiler = CursorAgentCompiler()
+    result = compiler.compile(agent)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["model"] == "inherit"
+    assert payload["is_background"] is True
+    assert payload["readonly"] is False
+
+
+def test_cursor_compiler_rejects_unsupported_app_override() -> None:
+    agent = _make_agent(app_overrides={"cursor": {"permission": "ask"}})
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CursorAgentCompiler().compile(agent)
+
+    assert "x-cursor.permission is not supported" in exc_info.value.detail
 
 
 def test_cursor_compiler_does_not_leak_other_app_overrides() -> None:
