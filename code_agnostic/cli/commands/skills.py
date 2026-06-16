@@ -97,6 +97,14 @@ def _preflight_skill_destinations(
     return installs
 
 
+def _rollback_skill_destinations(destinations: list[Path]) -> None:
+    for destination in reversed(destinations):
+        if destination.is_symlink() or destination.is_file():
+            destination.unlink()
+        elif destination.is_dir():
+            shutil.rmtree(destination)
+
+
 def _validate_skill_source_names(source_dirs: tuple[Path, ...]) -> list[str]:
     names: list[str] = []
     seen_names: set[str] = set()
@@ -168,15 +176,21 @@ def skills_install(
         for _name, _source_dir, destination in installs:
             destination.parent.mkdir(parents=True, exist_ok=True)
         installed = False
-        for name, source_dir, destination in installs:
-            shutil.copytree(source_dir, destination)
-            installed = True
-            if scope_note is not None:
-                click.echo(scope_note)
-                scope_note = None
-            click.echo(f"Installed {scope} skill: {name}")
-            click.echo(f"Source: {compact_home_path(source_dir)}")
-            click.echo(f"Destination: {compact_home_path(destination)}")
+        try:
+            for name, source_dir, destination in installs:
+                shutil.copytree(source_dir, destination)
+                installed = True
+                if scope_note is not None:
+                    click.echo(scope_note)
+                    scope_note = None
+                click.echo(f"Installed {scope} skill: {name}")
+                click.echo(f"Source: {compact_home_path(source_dir)}")
+                click.echo(f"Destination: {compact_home_path(destination)}")
+        except Exception as exc:
+            _rollback_skill_destinations(
+                [destination for _name, _source_dir, destination in installs]
+            )
+            raise click.ClickException(f"Skill install failed: {exc}") from exc
         if installed:
             click.echo("Next:")
             click.echo("  code-agnostic plan")
