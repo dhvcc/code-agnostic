@@ -187,6 +187,8 @@ def test_cursor_compiler_uses_supported_app_overrides() -> None:
         model="gpt-5.4-mini",
         app_overrides={
             "cursor": {
+                "name": "cursor-reviewer",
+                "description": "Cursor-specific reviewer",
                 "model": "inherit",
                 "is_background": True,
                 "readonly": False,
@@ -200,6 +202,8 @@ def test_cursor_compiler_uses_supported_app_overrides() -> None:
     raw, _body = result.split("---\n", 2)[1:]
     payload = yaml.safe_load(raw)
 
+    assert payload["name"] == "cursor-reviewer"
+    assert payload["description"] == "Cursor-specific reviewer"
     assert payload["model"] == "inherit"
     assert payload["is_background"] is True
     assert payload["readonly"] is False

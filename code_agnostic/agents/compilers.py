@@ -13,7 +13,9 @@ from code_agnostic.agents.models import Agent
 from code_agnostic.agents.opencode import serialize_opencode_agent
 from code_agnostic.errors import InvalidConfigSchemaError
 
-_CURSOR_AGENT_FRONTMATTER_KEYS = frozenset({"model", "readonly", "is_background"})
+_CURSOR_AGENT_FRONTMATTER_KEYS = frozenset(
+    {"name", "description", "model", "readonly", "is_background"}
+)
 
 
 class IAgentCompiler(ABC):
