@@ -73,6 +73,7 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "code_mode" in features
         assert "local_thread_store_compression" in features
         assert "resize_all_images" in features
+        assert "respect_system_proxy" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
         assert "sleep_tool" in features
