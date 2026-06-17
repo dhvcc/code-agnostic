@@ -283,6 +283,30 @@ def test_import_plan_conflict_skip_shows_overwrite_next_step(
     assert "code-agnostic import plan -a codex --on-conflict overwrite" in result.output
 
 
+def test_import_plan_empty_source_points_to_source_root(
+    cli_runner, tmp_path: Path
+) -> None:
+    result = cli_runner.invoke(
+        cli,
+        [
+            "import",
+            "plan",
+            "-a",
+            "codex",
+            "--source-root",
+            str(tmp_path / "empty-codex"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Source MCP config missing" in result.output
+    assert (
+        "No importable Codex config found for the selected sections." in result.output
+    )
+    assert "Check --source-root" in result.output
+    assert "No import changes needed" not in result.output
+
+
 def test_import_plan_default_view_shows_app_labels(cli_runner, tmp_path: Path) -> None:
     _write_codex_source(tmp_path / ".codex", {"demo": {"command": "uvx"}})
 
