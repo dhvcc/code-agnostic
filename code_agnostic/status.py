@@ -122,6 +122,7 @@ class StatusService:
         app_services: list[IAppConfigService] | None = None,
         planned_actions: list[Action] | None = None,
     ) -> list[ProjectStatusRow]:
+        projects = load_project_entries(source_repo)
         if not app_services:
             return []
 
@@ -137,7 +138,7 @@ class StatusService:
         ]
 
         rows: list[ProjectStatusRow] = []
-        for project in load_project_entries(source_repo):
+        for project in projects:
             project_name = project["name"]
             project_path = Path(project["path"])
 
