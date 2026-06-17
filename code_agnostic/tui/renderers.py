@@ -1,5 +1,6 @@
 from rich.console import Console
 
+from code_agnostic.apps.app_id import app_label
 from code_agnostic.imports.models import (
     ImportActionStatus,
     ImportApplyResult,
@@ -479,6 +480,15 @@ class SyncConsoleUI:
             return (
                 "Skipped conflicts were left unchanged.\n"
                 f"- code-agnostic import plan{target_flag} --on-conflict overwrite"
+            )
+
+        if plan.skipped and all(
+            item.lower().startswith("source ") and " missing:" in item.lower()
+            for item in plan.skipped
+        ):
+            return (
+                f"No importable {app_label(plan.source_app)} config found for the selected sections.\n"
+                "Check --source-root, or choose a different source app."
             )
 
         return "No import changes needed.\n- code-agnostic validate"
