@@ -115,6 +115,24 @@ def test_entrypoint_workspaces_remove_preserves_invalid_registry(
     assert registry.read_text(encoding="utf-8") == registry_text
 
 
+def test_entrypoint_status_fails_on_invalid_project_registry(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    registry = home / ".config" / "code-agnostic" / "config" / "projects.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = _run_cli(home, "status")
+
+    assert result.returncode != 0
+    assert "projects" in result.stdout
+    assert "error" in result.stdout
+    assert "Invalid JSON" in result.stdout
+    assert "format" in result.stdout
+    assert registry.read_text(encoding="utf-8") == "{bad"
+
+
 def test_entrypoint_apply_fails_on_generated_skill_conflict(
     tmp_path: Path,
 ) -> None:

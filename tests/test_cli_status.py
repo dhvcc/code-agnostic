@@ -198,6 +198,22 @@ def test_status_reports_error_for_corrupted_workspace_registry(
     assert "synced" not in result.output
 
 
+def test_status_reports_error_for_corrupted_project_registry(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    registry = minimal_shared_config / "config" / "projects.json"
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["status"])
+
+    assert result.exit_code != 0
+    assert "projects" in result.output
+    assert "error" in result.output
+    assert "Invalid JSON" in result.output
+    assert "format" in result.output
+    assert "synced" not in result.output
+
+
 def test_status_app_scope_returns_nonzero_for_workspace_error(
     tmp_path: Path, cli_runner, enable_app
 ) -> None:
