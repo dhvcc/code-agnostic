@@ -157,6 +157,30 @@ def test_entrypoint_skills_remove_refuses_symlinked_source_dir(
     )
 
 
+def test_entrypoint_skills_install_rejects_invalid_bundle_before_writing(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    source = tmp_path / "bad-skill"
+    source.mkdir()
+    (source / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: bad-skill\n"
+        "description: Bad skill\n"
+        "surprise: nope\n",
+        encoding="utf-8",
+    )
+    (source / "prompt.md").write_text("Bad skill\n", encoding="utf-8")
+
+    result = _run_cli(home, "skills", "install", "--global", str(source))
+
+    assert result.returncode != 0
+    assert "Invalid config schema" in result.stderr
+    assert "surprise" in result.stderr
+    assert not (home / ".config" / "code-agnostic" / "skills" / "bad-skill").exists()
+
+
 def test_entrypoint_apply_fails_on_generated_skill_conflict(
     tmp_path: Path,
 ) -> None:

@@ -19,6 +19,7 @@ from code_agnostic.skills.install_sources import (
     cleanup_skill_install_resolution,
     resolve_skill_install_source,
 )
+from code_agnostic.spec.loaders import load_skill_bundle
 from code_agnostic.tui import SyncConsoleUI
 from code_agnostic.utils import compact_home_path
 
@@ -98,6 +99,7 @@ def _preflight_skill_destinations(
         if destination.exists():
             raise click.ClickException(f"Skill already exists: {scope}:{name}")
         installs.append((name, source_dir, destination))
+    _validate_skill_source_metadata(source_dirs)
     return installs
 
 
@@ -120,6 +122,12 @@ def _validate_skill_source_names(source_dirs: tuple[Path, ...]) -> list[str]:
         seen_names.add(name)
         names.append(name)
     return names
+
+
+def _validate_skill_source_metadata(source_dirs: tuple[Path, ...]) -> None:
+    for source_dir in source_dirs:
+        if (source_dir / "meta.yaml").exists() and (source_dir / "prompt.md").exists():
+            load_skill_bundle(source_dir)
 
 
 @click.group(
@@ -205,7 +213,7 @@ def skills_install(
                     "Note: project skills are separate; bare "
                     "`code-agnostic skills list` shows only global skills."
                 )
-    except SkillInstallSourceError as exc:
+    except SyncAppError as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
         if resolution is not None:

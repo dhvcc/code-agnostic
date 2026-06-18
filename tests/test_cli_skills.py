@@ -204,6 +204,29 @@ def test_skills_install_rejects_invalid_source(
     assert "not-a-skill" in result.output
 
 
+def test_skills_install_rejects_invalid_bundle_before_writing(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    source = tmp_path / "bad-skill"
+    source.mkdir()
+    (source / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: bad-skill\n"
+        "description: Bad skill\n"
+        "surprise: nope\n",
+        encoding="utf-8",
+    )
+    (source / "prompt.md").write_text("Bad skill\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["skills", "install", "--global", str(source)])
+
+    assert result.exit_code != 0
+    assert "Invalid config schema" in result.output
+    assert "surprise" in result.output
+    assert not (core_root / "skills" / "bad-skill").exists()
+
+
 def test_skills_install_rejects_path_like_destination_name(
     minimal_shared_config: Path, tmp_path: Path, cli_runner
 ) -> None:
