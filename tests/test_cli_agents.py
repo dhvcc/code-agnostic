@@ -89,6 +89,26 @@ def test_agents_remove_rejects_path_like_name(
     assert victim.read_text(encoding="utf-8") == "keep\n"
 
 
+def test_agents_remove_rejects_symlinked_source_dir(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    outside = tmp_path / "outside-agents"
+    outside_agent = outside / "planner"
+    outside_agent.mkdir(parents=True)
+    (outside_agent / "meta.yaml").write_text(
+        "spec_version: v1\nkind: agent\nname: planner\n", encoding="utf-8"
+    )
+    (outside_agent / "prompt.md").write_text("keep\n", encoding="utf-8")
+    (core_root / "agents").symlink_to(outside)
+
+    result = cli_runner.invoke(cli, ["agents", "remove", "--name", "planner"])
+
+    assert result.exit_code != 0
+    assert "Refusing to modify symlinked agents source directory" in result.output
+    assert outside_agent.exists()
+    assert (outside_agent / "prompt.md").read_text(encoding="utf-8") == "keep\n"
+
+
 def test_agents_workspace_scoped(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
 ) -> None:

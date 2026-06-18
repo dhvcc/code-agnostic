@@ -6,7 +6,11 @@ import shutil
 import click
 from rich.console import Console
 
-from code_agnostic.cli.helpers import validate_resource_name, workspace_config_root
+from code_agnostic.cli.helpers import (
+    reject_symlinked_source_dir,
+    validate_resource_name,
+    workspace_config_root,
+)
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.errors import SyncAppError
@@ -167,6 +171,7 @@ def skills_install(
         project=project,
     )
     try:
+        reject_symlinked_source_dir(root / "skills", "skills")
         if resolution is None:
             resolution = resolve_skill_install_source(
                 source,
@@ -271,6 +276,7 @@ def skills_remove(obj: dict[str, str], name: str, workspace: str | None) -> None
     validate_resource_name(name, "skill")
     core = CoreRepository()
     root = workspace_config_root(core, workspace)
+    reject_symlinked_source_dir(root / "skills", "skills")
     skill_dir = root / "skills" / name
     if not skill_dir.exists():
         raise click.ClickException(f"Skill not found: {name}")
