@@ -64,6 +64,13 @@ def test_status_empty_state_suggests_enabling_app(
     assert "code-agnostic apply -a <app>" in result.output
 
 
+def test_status_help_mentions_project_status(cli_runner) -> None:
+    result = cli_runner.invoke(cli, ["status", "--help"])
+
+    assert result.exit_code == 0
+    assert "editors, workspaces, and projects" in result.output
+
+
 def test_status_reports_workspace_repo_generated_config_content_drift(
     minimal_shared_config: Path,
     tmp_path: Path,
@@ -106,6 +113,9 @@ def test_status_reports_workspace_repo_generated_config_content_drift(
     assert "service-api" in result.output
     assert "drift" in result.output
     assert "needs sync" in result.output
+    assert "code-agnostic plan" in result.output
+    assert "code-agnostic apply" in result.output
+    assert "code-agnostic restore -w ws" in result.output
 
 
 def test_status_can_scope_to_single_app(
