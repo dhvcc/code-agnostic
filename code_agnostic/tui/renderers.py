@@ -275,22 +275,28 @@ class SyncConsoleUI:
             )
 
         project_rows = projects or []
-        if not project_rows:
-            return
+        if project_rows:
+            project_style = UIStyle.GREEN.value
+            if any(item.status == ProjectSyncStatus.DRIFT for item in project_rows):
+                project_style = UIStyle.YELLOW.value
+            if any(item.status == ProjectSyncStatus.ERROR for item in project_rows):
+                project_style = UIStyle.RED.value
 
-        project_style = UIStyle.GREEN.value
-        if any(item.status == ProjectSyncStatus.DRIFT for item in project_rows):
-            project_style = UIStyle.YELLOW.value
-        if any(item.status == ProjectSyncStatus.ERROR for item in project_rows):
-            project_style = UIStyle.RED.value
-
-        self.console.print(
-            UISection.wrap(
-                "project sync",
-                StatusTable.project_overview(project_rows),
-                style=project_style,
+            self.console.print(
+                UISection.wrap(
+                    "project sync",
+                    StatusTable.project_overview(project_rows),
+                    style=project_style,
+                )
             )
+
+        drift_next_steps = self._status_drift_next_steps(
+            editors, workspaces, project_rows
         )
+        if drift_next_steps:
+            self.console.print(
+                UISection.note("next", drift_next_steps, style=UIStyle.DIM.value)
+            )
 
     @staticmethod
     def _status_next_steps(editors: list[EditorStatusRow]) -> str | None:
@@ -314,6 +320,34 @@ class SyncConsoleUI:
             "- code-agnostic plan -a <app>\n"
             "- code-agnostic apply -a <app>"
         )
+
+    @staticmethod
+    def _status_drift_next_steps(
+        editors: list[EditorStatusRow],
+        workspaces: list[WorkspaceStatusRow],
+        projects: list[ProjectStatusRow],
+    ) -> str | None:
+        workspace_names = [
+            item.name for item in workspaces if item.status == WorkspaceSyncStatus.DRIFT
+        ]
+        project_names = [
+            item.name for item in projects if item.status == ProjectSyncStatus.DRIFT
+        ]
+        if not workspace_names and not project_names:
+            return None
+
+        app_suffix = f" -a {editors[0].name}" if len(editors) == 1 else ""
+        lines = [
+            "Review drift before changing generated files.",
+            f"- code-agnostic plan{app_suffix}",
+            f"- code-agnostic apply{app_suffix}",
+            "If managed outputs were edited after apply, restore the active revision.",
+        ]
+        lines.extend(f"- code-agnostic restore -w {name}" for name in workspace_names)
+        lines.extend(
+            f"- code-agnostic restore --project {name}" for name in project_names
+        )
+        return "\n".join(lines)
 
     def render_apps(self, items: list[AppStatusRow]) -> None:
         self.console.print(

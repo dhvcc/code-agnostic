@@ -240,3 +240,34 @@ def test_project_status_cli_renders_project_section(
     assert result.exit_code == 0
     assert "project sync" in result.output
     assert "service-api" in result.output
+
+
+def test_project_status_drift_suggests_project_recovery(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+    cli_runner,
+    enable_app,
+) -> None:
+    project_root = tmp_path / "service-api"
+    project_root.mkdir()
+    core = CoreRepository(core_root)
+    _register_project(core, project_root, write_json)
+    _write_project_skill(core)
+    enable_app("codex")
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+    assert apply_result.exit_code == 0
+
+    target = project_root / ".agents" / "skills" / "project-tool" / "SKILL.md"
+    target.write_text("manual edit\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["status", "-a", "codex"])
+
+    assert result.exit_code == 0
+    assert "project sync" in result.output
+    assert "drift" in result.output
+    assert "code-agnostic plan -a codex" in result.output
+    assert "code-agnostic apply -a codex" in result.output
+    assert "code-agnostic restore --project service-api" in result.output

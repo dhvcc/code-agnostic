@@ -38,7 +38,7 @@ def _status_row_for_app(app_name: str, apps: AppsService) -> EditorStatusRow:
         )
 
 
-@click.command(help="Show sync status for editors and workspaces.")
+@click.command(help="Show sync status for editors, workspaces, and projects.")
 @app_option()
 @verbose_option()
 @click.pass_obj
