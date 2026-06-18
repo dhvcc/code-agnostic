@@ -74,6 +74,7 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "local_thread_store_compression" in features
         assert "resize_all_images" in features
         assert "respect_system_proxy" in features
+        assert "rollout_budget" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
         assert "sleep_tool" in features
@@ -84,6 +85,46 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
     code_mode_config = schema["definitions"]["CodeModeConfigToml"]["properties"]
     assert "direct_only_tool_namespaces" in code_mode_config
     assert "excluded_tool_namespaces" in code_mode_config
+
+    rollout_budget = global_features["rollout_budget"]
+    assert rollout_budget == {
+        "$ref": "#/definitions/FeatureToml_for_RolloutBudgetConfigToml"
+    }
+    assert profile_features["rollout_budget"] == rollout_budget
+    assert schema["definitions"]["FeatureToml_for_RolloutBudgetConfigToml"] == {
+        "anyOf": [
+            {"type": "boolean"},
+            {"$ref": "#/definitions/RolloutBudgetConfigToml"},
+        ]
+    }
+    rollout_budget_config = schema["definitions"]["RolloutBudgetConfigToml"]
+    assert rollout_budget_config == {
+        "additionalProperties": False,
+        "properties": {
+            "enabled": {"type": "boolean"},
+            "limit_tokens": {
+                "format": "int64",
+                "minimum": 1.0,
+                "type": "integer",
+            },
+            "prefill_token_weight": {
+                "format": "double",
+                "minimum": 0.0,
+                "type": "number",
+            },
+            "reminder_interval_tokens": {
+                "format": "int64",
+                "minimum": 1.0,
+                "type": "integer",
+            },
+            "sampling_token_weight": {
+                "format": "double",
+                "minimum": 0.0,
+                "type": "number",
+            },
+        },
+        "type": "object",
+    }
 
 
 def test_codex_schema_repository_fallback_allows_advertised_reasoning_efforts(
