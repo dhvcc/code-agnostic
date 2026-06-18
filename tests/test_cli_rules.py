@@ -56,6 +56,22 @@ def test_rules_remove_rejects_path_like_name(
     assert victim.read_text(encoding="utf-8") == "keep\n"
 
 
+def test_rules_remove_rejects_symlinked_source_dir(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    outside = tmp_path / "outside-rules"
+    outside.mkdir()
+    outside_rule = outside / "old-rule.md"
+    outside_rule.write_text("keep\n", encoding="utf-8")
+    (core_root / "rules").symlink_to(outside)
+
+    result = cli_runner.invoke(cli, ["rules", "remove", "--name", "old-rule"])
+
+    assert result.exit_code != 0
+    assert "Refusing to modify symlinked rules source directory" in result.output
+    assert outside_rule.read_text(encoding="utf-8") == "keep\n"
+
+
 def test_rules_workspace_scoped_list(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
 ) -> None:

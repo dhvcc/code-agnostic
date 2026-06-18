@@ -5,7 +5,11 @@ import shutil
 import click
 from rich.console import Console
 
-from code_agnostic.cli.helpers import validate_resource_name, workspace_config_root
+from code_agnostic.cli.helpers import (
+    reject_symlinked_source_dir,
+    validate_resource_name,
+    workspace_config_root,
+)
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.tui import SyncConsoleUI
@@ -36,6 +40,7 @@ def agents_remove(obj: dict[str, str], name: str, workspace: str | None) -> None
     validate_resource_name(name, "agent")
     core = CoreRepository()
     root = workspace_config_root(core, workspace)
+    reject_symlinked_source_dir(root / "agents", "agents")
     agent_dir = root / "agents" / name
     if agent_dir.is_dir():
         shutil.rmtree(agent_dir)

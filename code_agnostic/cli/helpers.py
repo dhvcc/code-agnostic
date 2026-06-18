@@ -57,6 +57,13 @@ def validate_resource_name(name: str, resource_type: str) -> None:
         raise click.ClickException(f"Invalid {resource_type} name: {name}")
 
 
+def reject_symlinked_source_dir(path: Path, resource_type: str) -> None:
+    if path.is_symlink():
+        raise click.ClickException(
+            f"Refusing to modify symlinked {resource_type} source directory: {path}"
+        )
+
+
 def status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRow:
     if not apps.is_enabled(app_name):
         return EditorStatusRow(

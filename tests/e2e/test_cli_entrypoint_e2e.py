@@ -133,6 +133,30 @@ def test_entrypoint_status_fails_on_invalid_project_registry(
     assert registry.read_text(encoding="utf-8") == "{bad"
 
 
+def test_entrypoint_skills_remove_refuses_symlinked_source_dir(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    source_root = home / ".config" / "code-agnostic"
+    outside = tmp_path / "outside-skills"
+    outside_skill = outside / "keep"
+    outside_skill.mkdir(parents=True)
+    (outside_skill / "SKILL.md").write_text("external data\n", encoding="utf-8")
+    source_root.mkdir(parents=True)
+    (source_root / "skills").symlink_to(outside)
+
+    result = _run_cli(home, "skills", "remove", "--name", "keep")
+
+    assert result.returncode != 0
+    assert "Refusing to modify symlinked skills source directory" in (
+        result.stdout + result.stderr
+    )
+    assert outside_skill.exists()
+    assert (outside_skill / "SKILL.md").read_text(encoding="utf-8") == (
+        "external data\n"
+    )
+
+
 def test_entrypoint_apply_fails_on_generated_skill_conflict(
     tmp_path: Path,
 ) -> None:

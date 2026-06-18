@@ -231,6 +231,21 @@ def test_skills_install_refuses_duplicate_destination(
     assert (existing / "SKILL.md").read_bytes() == b"existing\n"
 
 
+def test_skills_install_rejects_symlinked_source_dir(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    source = _legacy_skill(tmp_path / "my-skill", b"new\n")
+    outside = tmp_path / "outside-skills"
+    outside.mkdir()
+    (core_root / "skills").symlink_to(outside)
+
+    result = cli_runner.invoke(cli, ["skills", "install", "--global", str(source)])
+
+    assert result.exit_code != 0
+    assert "Refusing to modify symlinked skills source directory" in result.output
+    assert not (outside / "my-skill").exists()
+
+
 def test_skills_install_requires_selector_for_multiple_candidates(
     minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
 ) -> None:
@@ -433,6 +448,21 @@ def test_skills_remove_rejects_path_like_name(
     assert result.exit_code != 0
     assert "Invalid skill name" in result.output
     assert victim.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_skills_remove_rejects_symlinked_source_dir(
+    minimal_shared_config: Path, tmp_path: Path, core_root: Path, cli_runner
+) -> None:
+    outside = tmp_path / "outside-skills"
+    outside_skill = _legacy_skill(outside / "old-skill", b"keep\n")
+    (core_root / "skills").symlink_to(outside)
+
+    result = cli_runner.invoke(cli, ["skills", "remove", "--name", "old-skill"])
+
+    assert result.exit_code != 0
+    assert "Refusing to modify symlinked skills source directory" in result.output
+    assert outside_skill.exists()
+    assert (outside_skill / "SKILL.md").read_bytes() == b"keep\n"
 
 
 def test_skills_workspace_scoped(
