@@ -81,6 +81,9 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
 
     code_mode = global_features["code_mode"]
     assert code_mode == {"$ref": "#/definitions/FeatureToml_for_CodeModeConfigToml"}
+    code_mode_config = schema["definitions"]["CodeModeConfigToml"]["properties"]
+    assert "direct_only_tool_namespaces" in code_mode_config
+    assert "excluded_tool_namespaces" in code_mode_config
 
 
 def test_codex_schema_repository_fallback_allows_advertised_reasoning_efforts(
@@ -108,7 +111,9 @@ def test_codex_schema_repository_fallback_includes_current_app_config(
 
     schema = CodexSchemaRepository(ttl_seconds=0).load_schema()
     app_config = schema["definitions"]["AppConfig"]["properties"]
+    apps_default_config = schema["definitions"]["AppsDefaultConfig"]["properties"]
     assert "approvals_reviewer" in app_config
+    assert "default_tools_approval_mode" in apps_default_config
 
 
 def test_codex_schema_repository_fallback_includes_realtime_webrtc_base_url(
