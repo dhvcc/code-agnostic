@@ -6,6 +6,8 @@ from code_agnostic.constants import (
     CLAUDE_PROJECT_DIRNAME,
     CODEX_CONFIG_FILENAME,
     CODEX_PROJECT_DIRNAME,
+    COPILOT_PROJECT_CONFIG_FILENAME,
+    COPILOT_PROJECT_DIRNAME,
     CURSOR_CONFIG_FILENAME,
     CURSOR_PROJECT_DIRNAME,
     OPENCODE_CONFIG_FILENAME,
@@ -19,6 +21,7 @@ class AppId(str, Enum):
     CURSOR = "cursor"
     CODEX = "codex"
     CLAUDE = "claude"
+    COPILOT = "copilot"
 
 
 @dataclass(frozen=True)
@@ -88,6 +91,17 @@ APP_CATALOG: dict[AppId, AppMetadata] = {
         supports_workspace_propagation=True,
         project_dir_name=CLAUDE_PROJECT_DIRNAME,
         config_filename=CLAUDE_CONFIG_FILENAME,
+    ),
+    AppId.COPILOT: AppMetadata(
+        app_id=AppId.COPILOT,
+        label="GitHub Copilot",
+        targetable=True,
+        toggleable=True,
+        importable=True,
+        supports_import_agents=True,
+        supports_workspace_propagation=True,
+        project_dir_name=COPILOT_PROJECT_DIRNAME,
+        config_filename=COPILOT_PROJECT_CONFIG_FILENAME,
     ),
 }
 

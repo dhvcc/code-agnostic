@@ -7,6 +7,7 @@ from code_agnostic.constants import (
     AGENTS_PROJECT_DIRNAME,
     CLAUDE_PROJECT_DIRNAME,
     CODEX_PROJECT_DIRNAME,
+    COPILOT_PROJECT_DIRNAME,
     CURSOR_PROJECT_DIRNAME,
     OPENCODE_PROJECT_DIRNAME,
     SKILLS_DIRNAME,
@@ -36,4 +37,6 @@ def _project_dir_name(app_id: AppId) -> str:
         return CODEX_PROJECT_DIRNAME
     if app_id == AppId.CLAUDE:
         return CLAUDE_PROJECT_DIRNAME
+    if app_id == AppId.COPILOT:
+        return COPILOT_PROJECT_DIRNAME
     raise ValueError(f"Unsupported app for project artifact: {app_id.value}")

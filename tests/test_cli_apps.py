@@ -14,6 +14,7 @@ def test_apps_list_shows_all_disabled_by_default(
     assert "opencode" in result.output
     assert "cursor" in result.output
     assert "codex" in result.output
+    assert "copilot" in result.output
     assert "disabled" in result.output
 
 

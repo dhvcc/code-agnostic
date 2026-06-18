@@ -17,7 +17,7 @@ from workspace rules. They must have the same ownership rules.
 
 The same risk exists for generated skills and agents when target apps use folders
 that users also edit directly, such as `.claude`, `.agents`, `.codex`, `.cursor`,
-or `.opencode`.
+`.opencode`, or `.github`.
 
 ## Ownership model
 

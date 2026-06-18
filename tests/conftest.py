@@ -24,6 +24,7 @@ def isolated_home(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("APPDATA", str(tmp_path / ".config"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / ".local" / "share"))
     monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("COPILOT_HOME", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
 
@@ -33,6 +34,7 @@ def enforce_default_path_isolation(isolated_home, tmp_path: Path) -> None:
 
     from code_agnostic.apps.codex.config_repository import CodexConfigRepository
     from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
+    from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
     from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
     from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
     from code_agnostic.core.repository import CoreRepository
@@ -43,6 +45,10 @@ def enforce_default_path_isolation(isolated_home, tmp_path: Path) -> None:
     assert CodexConfigRepository().root == tmp_path / ".codex"
     assert ClaudeConfigRepository().root == tmp_path / ".claude"
     assert ClaudeConfigRepository().config_path == tmp_path / ".claude.json"
+    assert CopilotConfigRepository().root == tmp_path / ".copilot"
+    assert CopilotConfigRepository().config_path == (
+        tmp_path / ".copilot" / "mcp-config.json"
+    )
 
 
 @pytest.fixture(autouse=True)

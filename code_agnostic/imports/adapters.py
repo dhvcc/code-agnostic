@@ -7,6 +7,8 @@ from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
+from code_agnostic.apps.copilot.mapper import CopilotMCPMapper
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
@@ -72,5 +74,15 @@ def create_import_adapter(app: str, source_root: Path | None = None) -> ImportAd
             agents_dir=claude_repo.agents_dir,
             mapper=ClaudeMCPMapper(),
             config_repository=claude_repo,
+        )
+    if normalized == AppId.COPILOT.value:
+        copilot_repo = CopilotConfigRepository(root=source_root)
+        return ImportAdapter(
+            app_id=AppId.COPILOT,
+            root=copilot_repo.root,
+            skills_dir=copilot_repo.skills_dir,
+            agents_dir=copilot_repo.agents_dir,
+            mapper=CopilotMCPMapper(),
+            config_repository=copilot_repo,
         )
     raise ValueError(f"Unsupported source app: {app}")

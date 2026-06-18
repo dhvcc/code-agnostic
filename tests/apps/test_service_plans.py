@@ -16,6 +16,9 @@ from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
 from code_agnostic.apps.cursor.service import CursorConfigService
 from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
+from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
+from code_agnostic.apps.copilot.mapper import CopilotMCPMapper
+from code_agnostic.apps.copilot.service import CopilotConfigService
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
@@ -64,6 +67,13 @@ def _build_claude_service(core: CoreRepository, root: Path) -> ClaudeConfigServi
     )
 
 
+def _build_copilot_service(core: CoreRepository, root: Path) -> CopilotConfigService:
+    return CopilotConfigService(
+        repository=CopilotConfigRepository(root=root),
+        mapper=CopilotMCPMapper(),
+    )
+
+
 @pytest.mark.parametrize(
     ("app_id", "service_factory", "target_root_name"),
     [
@@ -71,6 +81,7 @@ def _build_claude_service(core: CoreRepository, root: Path) -> ClaudeConfigServi
         (AppId.CURSOR, _build_cursor_service, ".cursor"),
         (AppId.CODEX, _build_codex_service, ".codex"),
         (AppId.CLAUDE, _build_claude_service, ".claude"),
+        (AppId.COPILOT, _build_copilot_service, ".copilot"),
     ],
 )
 def test_app_services_build_skill_and_agent_scopes(
@@ -107,6 +118,7 @@ def test_app_services_build_skill_and_agent_scopes(
         (AppId.CURSOR, _build_cursor_service, ".cursor"),
         (AppId.CODEX, _build_codex_service, ".codex"),
         (AppId.CLAUDE, _build_claude_service, ".claude"),
+        (AppId.COPILOT, _build_copilot_service, ".copilot"),
     ],
 )
 def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
@@ -160,6 +172,7 @@ def test_agent_planning_only_uses_managed_symlink_ancestors_where_supported(
         (AppId.CURSOR, _build_cursor_service, ".cursor"),
         (AppId.CODEX, _build_codex_service, ".codex"),
         (AppId.CLAUDE, _build_claude_service, ".claude"),
+        (AppId.COPILOT, _build_copilot_service, ".copilot"),
     ],
 )
 def test_app_generated_skills_conflict_with_unmanaged_existing_files(

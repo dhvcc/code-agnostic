@@ -87,7 +87,7 @@ def _is_skill_bundle_dir(path: Path) -> bool:
 
 def _coerce_skill_app_overrides(payload: dict) -> dict[str, dict[str, object]]:
     overrides: dict[str, dict[str, object]] = {}
-    for app_name in ("cursor", "codex", "opencode", "claude"):
+    for app_name in ("cursor", "codex", "opencode", "claude", "copilot"):
         raw = payload.get(f"x-{app_name}")
         if not isinstance(raw, dict):
             continue

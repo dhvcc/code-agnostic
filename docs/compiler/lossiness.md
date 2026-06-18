@@ -22,7 +22,8 @@ The compiler must make cross-app lossiness explicit.
 - Codex MCP `env_vars` entries with `source = "remote"` are rejected on import
   because preserving the remote-executor source would require a Codex-specific
   canonical extension that does not exist in v1.
-- Skill `tools.*` is lossy for Cursor, Codex, OpenCode, and Claude Code skills because
+- Skill `tools.*` is lossy for Cursor, Codex, OpenCode, Claude Code, and
+  GitHub Copilot skills because
   current target `SKILL.md` frontmatter does not represent per-skill tool
   permissions.
 - Agent `tools.read`, `tools.mcp`, and `reasoning_effort` are lossy for Cursor
@@ -30,6 +31,10 @@ The compiler must make cross-app lossiness explicit.
   those controls. Agent `tools.write: false` maps to Cursor `readonly: true`.
 - Agent `tools.*` is lossy for Codex agents because current Codex subagent TOML
   does not expose generic per-agent read, write, or MCP tool permissions.
+- Agent `reasoning_effort`, `sandbox_mode`, `nickname_candidates`, and
+  Codex-specific agent config are lossy for GitHub Copilot agents. Copilot agent
+  `tools` are generated only from canonical read/write/MCP references that are
+  safely representable.
 - Agent `description` is rejected for OpenCode agents when absent because
   OpenCode requires that field for agent config.
 

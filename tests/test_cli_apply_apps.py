@@ -124,6 +124,59 @@ def test_apply_codex_target_writes_toml_config(
     assert "[mcp_servers]" not in codex_config.read_text(encoding="utf-8")
 
 
+def test_apply_copilot_target_writes_global_mcp_config(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("copilot")
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "local": {
+                        "command": "uvx",
+                        "args": ["tool"],
+                        "env": {"TOKEN": "${TOKEN}"},
+                        "timeout": 3000,
+                    },
+                    "remote": {
+                        "url": "https://example.com/mcp",
+                        "headers": {"Authorization": "Bearer ${API_KEY}"},
+                        "timeout": 5000,
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    copilot_config = tmp_path / ".copilot" / "mcp-config.json"
+    assert copilot_config.exists()
+    payload = json.loads(copilot_config.read_text(encoding="utf-8"))
+    assert payload["mcpServers"]["local"] == {
+        "tools": ["*"],
+        "type": "local",
+        "command": "uvx",
+        "args": ["tool"],
+        "env": {"TOKEN": "${TOKEN}"},
+        "timeout": 3000,
+    }
+    assert payload["mcpServers"]["remote"] == {
+        "tools": ["*"],
+        "type": "http",
+        "url": "https://example.com/mcp",
+        "headers": {"Authorization": "Bearer ${API_KEY}"},
+        "timeout": 5000,
+    }
+    assert not (tmp_path / ".copilot" / "mcp.json").exists()
+
+
 def test_apply_still_rejects_invalid_existing_global_mcp_source(
     minimal_shared_config: Path, core_root: Path, cli_runner, enable_app
 ) -> None:
@@ -620,6 +673,99 @@ def test_apply_cursor_writes_subrepo_mcp_json(
     )
 
 
+def test_apply_copilot_writes_workspace_and_repo_github_mcp_json(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("copilot")
+
+    workspace_root = tmp_path / "microservice-workspace"
+    workspace_root.mkdir()
+    (workspace_root / "service-a" / ".git" / "info").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli,
+        [
+            "workspaces",
+            "add",
+            "--name",
+            "workspace-example",
+            "--path",
+            str(workspace_root),
+        ],
+    )
+    assert add_result.exit_code == 0
+
+    ws_config_dir = core_root / "workspaces" / "workspace-example"
+    (ws_config_dir / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "ws-only": {"url": "https://ws.example.com/mcp"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+
+    assert apply_result.exit_code == 0
+    workspace_mcp = workspace_root / ".github" / "mcp.json"
+    repo_mcp = workspace_root / "service-a" / ".github" / "mcp.json"
+    assert (
+        json.loads(workspace_mcp.read_text(encoding="utf-8"))["mcpServers"]["ws-only"][
+            "url"
+        ]
+        == "https://ws.example.com/mcp"
+    )
+    assert (
+        json.loads(repo_mcp.read_text(encoding="utf-8"))["mcpServers"]["ws-only"]["url"]
+        == "https://ws.example.com/mcp"
+    )
+    assert not (workspace_root / ".mcp.json").exists()
+    assert not (workspace_root / "service-a" / ".mcp.json").exists()
+    exclude = workspace_root / "service-a" / ".git" / "info" / "exclude"
+    assert ".github/mcp.json" in exclude.read_text(encoding="utf-8").splitlines()
+
+
+def test_apply_copilot_writes_project_github_mcp_json(
+    minimal_shared_config: Path,
+    tmp_path: Path,
+    core_root: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    enable_app("copilot")
+    project_root = tmp_path / "service-api"
+    project_root.mkdir()
+    write_json(
+        core_root / "config" / "projects.json",
+        [{"name": "service-api", "path": str(project_root)}],
+    )
+    write_json(
+        core_root / "projects" / "service-api" / "mcp.base.json",
+        {"mcpServers": {"project-only": {"command": "uvx", "args": ["project"]}}},
+    )
+
+    apply_result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+
+    assert apply_result.exit_code == 0
+    project_mcp = project_root / ".github" / "mcp.json"
+    payload = json.loads(project_mcp.read_text(encoding="utf-8"))
+    assert payload["mcpServers"]["project-only"] == {
+        "tools": ["*"],
+        "type": "local",
+        "command": "uvx",
+        "args": ["project"],
+    }
+    assert not (project_root / ".mcp.json").exists()
+
+
 def test_apply_cursor_does_not_write_workspace_mcp_from_global_config_only(
     minimal_shared_config: Path,
     tmp_path: Path,
@@ -833,3 +979,109 @@ def test_apply_codex_aborts_on_invalid_schema_key(
 
     assert result.exit_code != 0
     assert "Invalid config schema" in result.output
+
+
+def test_apply_copilot_target_writes_global_mcp_skills_and_agents(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("copilot")
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "playwright": {
+                        "command": "npx",
+                        "args": ["@playwright/mcp@latest"],
+                        "env": {"TOKEN": "$COPILOT_MCP_TOKEN"},
+                    },
+                    "context7": {
+                        "url": "https://mcp.context7.com/mcp",
+                        "headers": {"Authorization": "Bearer $COPILOT_MCP_TOKEN"},
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (core_root / "skills" / "review").mkdir(parents=True)
+    (core_root / "skills" / "review" / "SKILL.md").write_text(
+        "---\nname: review\ndescription: Review code\n---\n\nReview.\n",
+        encoding="utf-8",
+    )
+    (core_root / "agents").mkdir(parents=True)
+    (core_root / "agents" / "planner.agent.md").write_text(
+        "---\nname: planner\ndescription: Plan work\n---\n\nPlan.\n",
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    config = json.loads((tmp_path / ".copilot" / "mcp-config.json").read_text())
+    assert config["mcpServers"]["playwright"] == {
+        "tools": ["*"],
+        "type": "local",
+        "command": "npx",
+        "args": ["@playwright/mcp@latest"],
+        "env": {"TOKEN": "$COPILOT_MCP_TOKEN"},
+    }
+    assert config["mcpServers"]["context7"] == {
+        "tools": ["*"],
+        "type": "http",
+        "url": "https://mcp.context7.com/mcp",
+        "headers": {"Authorization": "Bearer $COPILOT_MCP_TOKEN"},
+    }
+    assert (tmp_path / ".copilot" / "skills" / "review" / "SKILL.md").exists()
+    assert (tmp_path / ".copilot" / "agents" / "planner.agent.md").exists()
+    assert not (tmp_path / ".copilot" / "agents" / "planner.agent.agent.md").exists()
+
+
+def test_apply_copilot_workspace_writes_repo_github_artifacts(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    repo = workspace_root / "repo-a"
+    (repo / ".git" / "info").mkdir(parents=True)
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    ws_config = core_root / "workspaces" / "myws"
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"demo": {"command": "uvx", "args": ["demo"]}}},
+    )
+    (ws_config / "skills" / "review").mkdir(parents=True)
+    (ws_config / "skills" / "review" / "SKILL.md").write_text(
+        "---\nname: review\ndescription: Review code\n---\n\nReview.\n",
+        encoding="utf-8",
+    )
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.agent.md").write_text(
+        "---\nname: planner\ndescription: Plan work\n---\n\nPlan.\n",
+        encoding="utf-8",
+    )
+    enable_app("copilot")
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    assert (repo / ".github" / "mcp.json").exists()
+    assert (repo / ".github" / "skills" / "review" / "SKILL.md").exists()
+    assert (repo / ".github" / "agents" / "planner.agent.md").exists()
+    assert not (repo / ".github" / "agents" / "planner.agent.agent.md").exists()
+    exclude = (repo / ".git" / "info" / "exclude").read_text(encoding="utf-8")
+    assert ".github/mcp.json" in exclude
+    assert ".github/skills/review/SKILL.md" in exclude
+    assert ".github/agents/planner.agent.md" in exclude
+    assert ".github/agents/planner.agent.agent.md" not in exclude

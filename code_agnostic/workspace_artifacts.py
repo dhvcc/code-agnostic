@@ -5,6 +5,7 @@ from pathlib import Path
 
 from code_agnostic.agents.claude import claude_agent_target_path
 from code_agnostic.agents.codex import normalize_codex_agent_filename
+from code_agnostic.agents.copilot import copilot_agent_filename
 from code_agnostic.agents.models import Agent, AgentMetadata
 from code_agnostic.agents.parser import parse_agent
 from code_agnostic.apps.app_id import AppId
@@ -17,6 +18,8 @@ from code_agnostic.constants import (
     CODEX_AGENTS_OVERRIDE_FILENAME,
     CODEX_CONFIG_FILENAME,
     CODEX_PROJECT_DIRNAME,
+    COPILOT_PROJECT_CONFIG_FILENAME,
+    COPILOT_PROJECT_DIRNAME,
     CURSOR_CONFIG_FILENAME,
     CURSOR_PROJECT_DIRNAME,
     OPENCODE_CONFIG_FILENAME,
@@ -156,6 +159,12 @@ def _repo_config_path(
             or ws_source.codex_base_path.exists()
         ):
             return Path(CODEX_PROJECT_DIRNAME) / CODEX_CONFIG_FILENAME
+    if app_id == AppId.COPILOT:
+        return (
+            Path(COPILOT_PROJECT_DIRNAME) / COPILOT_PROJECT_CONFIG_FILENAME
+            if ws_source.has_mcp()
+            else None
+        )
     return None
 
 
@@ -197,6 +206,12 @@ def _agent_path(app_id: AppId, source: Path, repo_path: Path | None) -> Path:
             / AGENTS_DIRNAME
             / (source.name if source.is_file() else f"{source.name}.md")
         )
+    if app_id == AppId.COPILOT:
+        return (
+            Path(COPILOT_PROJECT_DIRNAME)
+            / AGENTS_DIRNAME
+            / copilot_agent_filename(source)
+        )
     raise ValueError(f"Unsupported app for workspace agent artifact: {app_id.value}")
 
 
@@ -222,6 +237,8 @@ def _project_dir_name(app_id: AppId) -> str:
         return CODEX_PROJECT_DIRNAME
     if app_id == AppId.CLAUDE:
         return CLAUDE_PROJECT_DIRNAME
+    if app_id == AppId.COPILOT:
+        return COPILOT_PROJECT_DIRNAME
     raise ValueError(f"Unsupported app for workspace artifact: {app_id.value}")
 
 

@@ -21,6 +21,7 @@ skills/<name>/
 - `x-codex.*`
 - `x-opencode.*`
 - `x-claude.*`
+- `x-copilot.*`
 
 Tool permission fields are intentionally coarse in v1:
 
@@ -40,18 +41,19 @@ Unknown keys fail validation.
 
 ## Capability matrix
 
-| Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
-| --- | --- | --- | --- | --- | --- |
-| `name` | supported | compiled | compiled | compiled | compiled |
-| `description` | supported | compiled | compiled | compiled | compiled |
-| `tools.read` | supported | ignored | ignored | ignored | ignored |
-| `tools.write` | supported | ignored | ignored | ignored | ignored |
-| `tools.mcp` | supported | ignored | ignored | ignored | ignored |
-| `prompt.md` body | supported | compiled | compiled | compiled | compiled |
-| `x-cursor.*` | supported | native or compiled | ignored | ignored | ignored |
-| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored |
-| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored |
-| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled |
+| Property | Compiler | Cursor | Codex | OpenCode | Claude Code | GitHub Copilot |
+| --- | --- | --- | --- | --- | --- | --- |
+| `name` | supported | compiled | compiled | compiled | compiled | compiled |
+| `description` | supported | compiled | compiled | compiled | compiled | compiled |
+| `tools.read` | supported | ignored | ignored | ignored | ignored | ignored |
+| `tools.write` | supported | ignored | ignored | ignored | ignored | ignored |
+| `tools.mcp` | supported | ignored | ignored | ignored | ignored | ignored |
+| `prompt.md` body | supported | compiled | compiled | compiled | compiled | compiled |
+| `x-cursor.*` | supported | native or compiled | ignored | ignored | ignored | ignored |
+| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored | ignored |
+| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored | ignored |
+| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled | ignored |
+| `x-copilot.*` | supported | ignored | ignored | ignored | ignored | native or compiled |
 
 ## Notes
 
@@ -74,5 +76,8 @@ Unknown keys fail validation.
 - Claude-native skill frontmatter fields such as `when_to_use`,
   `disable-model-invocation`, and `metadata` can be preserved through
   `x-claude`.
+- GitHub Copilot skill output is `SKILL.md` with `name`, `description`, and the
+  prompt body. `x-copilot.license` can be preserved because Copilot documents
+  that native field.
 - Unsupported app-specific skill frontmatter keys are rejected during
   compilation instead of being emitted as ignored no-op fields.

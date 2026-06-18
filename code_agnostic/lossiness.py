@@ -88,7 +88,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name=f"mcpServers.{name}.envFile",
-                        targets=("codex", "opencode", "claude"),
+                        targets=("codex", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support MCP envFile",
                     )
@@ -124,7 +124,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="always_apply",
-                        targets=("codex", "opencode", "claude"),
+                        targets=("codex", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support rule always_apply semantics",
                     )
@@ -134,7 +134,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="globs",
-                        targets=("codex", "opencode", "claude"),
+                        targets=("codex", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support rule globs",
                     )
@@ -170,7 +170,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.read",
-                        targets=("cursor", "codex", "opencode", "claude"),
+                        targets=("cursor", "codex", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support per-skill read permissions",
                     )
@@ -180,7 +180,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.write",
-                        targets=("cursor", "codex", "opencode", "claude"),
+                        targets=("cursor", "codex", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support per-skill write permissions",
                     )
@@ -190,7 +190,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="tools.mcp",
-                        targets=("cursor", "codex", "opencode", "claude"),
+                        targets=("cursor", "codex", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support per-skill MCP permissions",
                     )
@@ -223,7 +223,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="codex.mcp_servers",
-                        targets=("cursor", "opencode", "claude"),
+                        targets=("cursor", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target only supports codex.mcp_servers in Codex output",
                     )
@@ -233,7 +233,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="codex.skills.config",
-                        targets=("cursor", "opencode", "claude"),
+                        targets=("cursor", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target only supports codex.skills.config in Codex output",
                     )
@@ -243,7 +243,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="nickname_candidates",
-                        targets=("cursor", "opencode", "claude"),
+                        targets=("cursor", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support agent nickname_candidates",
                     )
@@ -253,7 +253,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="reasoning_effort",
-                        targets=("cursor",),
+                        targets=("cursor", "copilot"),
                         app=app,
                         reason="target does not support agent reasoning_effort",
                     )
@@ -263,7 +263,7 @@ class LossinessExplainer:
                     self._findings_for_targets(
                         resource_path=resource_path,
                         property_name="sandbox_mode",
-                        targets=("cursor", "opencode", "claude"),
+                        targets=("cursor", "opencode", "claude", "copilot"),
                         app=app,
                         reason="target does not support agent sandbox_mode",
                     )
@@ -298,6 +298,16 @@ class LossinessExplainer:
                         reason="target does not support agent MCP permissions",
                     )
                 )
+                if any(not item.get("server") for item in agent.metadata.tools.mcp):
+                    findings.extend(
+                        self._findings_for_targets(
+                            resource_path=resource_path,
+                            property_name="tools.mcp",
+                            targets=("copilot",),
+                            app=app,
+                            reason="target requires MCP tool references with server names",
+                        )
+                    )
 
         return findings
 

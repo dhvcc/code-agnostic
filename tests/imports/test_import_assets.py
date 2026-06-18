@@ -95,6 +95,37 @@ def test_codex_agents_import_copies_supported_app_assets(tmp_path: Path) -> None
     assert codex_base["agents"]["max_threads"] == 6
 
 
+def test_copilot_agents_import_normalizes_agent_markdown(tmp_path: Path) -> None:
+    source = tmp_path / ".copilot"
+    agent_file = source / "agents" / "planner.agent.md"
+    agent_file.parent.mkdir(parents=True)
+    agent_file.write_text(
+        "---\n"
+        "name: planner\n"
+        "description: Planning specialist\n"
+        "model: gpt-5.4-mini\n"
+        "tools: [read, edit, github/create_issue, playwright/*]\n"
+        "---\n"
+        "\n"
+        "Plan carefully.\n",
+        encoding="utf-8",
+    )
+
+    core = CoreRepository(tmp_path / ".config" / "code-agnostic")
+    service = ImportService(core)
+
+    plan = service.plan("copilot", include=[ImportSection.AGENTS])
+    result = service.apply(plan)
+
+    assert result.failed == 0
+    imported = (core.agents_dir / "planner.md").read_text(encoding="utf-8")
+    assert "tools:\n  mcp:" in imported
+    assert "server: github" in imported
+    assert "tool: create_issue" in imported
+    assert "server: playwright" in imported
+    assert "Plan carefully." in imported
+
+
 def test_import_apply_preflights_blocked_target_ancestor_before_writes(
     tmp_path: Path,
 ) -> None:

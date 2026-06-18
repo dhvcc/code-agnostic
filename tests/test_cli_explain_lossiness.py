@@ -51,6 +51,10 @@ def test_explain_lossiness_reports_documented_rule_and_agent_mappings(
         "agents/bundle-agent\tclaude\tcodex.skills.config\tignored\ttarget only supports codex.skills.config in Codex output",
         "agents/bundle-agent\tclaude\tnickname_candidates\tignored\ttarget does not support agent nickname_candidates",
         "agents/bundle-agent\tclaude\tsandbox_mode\tignored\ttarget does not support agent sandbox_mode",
+        "agents/bundle-agent\tcopilot\tcodex.mcp_servers\tignored\ttarget only supports codex.mcp_servers in Codex output",
+        "agents/bundle-agent\tcopilot\tcodex.skills.config\tignored\ttarget only supports codex.skills.config in Codex output",
+        "agents/bundle-agent\tcopilot\tnickname_candidates\tignored\ttarget does not support agent nickname_candidates",
+        "agents/bundle-agent\tcopilot\tsandbox_mode\tignored\ttarget does not support agent sandbox_mode",
         "agents/bundle-agent\tcursor\tcodex.mcp_servers\tignored\ttarget only supports codex.mcp_servers in Codex output",
         "agents/bundle-agent\tcursor\tcodex.skills.config\tignored\ttarget only supports codex.skills.config in Codex output",
         "agents/bundle-agent\tcursor\tnickname_candidates\tignored\ttarget does not support agent nickname_candidates",
@@ -63,6 +67,8 @@ def test_explain_lossiness_reports_documented_rule_and_agent_mappings(
         "rules/bundle-rule\tclaude\tglobs\tignored\ttarget does not support rule globs",
         "rules/bundle-rule\tcodex\talways_apply\tignored\ttarget does not support rule always_apply semantics",
         "rules/bundle-rule\tcodex\tglobs\tignored\ttarget does not support rule globs",
+        "rules/bundle-rule\tcopilot\talways_apply\tignored\ttarget does not support rule always_apply semantics",
+        "rules/bundle-rule\tcopilot\tglobs\tignored\ttarget does not support rule globs",
         "rules/bundle-rule\topencode\talways_apply\tignored\ttarget does not support rule always_apply semantics",
         "rules/bundle-rule\topencode\tglobs\tignored\ttarget does not support rule globs",
     ]
@@ -126,6 +132,36 @@ def test_explain_lossiness_reports_skill_tool_mappings(
     ]
 
 
+def test_explain_lossiness_reports_copilot_skill_tool_mappings(
+    minimal_shared_config: Path,
+    core_root: Path,
+    cli_runner,
+) -> None:
+    skill_dir = core_root / "skills" / "reviewer"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: reviewer\n"
+        "tools:\n"
+        "  write: true\n"
+        "  mcp:\n"
+        "    - server: github\n"
+        "      tool: create_review\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "prompt.md").write_text("Review code.\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["explain-lossiness", "--app", "copilot"])
+
+    assert result.exit_code == 0
+    assert result.output.splitlines() == [
+        "resource_path\tapp\tproperty\tstatus\treason",
+        "skills/reviewer\tcopilot\ttools.mcp\tignored\ttarget does not support per-skill MCP permissions",
+        "skills/reviewer\tcopilot\ttools.write\tignored\ttarget does not support per-skill write permissions",
+    ]
+
+
 def test_explain_lossiness_reports_mcp_env_file_mappings(
     minimal_shared_config: Path,
     core_root: Path,
@@ -144,6 +180,7 @@ def test_explain_lossiness_reports_mcp_env_file_mappings(
         "resource_path\tapp\tproperty\tstatus\treason",
         "config/mcp.base.json\tclaude\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
         "config/mcp.base.json\tcodex\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
+        "config/mcp.base.json\tcopilot\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
         "config/mcp.base.json\topencode\tmcpServers.local.envFile\tignored\ttarget does not support MCP envFile",
     ]
 
@@ -242,6 +279,7 @@ def test_explain_lossiness_reports_workspace_paths(
         "resource_path\tapp\tproperty\tstatus\treason",
         "workspaces/team/rules/bundle-rule\tclaude\tglobs\tignored\ttarget does not support rule globs",
         "workspaces/team/rules/bundle-rule\tcodex\tglobs\tignored\ttarget does not support rule globs",
+        "workspaces/team/rules/bundle-rule\tcopilot\tglobs\tignored\ttarget does not support rule globs",
         "workspaces/team/rules/bundle-rule\topencode\tglobs\tignored\ttarget does not support rule globs",
     ]
 

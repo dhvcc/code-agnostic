@@ -31,6 +31,7 @@ agents/<name>/
 - `x-codex.*`
 - `x-opencode.*`
 - `x-claude.*`
+- `x-copilot.*`
 
 Tool permission fields are intentionally coarse in v1:
 
@@ -70,24 +71,25 @@ Legacy single-file markdown agents can express the same override with flat alias
 
 ## Capability matrix
 
-| Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
-| --- | --- | --- | --- | --- | --- |
-| `name` | supported | compiled | compiled | compiled | compiled |
-| `description` | supported | compiled | compiled | required | compiled |
-| `model` | supported | compiled | native | native | native |
-| `reasoning_effort` | supported | ignored | native | native | compiled to `effort` |
-| `sandbox_mode` | supported | ignored | native | ignored | ignored |
-| `nickname_candidates` | supported | ignored | native | ignored | ignored |
-| `tools.read` | supported | ignored | ignored | compiled to `permission.read` | ignored |
-| `tools.write` | supported | compiled to `readonly` when false | ignored | compiled to `permission.edit` | ignored |
-| `tools.mcp` | supported | ignored | ignored | compiled to MCP tool permissions | ignored |
-| `codex.mcp_servers` | supported | ignored | native | ignored | ignored |
-| `codex.skills.config` | supported | ignored | native | ignored | ignored |
-| `prompt.md` body | supported | compiled | compiled | compiled | compiled |
-| `x-cursor.*` | supported | native or compiled | ignored | ignored | ignored |
-| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored |
-| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored |
-| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled |
+| Property | Compiler | Cursor | Codex | OpenCode | Claude Code | GitHub Copilot |
+| --- | --- | --- | --- | --- | --- | --- |
+| `name` | supported | compiled | compiled | compiled | compiled | compiled |
+| `description` | supported | compiled | compiled | required | compiled | required |
+| `model` | supported | compiled | native | native | native | native |
+| `reasoning_effort` | supported | ignored | native | native | compiled to `effort` | ignored |
+| `sandbox_mode` | supported | ignored | native | ignored | ignored | ignored |
+| `nickname_candidates` | supported | ignored | native | ignored | ignored | ignored |
+| `tools.read` | supported | ignored | ignored | compiled to `permission.read` | ignored | compiled to `tools: ["read"]` |
+| `tools.write` | supported | compiled to `readonly` when false | ignored | compiled to `permission.edit` | ignored | compiled to `tools: ["edit"]` |
+| `tools.mcp` | supported | ignored | ignored | compiled to MCP tool permissions | ignored | compiled to `server/tool` strings when server is present |
+| `codex.mcp_servers` | supported | ignored | native | ignored | ignored | ignored |
+| `codex.skills.config` | supported | ignored | native | ignored | ignored | ignored |
+| `prompt.md` body | supported | compiled | compiled | compiled | compiled | compiled |
+| `x-cursor.*` | supported | native or compiled | ignored | ignored | ignored | ignored |
+| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored | ignored |
+| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored | ignored |
+| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled | ignored |
+| `x-copilot.*` | supported | ignored | ignored | ignored | ignored | native or compiled |
 
 ## Notes
 
@@ -100,4 +102,8 @@ Legacy single-file markdown agents can express the same override with flat alias
   `explain-lossiness`.
 - OpenCode requires agent `description`; OpenCode compilation rejects agents
   without one instead of emitting an invalid target agent.
+- GitHub Copilot custom agents are emitted as `<name>.agent.md`. The compiler
+  writes `name`, required `description`, optional canonical `model`, and a
+  native `tools` list only from canonical `tools.read`, `tools.write`, and MCP
+  references that include a `server`.
 - If a target cannot represent a field without changing behavior, the compiler should reject instead of silently dropping it.

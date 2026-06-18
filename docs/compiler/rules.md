@@ -19,21 +19,23 @@ rules/<name>/
 - `x-codex.*`
 - `x-opencode.*`
 - `x-claude.*`
+- `x-copilot.*`
 
 Unknown keys fail validation.
 
 ## Capability matrix
 
-| Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
-| --- | --- | --- | --- | --- | --- |
-| `description` | supported | native | compiled | compiled | compiled |
-| `globs` | supported | native | ignored | ignored | ignored |
-| `always_apply` | supported | native | ignored | ignored | ignored |
-| `prompt.md` body | supported | native | compiled | compiled | compiled |
-| `x-cursor.*` | supported | native | ignored | ignored | ignored |
-| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored |
-| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored |
-| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled |
+| Property | Compiler | Cursor | Codex | OpenCode | Claude Code | GitHub Copilot |
+| --- | --- | --- | --- | --- | --- | --- |
+| `description` | supported | native | compiled | compiled | compiled | compiled |
+| `globs` | supported | native | ignored | ignored | ignored | ignored |
+| `always_apply` | supported | native | ignored | ignored | ignored | ignored |
+| `prompt.md` body | supported | native | compiled | compiled | compiled | compiled |
+| `x-cursor.*` | supported | native | ignored | ignored | ignored | ignored |
+| `x-codex.*` | supported | ignored | native or compiled | ignored | ignored | ignored |
+| `x-opencode.*` | supported | ignored | ignored | native or compiled | ignored | ignored |
+| `x-claude.*` | supported | ignored | ignored | ignored | native or compiled | ignored |
+| `x-copilot.*` | supported | ignored | ignored | ignored | ignored | ignored |
 
 ## Notes
 

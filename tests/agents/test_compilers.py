@@ -13,6 +13,7 @@ import pytest
 from code_agnostic.agents.compilers import (
     ClaudeAgentCompiler,
     CodexAgentCompiler,
+    CopilotAgentCompiler,
     CursorAgentCompiler,
     OpenCodeAgentCompiler,
 )
@@ -23,6 +24,7 @@ from code_agnostic.agents.models import (
     AgentSkillConfig,
     AgentToolPermissions,
 )
+from code_agnostic.agents.parser import parse_agent
 from code_agnostic.errors import InvalidConfigSchemaError
 
 
@@ -265,6 +267,95 @@ def test_codex_compiler_uses_generic_model_when_other_app_overrides_exist() -> N
     assert "temperature" not in payload
 
 
+def test_copilot_compiler_outputs_custom_agent_markdown() -> None:
+    agent = _make_agent(
+        model="gpt-5.4-mini",
+        tools=AgentToolPermissions(
+            read=True,
+            write=False,
+            mcp=[
+                {"server": "github", "tool": "list_issues"},
+                {"server": "playwright"},
+            ],
+        ),
+    )
+
+    result = CopilotAgentCompiler().compile(agent)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload == {
+        "name": "test-agent",
+        "description": "Test agent",
+        "model": "gpt-5.4-mini",
+        "tools": ["read", "github/list_issues", "playwright/*"],
+    }
+    assert body.strip() == "Agent body."
+
+
+def test_copilot_compiler_omits_default_tools() -> None:
+    agent = _make_agent(tools=AgentToolPermissions(read=True, write=True))
+
+    result = CopilotAgentCompiler().compile(agent)
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert "tools" not in payload
+
+
+def test_copilot_compiler_rejects_unsupported_app_override() -> None:
+    agent = _make_agent(app_overrides={"copilot": {"handoffs": ["reviewer"]}})
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CopilotAgentCompiler().compile(agent)
+
+    assert "x-copilot.handoffs is not supported" in exc_info.value.detail
+
+
+def test_copilot_compiler_rejects_native_tools_override() -> None:
+    agent = _make_agent(app_overrides={"copilot": {"tools": ["shell"]}})
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CopilotAgentCompiler().compile(agent)
+
+    assert "x-copilot.tools is not supported" in exc_info.value.detail
+
+
+def test_copilot_compiler_rejects_mcp_tool_without_server() -> None:
+    agent = _make_agent(
+        tools=AgentToolPermissions(
+            read=True,
+            write=False,
+            mcp=[{"tool": "search"}],
+        )
+    )
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CopilotAgentCompiler().compile(agent)
+
+    assert "Copilot agent MCP tools require a server" in exc_info.value.detail
+
+
+def test_copilot_compiler_uses_legacy_flat_model_override(tmp_path: Path) -> None:
+    (tmp_path / "reviewer.md").write_text(
+        "---\n"
+        "name: reviewer\n"
+        "description: Review code\n"
+        "model: gpt-5.4-mini\n"
+        "copilot-model: gpt-5.4\n"
+        "---\n"
+        "\n"
+        "Review carefully.\n",
+        encoding="utf-8",
+    )
+
+    result = CopilotAgentCompiler().compile(parse_agent(tmp_path / "reviewer.md"))
+    raw, _body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload["model"] == "gpt-5.4"
+
+
 def test_claude_compiler_outputs_markdown_subagent() -> None:
     agent = _make_agent(
         app_overrides={
@@ -288,3 +379,45 @@ def test_claude_compiler_outputs_markdown_subagent() -> None:
     assert payload["color"] == "blue"
     assert payload["skills"] == ["review-pr"]
     assert body.strip() == "Agent body."
+
+
+def test_copilot_compiler_emits_agent_profile_frontmatter() -> None:
+    agent = _make_agent(
+        tools=AgentToolPermissions(
+            read=False,
+            write=False,
+            mcp=[
+                {"server": "github"},
+                {"server": "playwright", "tool": "browser_snapshot"},
+            ],
+        ),
+        app_overrides={
+            "copilot": {
+                "target": "github-copilot",
+                "disable-model-invocation": True,
+            }
+        },
+    )
+
+    result = CopilotAgentCompiler().compile(agent)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload == {
+        "name": "test-agent",
+        "description": "Test agent",
+        "model": "claude-sonnet-4-20250514",
+        "tools": ["github/*", "playwright/browser_snapshot"],
+        "disable-model-invocation": True,
+        "target": "github-copilot",
+    }
+    assert body.strip() == "Agent body."
+
+
+def test_copilot_compiler_rejects_unsupported_agent_overrides() -> None:
+    agent = _make_agent(app_overrides={"copilot": {"argument-hint": "ticket"}})
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CopilotAgentCompiler().compile(agent)
+
+    assert "x-copilot.argument-hint is not supported" in exc_info.value.detail

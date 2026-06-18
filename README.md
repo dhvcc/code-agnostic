@@ -31,9 +31,10 @@ AI coding tools each want config in a different place and format. When you use m
 ~/.cursor/                        Compiled & synced for Cursor
 ~/.codex/                         Compiled & synced for Codex (or CODEX_HOME)
 ~/.claude.json and ~/.claude/      Compiled & synced for Claude Code
+~/.copilot/ and repo .github/      Compiled & synced for GitHub Copilot
 ```
 
-Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex, and `CLAUDE.local.md` memory for Claude Code.
+Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex/Copilot, and `CLAUDE.local.md` memory for Claude Code.
 
 Legacy single-file rules, `skills/<name>/SKILL.md`, and markdown agents are still supported for migration, but bundle directories are the preferred source format for new config.
 
@@ -52,8 +53,9 @@ Today the implementation is still mixed: some assets are compiled and some are s
 
 Workspace sync may generate repo-local outputs, but those outputs are not
 source. Project-local skill folders generated inside a repo, such as
-`.agents/skills` or `.opencode/skills`, are also generated outputs; install
-skills into managed project source first, then run `plan` / `apply`.
+`.agents/skills`, `.opencode/skills`, or `.github/skills`, are also generated
+outputs; install skills into managed project source first, then run `plan` /
+`apply`.
 
 ## Install
 
@@ -89,6 +91,7 @@ code-agnostic import apply -a codex
 code-agnostic apps enable -a cursor
 code-agnostic apps enable -a opencode
 code-agnostic apps enable -a claude
+code-agnostic apps enable -a copilot
 
 # Preview and apply
 code-agnostic validate
@@ -98,19 +101,19 @@ code-agnostic apply
 
 ## Editor compatibility
 
-| Feature | OpenCode | Cursor | Codex | Claude Code |
-|---------|:--------:|:------:|:-----:|:-----------:|
-| MCP sync | yes | yes | yes | yes |
-| Rules sync (cross-compiled) | yes | yes | yes | yes |
-| Skills sync | yes | yes | yes | yes |
-| Agents sync | yes | yes | yes | yes |
-| Workspace root `AGENTS.md` link | yes | yes | yes | yes |
-| Native repo config include for workspace `AGENTS.md` | yes | -- | -- | -- |
-| Repo/subdir gets shared workspace instructions today | yes | -- | yes | yes |
-| Nested `AGENTS.md` discovery | -- | yes | yes | -- |
-| Workspace propagation | yes | yes | yes | yes |
-| Import from | yes | yes | yes | yes |
-| Interactive import (TUI) | yes | yes | yes | yes |
+| Feature | OpenCode | Cursor | Codex | Claude Code | GitHub Copilot |
+|---------|:--------:|:------:|:-----:|:-----------:|:--------------:|
+| MCP sync | yes | yes | yes | yes | yes |
+| Rules sync (cross-compiled) | yes | yes | yes | yes | yes |
+| Skills sync | yes | yes | yes | yes | yes |
+| Agents sync | yes | yes | yes | yes | yes |
+| Workspace root `AGENTS.md` link | yes | yes | yes | yes | yes |
+| Native repo config include for workspace `AGENTS.md` | yes | -- | -- | -- | -- |
+| Repo/subdir gets shared workspace instructions today | yes | -- | yes | yes | yes |
+| Nested `AGENTS.md` discovery | -- | yes | yes | -- | yes |
+| Workspace propagation | yes | yes | yes | yes | yes |
+| Import from | yes | yes | yes | yes | yes |
+| Interactive import (TUI) | yes | yes | yes | yes | yes |
 
 `yes` means the resource type is synced for that editor. Some metadata is still
 target-specific or lossy; run `code-agnostic explain-lossiness` to see fields
@@ -118,7 +121,7 @@ that are omitted or rejected for a selected target.
 
 Cursor workspace propagation writes repo-local MCP, skills, and agents when those resources exist in the workspace source config.
 
-OpenCode workspace configs write project-root `opencode.json` files that include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`. Claude Code receives workspace instructions through generated `CLAUDE.local.md` files, never by editing committed `CLAUDE.md`.
+OpenCode workspace configs write project-root `opencode.json` files that include the shared workspace `AGENTS.md` natively via `instructions`, so repos under the workspace get both repo-local and shared workspace instructions. Codex repos receive workspace instructions through a generated `AGENTS.override.md`, which is added to each repo's `.git/info/exclude`. Claude Code receives workspace instructions through generated `CLAUDE.local.md` files, never by editing committed `CLAUDE.md`. Copilot repo-shared MCP, skills, and agents are written under `.github/`.
 
 Cursor documents `AGENTS.md` support in project roots and subdirectories. `code-agnostic` does not copy or link the shared workspace `AGENTS.md` into child repos; Cursor will load `AGENTS.md` files that already exist in the opened project. Codex documents nested `AGENTS.md` discovery, but not a native config include for an extra workspace file.
 
@@ -132,14 +135,13 @@ Plan-then-apply workflow. Preview every change before it touches disk.
 code-agnostic validate              # check canonical source files
 code-agnostic plan -a cursor        # dry-run for one editor
 code-agnostic plan                   # dry-run for all
-code-agnostic apply                  # apply changes for all enabled editors
 code-agnostic status                 # check drift and disabled app states
 code-agnostic explain-lossiness      # show fields omitted or rejected per editor
 ```
 
 Bare `plan` and `apply` target every enabled editor; bare `status` also shows
-disabled app states. Use `-a codex`, `-a cursor`, `-a opencode`, or `-a claude`
-when you want one editor at a time.
+disabled app states. Use `-a codex`, `-a cursor`, `-a opencode`, `-a claude`, or
+`-a copilot` when you want one editor at a time.
 
 If managed outputs need repair after an apply, restore the active synced revision:
 
@@ -246,9 +248,12 @@ a coarse `[skills]` marker today. Codex generated skill outputs are written to
 `~/.agents/skills`, while Codex agents and config remain under `CODEX_HOME` when
 set, defaulting to `~/.codex`. Claude Code generated skills and agents are
 written under `~/.claude/skills` and `~/.claude/agents`, with workspace/project
-copies under repo-local `.claude/skills` and `.claude/agents`.
+copies under repo-local `.claude/skills` and `.claude/agents`. GitHub Copilot
+generated skills and agents are written under `~/.copilot/skills` and
+`~/.copilot/agents`, with repo-shared copies under `.github/skills` and
+`.github/agents`.
 
-If a target app discovers user-created repo-local skill folders such as `.agents/skills`, `.opencode/skills`, or `.claude/skills`, treat those as unmanaged app inputs unless they were generated from `code-agnostic` project source. Workspace and project sync write only the exact generated paths recorded in their `.sync-state.json` files.
+If a target app discovers user-created repo-local skill folders such as `.agents/skills`, `.opencode/skills`, `.claude/skills`, or `.github/skills`, treat those as unmanaged app inputs unless they were generated from `code-agnostic` project source. Workspace and project sync write only the exact generated paths recorded in their `.sync-state.json` files.
 
 Planned convenience command:
 
@@ -262,7 +267,7 @@ first implementation slice.
 
 ### Workspaces
 
-Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs write project-root `opencode.json` files that reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Workspace source config, skills, and agents are propagated into repo-local generated paths for OpenCode, Cursor, Codex, and Claude; user-created target app skill folders remain unmanaged unless they were generated from managed source.
+Register workspace directories. Workspace rules are compiled into a canonical `AGENTS.md` at the workspace root. Repos keep their own repo-specific `AGENTS.md`; Codex receives the workspace rules through generated, git-excluded `AGENTS.override.md` files, while OpenCode workspace configs write project-root `opencode.json` files that reference the shared workspace file through `instructions`. Claude receives generated `CLAUDE.local.md` files and project MCP entries in `~/.claude.json["projects"][absolute_repo_path]["mcpServers"]`. Copilot receives repo-shared `.github/mcp.json`, `.github/skills`, and `.github/agents`. Workspace source config, skills, and agents are propagated into repo-local generated paths for OpenCode, Cursor, Codex, Claude, and Copilot; user-created target app skill folders remain unmanaged unless they were generated from managed source.
 
 Cursor propagation intentionally stays to repo-local MCP, skills, and agents; it does not copy the shared workspace `AGENTS.md` into child repos.
 
@@ -290,6 +295,7 @@ Migrate existing config from any supported editor into the hub.
 code-agnostic import plan -a codex
 code-agnostic import apply -a codex
 code-agnostic import plan -a claude
+code-agnostic import plan -a copilot
 code-agnostic import apply -a cursor --include mcp --on-conflict overwrite
 code-agnostic import plan -a codex -i    # interactive TUI picker
 ```

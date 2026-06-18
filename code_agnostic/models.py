@@ -30,6 +30,7 @@ class SyncTarget(str, Enum):
     CURSOR = "cursor"
     CODEX = "codex"
     CLAUDE = "claude"
+    COPILOT = "copilot"
 
 
 class EditorSyncStatus(str, Enum):
@@ -107,6 +108,7 @@ class SyncPlan:
             SyncTarget.CURSOR.value,
             SyncTarget.CODEX.value,
             SyncTarget.CLAUDE.value,
+            SyncTarget.COPILOT.value,
         ):
             filtered = [
                 action
@@ -121,6 +123,7 @@ class SyncPlan:
                 SyncTarget.CURSOR.value,
                 SyncTarget.CODEX.value,
                 SyncTarget.CLAUDE.value,
+                SyncTarget.COPILOT.value,
             ):
                 continue
             if action.app == "workspace":

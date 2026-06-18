@@ -329,3 +329,47 @@ def test_import_plan_verbose_view_shows_source_and_target_paths(
     assert result.exit_code == 0
     assert "Path" in result.output
     assert "~/" in result.output
+
+
+def test_import_apply_copilot_imports_mcp_skills_and_agents(
+    cli_runner, tmp_path: Path
+) -> None:
+    copilot = tmp_path / ".copilot"
+    (copilot / "skills" / "review").mkdir(parents=True)
+    (copilot / "skills" / "review" / "SKILL.md").write_text(
+        "---\nname: review\ndescription: Review code\n---\n\nReview.\n",
+        encoding="utf-8",
+    )
+    (copilot / "agents").mkdir(parents=True)
+    (copilot / "agents" / "planner.agent.md").write_text(
+        "---\nname: planner\ndescription: Plan work\n---\n\nPlan.\n",
+        encoding="utf-8",
+    )
+    (copilot / "mcp-config.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "demo": {
+                        "type": "local",
+                        "command": "uvx",
+                        "args": ["demo"],
+                        "tools": ["*"],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["import", "apply", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    core = tmp_path / ".config" / "code-agnostic"
+    mcp_base = json.loads((core / "config" / "mcp.base.json").read_text())
+    assert mcp_base["mcpServers"]["demo"] == {"command": "uvx", "args": ["demo"]}
+    assert (core / "skills" / "review" / "SKILL.md").exists()
+    assert (core / "agents" / "planner.md").exists()
+    parsed = parse_agent(core / "agents" / "planner.md")
+    assert parsed.metadata.name == "planner"
+    assert parsed.metadata.description == "Plan work"
+    assert parsed.content.strip() == "Plan."

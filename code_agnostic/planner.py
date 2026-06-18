@@ -362,6 +362,14 @@ class SyncPlanner:
         skipped: list[str] = []
         desired_paths_by_scope: dict[str, list[Path]] = {}
 
+        project_common_servers = None
+        if project_source.has_mcp():
+            try:
+                mcp_base = project_source.load_mcp_base()
+                project_common_servers = mcp_base.get(MCP_SERVERS_KEY, {})
+            except SyncAppError as exc:
+                return SyncPlan(actions=actions, errors=[exc], skipped=skipped)
+
         for svc in self.app_services:
             meta = app_metadata(svc.app_id)
             if meta.project_dir_name is None or not hasattr(svc, "plan_skill_actions"):
@@ -373,6 +381,17 @@ class SyncPlanner:
                 project_source,
                 self.core.opencode_base_path,
             )
+            if svc.app_id == AppId.COPILOT and project_common_servers is not None:
+                scope = f"project:{svc.app_id.value}:{project_name}:mcp"
+                mcp_payload = common_mcp_to_dto(
+                    mcp_servers_for_app(project_common_servers, svc.app_id)
+                )
+                mcp_action = target_service.build_action(mcp_payload)
+                mcp_action.scope = scope
+                _prepare_project_action(mcp_action, project_name=project_name)
+                actions.append(mcp_action)
+                desired_paths_by_scope.setdefault(scope, []).append(mcp_action.path)
+
             scope = f"project:{svc.app_id.value}:{project_name}:skills_dir"
             plan_skill_actions = getattr(target_service, "plan_skill_actions")
             skill_actions, desired_paths, skill_skipped = plan_skill_actions(

@@ -27,6 +27,7 @@ _OPENCODE_SKILL_FRONTMATTER_KEYS = frozenset(
 _CLAUDE_SKILL_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "when_to_use", "disable-model-invocation", "metadata"}
 )
+_COPILOT_SKILL_FRONTMATTER_KEYS = frozenset({"name", "description", "license"})
 
 
 class ISkillCompiler(ABC):
@@ -100,6 +101,17 @@ class CodexSkillCompiler(ISkillCompiler):
             skill=skill,
             target_app="codex",
             allowed_override_keys=_CODEX_SKILL_FRONTMATTER_KEYS,
+        )
+
+
+class CopilotSkillCompiler(ISkillCompiler):
+    """Cross-compile for GitHub Copilot agent skills."""
+
+    def compile(self, skill: Skill) -> str:
+        return _compile_skill_markdown(
+            skill=skill,
+            target_app="copilot",
+            allowed_override_keys=_COPILOT_SKILL_FRONTMATTER_KEYS,
         )
 
 

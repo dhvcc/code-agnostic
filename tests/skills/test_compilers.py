@@ -9,6 +9,7 @@ from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.skills.compilers import (
     ClaudeSkillCompiler,
     CodexSkillCompiler,
+    CopilotSkillCompiler,
     CursorSkillCompiler,
     OpenCodeSkillCompiler,
 )
@@ -248,3 +249,50 @@ def test_opencode_compiler_rejects_unsupported_skill_overrides() -> None:
         OpenCodeSkillCompiler().compile(skill)
 
     assert "x-opencode.permission is not supported" in exc_info.value.detail
+
+
+def test_copilot_compiler_emits_supported_skill_frontmatter() -> None:
+    skill = Skill(
+        name="release-helper",
+        source_path=Path("/fake/release-helper/SKILL.md"),
+        metadata=SkillMetadata(
+            name="release-helper",
+            description="Release helper",
+            tools=SkillToolPermissions(
+                read=False,
+                write=True,
+                mcp=[{"server": "github", "tool": "create_pr"}],
+            ),
+            app_overrides={"copilot": {"license": "MIT"}},
+        ),
+        content="Body.\n",
+    )
+
+    result = CopilotSkillCompiler().compile(skill)
+    raw, body = result.split("---\n", 2)[1:]
+    payload = yaml.safe_load(raw)
+
+    assert payload == {
+        "name": "release-helper",
+        "description": "Release helper",
+        "license": "MIT",
+    }
+    assert body.strip() == "Body."
+
+
+def test_copilot_compiler_rejects_unsupported_skill_overrides() -> None:
+    skill = Skill(
+        name="release-helper",
+        source_path=Path("/fake/release-helper/SKILL.md"),
+        metadata=SkillMetadata(
+            name="release-helper",
+            description="Release helper",
+            app_overrides={"copilot": {"metadata": {"team": "docs"}}},
+        ),
+        content="Body.\n",
+    )
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        CopilotSkillCompiler().compile(skill)
+
+    assert "x-copilot.metadata is not supported" in exc_info.value.detail

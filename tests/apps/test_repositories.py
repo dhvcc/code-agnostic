@@ -4,6 +4,7 @@ import pytest
 
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
+from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 
@@ -113,6 +114,31 @@ def test_claude_repository_reads_and_writes_mcp(write_json, tmp_path: Path) -> N
     assert repo.load_mcp_payload() == {"local": {"type": "stdio", "command": "uvx"}}
 
 
+def test_copilot_repository_reads_and_writes_global_mcp(
+    write_json, tmp_path: Path
+) -> None:
+    root = tmp_path / ".copilot"
+    write_json(
+        root / "mcp-config.json",
+        {"mcpServers": {"demo": {"type": "http", "url": "https://x"}}},
+    )
+
+    repo = CopilotConfigRepository(root=root)
+    assert repo.config_path == root / "mcp-config.json"
+    assert repo.load_mcp_payload() == {"demo": {"type": "http", "url": "https://x"}}
+
+    repo.save_mcp_payload({"local": {"type": "local", "command": "uvx"}})
+    assert repo.load_mcp_payload() == {"local": {"type": "local", "command": "uvx"}}
+
+
+def test_copilot_repository_uses_project_mcp_filename_for_github_dir(
+    tmp_path: Path,
+) -> None:
+    repo = CopilotConfigRepository(root=tmp_path / ".github")
+
+    assert repo.config_path == tmp_path / ".github" / "mcp.json"
+
+
 def test_opencode_repository_load_mcp_when_file_missing(tmp_path: Path) -> None:
     root = tmp_path / ".config" / "opencode"
     repo = OpenCodeConfigRepository(root=root)
@@ -187,6 +213,18 @@ def test_codex_repository_defaults_to_codex_home_env(
     assert repo.config_path == codex_home / "config.toml"
     assert repo.skills_dir == tmp_path / ".agents" / "skills"
     assert repo.agents_dir == codex_home / "agents"
+
+
+def test_copilot_repository_defaults_to_copilot_home_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    copilot_home = tmp_path / "custom" / "copilot-home"
+    monkeypatch.setenv("COPILOT_HOME", str(copilot_home))
+
+    repo = CopilotConfigRepository()
+
+    assert repo.root == copilot_home
+    assert repo.config_path == copilot_home / "mcp-config.json"
 
 
 def test_claude_repository_skills_and_agents_dirs(tmp_path: Path) -> None:

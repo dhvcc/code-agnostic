@@ -39,27 +39,28 @@ Legacy/common `mcp.base.json` server keys can target app compilation:
 - `@opencode-playwright` compiles only for OpenCode as `playwright`
 - `!codex-playwright` compiles for every target except Codex as `playwright`
 - `@claude-playwright` compiles only for Claude Code as `playwright`
+- `@copilot-playwright` compiles only for GitHub Copilot as `playwright`
 - unprefixed server keys compile for every target
 
 Target markers are recognized only for known targetable app ids.
 
 ## Capability matrix
 
-| Property | Compiler | Cursor | Codex | OpenCode | Claude Code |
-| --- | --- | --- | --- | --- | --- |
-| `type` | supported | compiled | compiled | compiled | compiled |
-| `command` | supported | native | native | native | native |
-| `args` | supported | native | native | native | native |
-| `cwd` | supported for local servers | ignored | native | native for local servers | native |
-| `envFile` | supported for local servers | native | ignored | ignored | ignored |
-| `url` | supported | native | native | native | native |
-| `headers` | supported | native | compiled | native | native |
-| `env` | supported | native | compiled | native for local servers; rejected for remote servers | native |
-| `auth.client_id` | supported | compiled | compiled | compiled | ignored |
-| `auth.client_secret` | supported | compiled | compiled | compiled | ignored |
-| `auth.scopes` | supported | compiled | compiled | compiled | ignored |
-| `auth.token_endpoint` | supported | compiled | compiled | compiled | ignored |
-| `timeout` | supported | native | compiled to `tool_timeout_sec` | native | native |
+| Property | Compiler | Cursor | Codex | OpenCode | Claude Code | GitHub Copilot |
+| --- | --- | --- | --- | --- | --- | --- |
+| `type` | supported | compiled | compiled | compiled | compiled | compiled to `local`/`http` |
+| `command` | supported | native | native | native | native | native |
+| `args` | supported | native | native | native | native | native |
+| `cwd` | supported for local servers | ignored | native | native for local servers | native | ignored |
+| `envFile` | supported for local servers | native | ignored | ignored | ignored | ignored |
+| `url` | supported | native | native | native | native | native |
+| `headers` | supported | native | compiled | native | native | native |
+| `env` | supported | native | compiled | native for local servers; rejected for remote servers | native | native |
+| `auth.client_id` | supported | compiled | compiled | compiled | ignored | rejected |
+| `auth.client_secret` | supported | compiled | compiled | compiled | ignored | rejected |
+| `auth.scopes` | supported | compiled | compiled | compiled | ignored | rejected |
+| `auth.token_endpoint` | supported | compiled | compiled | compiled | ignored | rejected |
+| `timeout` | supported | native | compiled to `tool_timeout_sec` | native | native | native |
 
 ## Notes
 
@@ -84,3 +85,9 @@ Target markers are recognized only for known targetable app ids.
 - Claude workspace MCP is written into `~/.claude.json` under
   `projects[absolute_repo_path].mcpServers`; v1 does not generate committed
   `.mcp.json`.
+- GitHub Copilot user MCP is written to `~/.copilot/mcp-config.json` (or
+  `$COPILOT_HOME/mcp-config.json`). Workspace/project MCP is written to
+  repo-shared `.github/mcp.json`. v1 does not generate `.mcp.json`.
+- GitHub Copilot output always emits `tools: ["*"]` for compiled MCP servers.
+  Canonical OAuth servers are rejected because current Copilot repository MCP
+  docs do not support OAuth remote servers.

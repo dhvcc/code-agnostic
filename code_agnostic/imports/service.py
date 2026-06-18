@@ -88,6 +88,12 @@ class ImportService:
                     conflict_policy=conflict_policy,
                     follow_symlinks=follow_symlinks,
                 )
+            elif adapter.app_id == AppId.COPILOT:
+                agent_actions, agent_errors, agent_skipped = self._plan_copilot_agents(
+                    adapter=adapter,
+                    conflict_policy=conflict_policy,
+                    follow_symlinks=follow_symlinks,
+                )
             else:
                 agent_actions, agent_errors, agent_skipped = self._plan_assets(
                     section=ImportSection.AGENTS,
@@ -420,6 +426,23 @@ class ImportService:
                 )
                 continue
 
+            if follow_symlinks and entry.is_symlink() and not entry.exists():
+                target = target_dir / entry.name
+                actions.append(
+                    ImportAction(
+                        section=section,
+                        kind=ImportActionKind.COPY_PATH,
+                        status=ImportActionStatus.CREATE,
+                        detail=f"Import {section.value} '{entry.name}'",
+                        source=entry,
+                        target=target,
+                    )
+                )
+                continue
+
+            if not entry.is_file() and not entry.is_dir():
+                continue
+
             if not follow_symlinks and tree_contains_symlink(entry):
                 skipped.append(
                     f"Skipped {section.value} entry with nested symlink: {entry}"
@@ -556,6 +579,58 @@ class ImportService:
                     skipped.append(action_skipped)
                 if action_error is not None:
                     errors.append(action_error)
+
+        return actions, errors, skipped
+
+    def _plan_copilot_agents(
+        self,
+        adapter,
+        conflict_policy: ConflictPolicy,
+        follow_symlinks: bool,
+    ):
+        actions: list[ImportAction] = []
+        errors: list[str] = []
+        skipped: list[str] = []
+
+        source_dir = adapter.agents_dir
+        if source_dir is None or not source_dir.exists() or not source_dir.is_dir():
+            skipped.append(f"Source agents directory missing: {source_dir}")
+            return actions, errors, skipped
+
+        from code_agnostic.agents.copilot import parse_copilot_agent
+
+        for entry in sorted(source_dir.iterdir(), key=lambda item: item.name):
+            if entry.name.startswith("."):
+                continue
+            if not entry.is_file():
+                continue
+
+            if not follow_symlinks and is_entry_symlink(entry):
+                skipped.append(f"Skipped symlink agents entry: {entry}")
+                continue
+
+            try:
+                parsed = parse_copilot_agent(entry)
+            except Exception as exc:
+                errors.append(f"Invalid copilot agent {entry}: {exc}")
+                continue
+            agent = parsed.agent
+            skipped.extend(parsed.warnings)
+
+            target_stem = entry.name.removesuffix(".agent.md").removesuffix(".md")
+            target_name = f"{target_stem}.md"
+            action, action_skipped, action_error = self._plan_text_import(
+                section=ImportSection.AGENTS,
+                detail_name=target_name,
+                target=self._core.agents_dir / target_name,
+                payload=serialize_agent(agent),
+                conflict_policy=conflict_policy,
+            )
+            actions.append(action)
+            if action_skipped is not None:
+                skipped.append(action_skipped)
+            if action_error is not None:
+                errors.append(action_error)
 
         return actions, errors, skipped
 

@@ -99,7 +99,9 @@ def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
         "    audience: maintainers\n"
         "x-claude:\n"
         "  when_to_use: Use during releases.\n"
-        "  disable-model-invocation: true\n",
+        "  disable-model-invocation: true\n"
+        "x-copilot:\n"
+        "  license: MIT\n",
         encoding="utf-8",
     )
     (skill_dir / "prompt.md").write_text("Prepare a release.\n", encoding="utf-8")
@@ -116,6 +118,7 @@ def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
             "when_to_use": "Use during releases.",
             "disable-model-invocation": True,
         },
+        "copilot": {"license": "MIT"},
     }
 
 
@@ -175,7 +178,10 @@ def test_load_agent_bundle_with_app_overrides(tmp_path: Path) -> None:
         "  temperature: 0.2\n"
         "x-claude:\n"
         "  model: claude-sonnet-4-20250514\n"
-        "  permissionMode: plan\n",
+        "  permissionMode: plan\n"
+        "x-copilot:\n"
+        "  target: github-copilot\n"
+        "  disable-model-invocation: true\n",
         encoding="utf-8",
     )
     (agent_dir / "prompt.md").write_text("Design the system.\n", encoding="utf-8")
@@ -188,6 +194,10 @@ def test_load_agent_bundle_with_app_overrides(tmp_path: Path) -> None:
         "claude": {
             "model": "claude-sonnet-4-20250514",
             "permissionMode": "plan",
+        },
+        "copilot": {
+            "target": "github-copilot",
+            "disable-model-invocation": True,
         },
     }
 
