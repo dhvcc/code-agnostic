@@ -101,7 +101,9 @@ def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
         "  when_to_use: Use during releases.\n"
         "  disable-model-invocation: true\n"
         "x-copilot:\n"
-        "  license: MIT\n",
+        "  license: MIT\n"
+        "  allowed-tools:\n"
+        "    - shell\n",
         encoding="utf-8",
     )
     (skill_dir / "prompt.md").write_text("Prepare a release.\n", encoding="utf-8")
@@ -118,7 +120,7 @@ def test_load_skill_bundle_with_app_overrides(tmp_path: Path) -> None:
             "when_to_use": "Use during releases.",
             "disable-model-invocation": True,
         },
-        "copilot": {"license": "MIT"},
+        "copilot": {"license": "MIT", "allowed-tools": ["shell"]},
     }
 
 

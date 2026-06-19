@@ -91,3 +91,6 @@ Target markers are recognized only for known targetable app ids.
 - GitHub Copilot output always emits `tools: ["*"]` for compiled MCP servers.
   Canonical OAuth servers are rejected because current Copilot repository MCP
   docs do not support OAuth remote servers.
+- Copilot CLI documents `sse` transport, but canonical v1 does not preserve the
+  distinction between SSE and HTTP transports. Copilot `type: "sse"` imports are
+  rejected instead of being silently rewritten as HTTP.

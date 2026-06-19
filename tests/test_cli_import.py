@@ -373,3 +373,32 @@ def test_import_apply_copilot_imports_mcp_skills_and_agents(
     assert parsed.metadata.name == "planner"
     assert parsed.metadata.description == "Plan work"
     assert parsed.content.strip() == "Plan."
+
+
+def test_import_apply_copilot_rejects_sse_mcp_transport(
+    cli_runner, tmp_path: Path
+) -> None:
+    copilot = tmp_path / ".copilot"
+    copilot.mkdir()
+    (copilot / "mcp-config.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "events": {
+                        "type": "sse",
+                        "url": "https://example.com/sse",
+                        "tools": ["*"],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["import", "apply", "-a", "copilot"])
+
+    assert result.exit_code != 0
+    assert "SSE transport cannot be imported" in result.output
+    assert not (
+        tmp_path / ".config" / "code-agnostic" / "config" / "mcp.base.json"
+    ).exists()

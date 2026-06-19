@@ -19,13 +19,16 @@ The compiler must make cross-app lossiness explicit.
 - MCP `envFile` is compiled only for Cursor local MCP servers. It is lossy for
   Codex, OpenCode, and Claude Code because current target configs do not model
   a native environment-file field.
+- Copilot MCP `type: "sse"` is rejected on import because canonical v1 does not
+  preserve the SSE-vs-HTTP transport distinction.
 - Codex MCP `env_vars` entries with `source = "remote"` are rejected on import
   because preserving the remote-executor source would require a Codex-specific
   canonical extension that does not exist in v1.
 - Skill `tools.*` is lossy for Cursor, Codex, OpenCode, Claude Code, and
-  GitHub Copilot skills because
-  current target `SKILL.md` frontmatter does not represent per-skill tool
-  permissions.
+  GitHub Copilot skills because current target skill frontmatter does not
+  represent code-agnostic's cross-app read/write/MCP permission model.
+  Copilot-native `allowed-tools` can still be preserved explicitly through
+  `x-copilot.allowed-tools`.
 - Agent `tools.read`, `tools.mcp`, and `reasoning_effort` are lossy for Cursor
   agents because current Cursor subagent frontmatter supports `readonly`, but not
   those controls. Agent `tools.write: false` maps to Cursor `readonly: true`.

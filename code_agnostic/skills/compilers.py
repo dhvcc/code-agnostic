@@ -27,7 +27,9 @@ _OPENCODE_SKILL_FRONTMATTER_KEYS = frozenset(
 _CLAUDE_SKILL_FRONTMATTER_KEYS = frozenset(
     {"name", "description", "when_to_use", "disable-model-invocation", "metadata"}
 )
-_COPILOT_SKILL_FRONTMATTER_KEYS = frozenset({"name", "description", "license"})
+_COPILOT_SKILL_FRONTMATTER_KEYS = frozenset(
+    {"name", "description", "license", "allowed-tools"}
+)
 
 
 class ISkillCompiler(ABC):

@@ -71,13 +71,19 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
     ]
     for features in (global_features, profile_features):
         assert "code_mode" in features
+        assert "current_time_reminder" in features
+        assert "deferred_executor" in features
+        assert "item_ids" in features
         assert "local_thread_store_compression" in features
+        assert "multi_agent_mode" in features
         assert "resize_all_images" in features
         assert "respect_system_proxy" in features
         assert "rollout_budget" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
+        assert "use_agent_identity" in features
         assert "sleep_tool" in features
+        assert "child_agents_md" not in features
         assert "responses_websocket_response_processed" not in features
 
     code_mode = global_features["code_mode"]
@@ -124,6 +130,22 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
             },
         },
         "type": "object",
+    }
+
+    current_time_reminder = global_features["current_time_reminder"]
+    assert current_time_reminder == {
+        "$ref": "#/definitions/FeatureToml_for_CurrentTimeReminderConfigToml"
+    }
+    assert profile_features["current_time_reminder"] == current_time_reminder
+    assert schema["definitions"]["FeatureToml_for_CurrentTimeReminderConfigToml"] == {
+        "anyOf": [
+            {"type": "boolean"},
+            {"$ref": "#/definitions/CurrentTimeReminderConfigToml"},
+        ]
+    }
+    assert schema["definitions"]["CurrentTimeSource"] == {
+        "enum": ["system", "external"],
+        "type": "string",
     }
 
 

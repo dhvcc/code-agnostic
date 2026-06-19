@@ -263,7 +263,7 @@ def test_copilot_compiler_emits_supported_skill_frontmatter() -> None:
                 write=True,
                 mcp=[{"server": "github", "tool": "create_pr"}],
             ),
-            app_overrides={"copilot": {"license": "MIT"}},
+            app_overrides={"copilot": {"license": "MIT", "allowed-tools": "shell"}},
         ),
         content="Body.\n",
     )
@@ -276,6 +276,7 @@ def test_copilot_compiler_emits_supported_skill_frontmatter() -> None:
         "name": "release-helper",
         "description": "Release helper",
         "license": "MIT",
+        "allowed-tools": "shell",
     }
     assert body.strip() == "Body."
 

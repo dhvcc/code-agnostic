@@ -53,7 +53,13 @@ class CopilotMCPMapper(IAppMCPMapper):
                 continue
 
             url = server.get("url")
-            if server_type in ("http", "sse") and isinstance(url, str):
+            if server_type == "sse":
+                raise InvalidConfigSchemaError(
+                    Path(f"mcpServers/{name}"),
+                    "GitHub Copilot MCP SSE transport cannot be imported because "
+                    "canonical MCP does not preserve SSE transport",
+                )
+            if server_type == "http" and isinstance(url, str):
                 mapped[name] = MCPServerDTO(
                     name=name,
                     type=MCPServerType.HTTP,

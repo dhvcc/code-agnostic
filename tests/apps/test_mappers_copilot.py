@@ -1,5 +1,8 @@
+import pytest
+
 from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
 from code_agnostic.apps.copilot.mapper import CopilotMCPMapper
+from code_agnostic.errors import InvalidConfigSchemaError
 
 
 def test_copilot_mapper_from_common_stdio_and_http() -> None:
@@ -80,3 +83,20 @@ def test_copilot_mapper_to_common_imports_supported_fields() -> None:
         headers={"Authorization": "Bearer ${API_KEY}"},
         timeout_ms=5000,
     )
+
+
+def test_copilot_mapper_rejects_sse_import_lossiness() -> None:
+    mapper = CopilotMCPMapper()
+
+    with pytest.raises(InvalidConfigSchemaError) as exc_info:
+        mapper.to_common(
+            {
+                "events": {
+                    "type": "sse",
+                    "url": "https://example.com/sse",
+                    "tools": ["*"],
+                }
+            }
+        )
+
+    assert "SSE transport" in exc_info.value.detail

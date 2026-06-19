@@ -77,7 +77,7 @@ Unknown keys fail validation.
   `disable-model-invocation`, and `metadata` can be preserved through
   `x-claude`.
 - GitHub Copilot skill output is `SKILL.md` with `name`, `description`, and the
-  prompt body. `x-copilot.license` can be preserved because Copilot documents
-  that native field.
+  prompt body. `x-copilot.license` and `x-copilot.allowed-tools` can be
+  preserved because Copilot documents those native fields.
 - Unsupported app-specific skill frontmatter keys are rejected during
   compilation instead of being emitted as ignored no-op fields.
