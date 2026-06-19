@@ -181,6 +181,104 @@ def test_entrypoint_skills_install_rejects_invalid_bundle_before_writing(
     assert not (home / ".config" / "code-agnostic" / "skills" / "bad-skill").exists()
 
 
+def test_entrypoint_copilot_apply_keeps_outputs_scoped_and_preserves_user_files(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    workspace_root = tmp_path / "workspace"
+    repo = workspace_root / "service-api"
+    (repo / ".git" / "info").mkdir(parents=True)
+
+    enable = _run_cli(home, "apps", "enable", "-a", "copilot")
+    assert enable.returncode == 0, enable.stderr
+
+    add_workspace = _run_cli(
+        home,
+        "workspaces",
+        "add",
+        "--name",
+        "myws",
+        "--path",
+        str(workspace_root),
+    )
+    assert add_workspace.returncode == 0, add_workspace.stderr
+
+    core_root = home / ".config" / "code-agnostic"
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {"mcpServers": {"global": {"command": "uvx", "args": ["global-server"]}}}
+        ),
+        encoding="utf-8",
+    )
+    ws_config = core_root / "workspaces" / "myws"
+    (ws_config / "mcp.base.json").write_text(
+        json.dumps({"mcpServers": {"workspace": {"url": "https://example.test/mcp"}}}),
+        encoding="utf-8",
+    )
+    (ws_config / "skills" / "review").mkdir(parents=True)
+    (ws_config / "skills" / "review" / "SKILL.md").write_text(
+        "---\nname: review\ndescription: Review code\n---\n\nReview.\n",
+        encoding="utf-8",
+    )
+    (ws_config / "agents").mkdir(parents=True)
+    (ws_config / "agents" / "planner.agent.md").write_text(
+        "---\nname: planner\ndescription: Plan work\n---\n\nPlan.\n",
+        encoding="utf-8",
+    )
+
+    user_global_file = home / ".copilot" / "user-settings.json"
+    user_global_file.parent.mkdir(parents=True)
+    user_global_file.write_text('{"theme": "dark"}\n', encoding="utf-8")
+    workspace_user_file = workspace_root / ".github" / "workflows" / "ci.yml"
+    workspace_user_file.parent.mkdir(parents=True)
+    workspace_user_file.write_text("name: ci\n", encoding="utf-8")
+    repo_user_file = repo / ".github" / "dependabot.yml"
+    repo_user_file.parent.mkdir(parents=True)
+    repo_user_file.write_text("version: 2\n", encoding="utf-8")
+    repo_mcp = repo / ".github" / "mcp.json"
+    repo_mcp.write_text(
+        json.dumps(
+            {
+                "note": "repo-owned",
+                "mcpServers": {
+                    "personal": {
+                        "tools": ["*"],
+                        "type": "local",
+                        "command": "uvx",
+                        "args": ["personal"],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    plan = _run_cli(home, "plan", "-a", "copilot")
+    assert plan.returncode == 0, plan.stderr + plan.stdout
+    assert "copilot" in plan.stdout
+
+    apply = _run_cli(home, "apply", "-a", "copilot")
+    assert apply.returncode == 0, apply.stderr + apply.stdout
+
+    assert (home / ".copilot" / "mcp-config.json").is_file()
+    assert not (home / ".mcp.json").exists()
+    assert user_global_file.read_text(encoding="utf-8") == '{"theme": "dark"}\n'
+
+    assert (workspace_root / ".github" / "mcp.json").is_file()
+    repo_mcp_payload = json.loads(repo_mcp.read_text(encoding="utf-8"))
+    assert repo_mcp_payload["note"] == "repo-owned"
+    assert repo_mcp_payload["mcpServers"]["personal"]["args"] == ["personal"]
+    assert repo_mcp_payload["mcpServers"]["workspace"]["url"] == (
+        "https://example.test/mcp"
+    )
+    assert (repo / ".github" / "skills" / "review" / "SKILL.md").is_file()
+    assert (repo / ".github" / "agents" / "planner.agent.md").is_file()
+    assert not (workspace_root / ".mcp.json").exists()
+    assert not (repo / ".mcp.json").exists()
+    assert workspace_user_file.read_text(encoding="utf-8") == "name: ci\n"
+    assert repo_user_file.read_text(encoding="utf-8") == "version: 2\n"
+
+
 def test_entrypoint_apply_fails_on_generated_skill_conflict(
     tmp_path: Path,
 ) -> None:

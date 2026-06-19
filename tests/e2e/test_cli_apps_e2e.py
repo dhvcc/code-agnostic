@@ -15,6 +15,7 @@ except ModuleNotFoundError:  # pragma: no cover
         ("cursor", "cursor", "write_json"),
         ("codex", "codex", "write_text"),
         ("claude", "claude", "write_json"),
+        ("copilot", "copilot", "write_json"),
     ],
 )
 def test_plan_then_apply_syncs_each_app_end_to_end(
@@ -82,6 +83,7 @@ def test_full_roundtrip_all_apps(
     enable_app("cursor")
     enable_app("codex")
     enable_app("claude")
+    enable_app("copilot")
 
     plan_result = cli_runner.invoke(cli, ["plan"])
     assert plan_result.exit_code == 0
@@ -94,6 +96,7 @@ def test_full_roundtrip_all_apps(
     assert expected_app_config_path("cursor").exists()
     assert expected_app_config_path("codex").exists()
     assert expected_app_config_path("claude").exists()
+    assert expected_app_config_path("copilot").exists()
 
     opencode_payload = json.loads(
         expected_app_config_path("opencode").read_text(encoding="utf-8")

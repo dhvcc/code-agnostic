@@ -177,6 +177,65 @@ def test_apply_copilot_target_writes_global_mcp_config(
     assert not (tmp_path / ".copilot" / "mcp.json").exists()
 
 
+def test_apply_copilot_preserves_unmanaged_mcp_servers(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    enable_app("copilot")
+    write_json(
+        tmp_path / ".copilot" / "mcp-config.json",
+        {
+            "note": "user setting",
+            "mcpServers": {
+                "personal": {
+                    "tools": ["*"],
+                    "type": "local",
+                    "command": "uvx",
+                    "args": ["personal"],
+                },
+                "managed": {
+                    "tools": ["*"],
+                    "type": "local",
+                    "command": "uvx",
+                    "args": ["old"],
+                },
+            },
+        },
+    )
+    (core_root / "config" / "mcp.base.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "managed": {"command": "uvx", "args": ["new"]},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    payload = json.loads((tmp_path / ".copilot" / "mcp-config.json").read_text())
+    assert payload["note"] == "user setting"
+    assert payload["mcpServers"]["personal"] == {
+        "tools": ["*"],
+        "type": "local",
+        "command": "uvx",
+        "args": ["personal"],
+    }
+    assert payload["mcpServers"]["managed"] == {
+        "tools": ["*"],
+        "type": "local",
+        "command": "uvx",
+        "args": ["new"],
+    }
+
+
 def test_apply_still_rejects_invalid_existing_global_mcp_source(
     minimal_shared_config: Path, core_root: Path, cli_runner, enable_app
 ) -> None:

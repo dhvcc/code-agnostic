@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,11 @@ class CopilotConfigService(RegisteredAppConfigService):
     def set_mcp_payload(
         self, merged: dict[str, Any], desired_mcp: dict[str, Any]
     ) -> None:
-        merged["mcpServers"] = desired_mcp
+        existing_mcp = merged.get("mcpServers")
+        preserved = deepcopy(existing_mcp) if isinstance(existing_mcp, dict) else {}
+        for name, config in desired_mcp.items():
+            preserved[name] = deepcopy(config)
+        merged["mcpServers"] = preserved
 
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]

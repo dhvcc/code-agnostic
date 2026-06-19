@@ -18,6 +18,9 @@ from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
 from code_agnostic.apps.cursor.service import CursorConfigService
+from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
+from code_agnostic.apps.copilot.mapper import CopilotMCPMapper
+from code_agnostic.apps.copilot.service import CopilotConfigService
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
 from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
 from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
@@ -68,6 +71,13 @@ def _claude_service(claude_root: Path) -> ClaudeConfigService:
             config_path=claude_root.parent / ".claude.json",
         ),
         mapper=ClaudeMCPMapper(),
+    )
+
+
+def _copilot_service(copilot_root: Path) -> CopilotConfigService:
+    return CopilotConfigService(
+        repository=CopilotConfigRepository(root=copilot_root),
+        mapper=CopilotMCPMapper(),
     )
 
 
@@ -1044,6 +1054,47 @@ def test_workspace_claude_unmanaged_existing_asset_conflict_fails_apply(
     assert unmanaged.read_text(encoding="utf-8") == "user skill\n"
 
 
+def test_workspace_copilot_unmanaged_existing_asset_conflict_fails_apply(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    unmanaged = repo / ".github" / "skills" / "my-skill" / "SKILL.md"
+    unmanaged.parent.mkdir(parents=True)
+    unmanaged.write_text("user skill\n", encoding="utf-8")
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text(
+        "---\nname: my-skill\ndescription: Workspace skill\n---\n\ns\n",
+        encoding="utf-8",
+    )
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_copilot_service(tmp_path / ".copilot")],
+    ).build()
+
+    repo_skill = next(a for a in plan.actions if a.path == unmanaged)
+    assert repo_skill.status == ActionStatus.CONFLICT
+
+    applied, failed, failures = SyncExecutor(core=core).execute(plan)
+
+    assert applied == 0
+    assert failed == 1
+    assert failures == [
+        f"Conflict (not overwritten): {unmanaged} (non-managed path exists)"
+    ]
+    assert unmanaged.read_text(encoding="utf-8") == "user skill\n"
+
+
 def test_workspace_compiled_sync_replaces_legacy_skill_symlink(
     minimal_shared_config: Path,
     core_root: Path,
@@ -1531,6 +1582,59 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_claude(
         a
         for a in plan2.actions
         if a.kind == ActionKind.REMOVE_FILE and a.scope == "ws:claude:repo_skills_dir"
+    ]
+    assert len(remove_actions) == 1
+
+    SyncExecutor(core=core).execute(plan2)
+    assert not skill_file.exists()
+
+
+def test_workspace_stale_skills_cleanup_when_skills_removed_for_copilot(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    (ws_config / "skills" / "my-skill").mkdir(parents=True)
+    (ws_config / "skills" / "my-skill" / "SKILL.md").write_text(
+        "---\nname: my-skill\ndescription: Workspace skill\n---\n\ns\n",
+        encoding="utf-8",
+    )
+
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_copilot_service(tmp_path / ".copilot")],
+    ).build()
+
+    SyncExecutor(core=core).execute(plan)
+    skill_file = repo / ".github" / "skills" / "my-skill" / "SKILL.md"
+    assert skill_file.is_file()
+
+    ws_repo = WorkspaceConfigRepository(root=ws_config)
+    state = ws_repo.load_state()
+    assert "ws:copilot:repo_skills_dir" in state["managed_paths"]
+
+    import shutil
+
+    shutil.rmtree(ws_config / "skills")
+
+    plan2 = SyncPlanner(
+        core=core,
+        app_services=[_copilot_service(tmp_path / ".copilot")],
+    ).build()
+
+    remove_actions = [
+        a
+        for a in plan2.actions
+        if a.kind == ActionKind.REMOVE_FILE and a.scope == "ws:copilot:repo_skills_dir"
     ]
     assert len(remove_actions) == 1
 
