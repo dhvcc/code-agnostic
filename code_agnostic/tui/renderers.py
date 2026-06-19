@@ -7,6 +7,7 @@ from code_agnostic.imports.models import (
     ImportPlan,
 )
 from code_agnostic.models import (
+    ActionStatus,
     AppStatusRow,
     EditorStatusRow,
     EditorSyncStatus,
@@ -111,6 +112,13 @@ class SyncConsoleUI:
         if plan.errors:
             return (
                 "Fix the errors above, then rerun the plan.\n"
+                f"- code-agnostic plan{target_flag}"
+            )
+
+        if any(action.status == ActionStatus.CONFLICT for action in plan.actions):
+            return (
+                "Resolve the conflicts above before applying; code-agnostic will not "
+                "overwrite unmanaged files.\n"
                 f"- code-agnostic plan{target_flag}"
             )
 
@@ -357,10 +365,11 @@ class SyncConsoleUI:
         )
 
     def render_app_enabled_next_steps(self, app: str) -> None:
+        label = app_label(app)
         self.console.print(
             UISection.note(
                 "next",
-                f"Preview and apply {app}.\n"
+                f"Preview and apply {label}.\n"
                 f"- code-agnostic plan -a {app}\n"
                 f"- code-agnostic apply -a {app}",
                 style=UIStyle.DIM.value,

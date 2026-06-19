@@ -15,6 +15,7 @@ def test_apps_list_shows_all_disabled_by_default(
     assert "cursor" in result.output
     assert "codex" in result.output
     assert "copilot" in result.output
+    assert "GitHub Copilot" in result.output
     assert "disabled" in result.output
 
 
@@ -38,6 +39,17 @@ def test_apps_enable_and_disable_updates_state(
     assert list_after_disable.exit_code == 0
     assert "opencode" in list_after_disable.output
     assert "disabled" in list_after_disable.output
+
+
+def test_apps_enable_copilot_uses_human_label(
+    minimal_shared_config, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["apps", "enable", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    assert "GitHub Copilot" in result.output
+    assert "code-agnostic plan -a copilot" in result.output
+    assert "code-agnostic apply -a copilot" in result.output
 
 
 def test_apply_skips_when_no_apps_enabled(minimal_shared_config, cli_runner) -> None:

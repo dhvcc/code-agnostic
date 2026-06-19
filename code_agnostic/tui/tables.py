@@ -315,7 +315,7 @@ class AppsTable:
     @staticmethod
     def apps_table(items: list[AppStatusRow]) -> Table:
         table = Table(
-            Column(header="App", width=14),
+            Column(header="App", width=24),
             Column(header="Status", width=12),
             Column(header="Detail", overflow="ellipsis"),
             expand=True,
@@ -328,8 +328,19 @@ class AppsTable:
                 if status == AppSyncStatus.ENABLED
                 else UIStyle.YELLOW.value
             )
-            table.add_row(item.name, f"[{style}]{status.value}[/{style}]", item.detail)
+            table.add_row(
+                AppsTable._display_name(item.name),
+                f"[{style}]{status.value}[/{style}]",
+                item.detail,
+            )
         return table
+
+    @staticmethod
+    def _display_name(name: str) -> str:
+        label = app_label(name)
+        if label == name:
+            return name
+        return f"{label} ({name})"
 
 
 class ConfigListTable:

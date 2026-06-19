@@ -3,7 +3,8 @@ from pathlib import Path
 from code_agnostic.__main__ import cli
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.core.repository import CoreRepository
-from code_agnostic.models import ActionKind
+from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.tui.renderers import SyncConsoleUI
 
 
 def test_plan_shows_invalid_json_error_for_mcp_base(
@@ -96,6 +97,29 @@ def test_plan_target_enabled_app_shows_scoped_apply_next_step(
     assert "Review the planned changes" in result.output
     assert "code-agnostic apply -a cursor" in result.output
     assert "code-agnostic apps enable -a <app>" not in result.output
+
+
+def test_plan_conflict_next_step_does_not_recommend_apply() -> None:
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_TEXT,
+                path=Path("/tmp/repo/.github/skills/review/SKILL.md"),
+                status=ActionStatus.CONFLICT,
+                detail="non-managed path exists",
+                app="copilot",
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    next_steps = SyncConsoleUI._next_steps(plan, "plan:copilot")
+
+    assert next_steps is not None
+    assert "Resolve the conflicts above before applying" in next_steps
+    assert "code-agnostic plan -a copilot" in next_steps
+    assert "code-agnostic apply -a copilot" not in next_steps
 
 
 def test_plan_missing_mcp_base_json(tmp_path: Path, cli_runner, enable_app) -> None:
