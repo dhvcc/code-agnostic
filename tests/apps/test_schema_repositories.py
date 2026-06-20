@@ -73,11 +73,17 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "code_mode" in features
         assert "local_thread_store_compression" in features
         assert "resize_all_images" in features
+        assert "current_time_reminder" in features
+        assert "deferred_executor" in features
+        assert "item_ids" in features
+        assert "multi_agent_mode" in features
         assert "respect_system_proxy" in features
         assert "rollout_budget" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
         assert "sleep_tool" in features
+        assert "use_agent_identity" in features
+        assert "child_agents_md" not in features
         assert "responses_websocket_response_processed" not in features
 
     code_mode = global_features["code_mode"]
@@ -125,6 +131,25 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         },
         "type": "object",
     }
+
+    current_time = global_features["current_time_reminder"]
+    assert current_time == {
+        "$ref": "#/definitions/FeatureToml_for_CurrentTimeReminderConfigToml"
+    }
+    assert profile_features["current_time_reminder"] == current_time
+    current_time_config = schema["definitions"]["CurrentTimeReminderConfigToml"]
+    assert current_time_config["properties"]["clock_source"] == {
+        "$ref": "#/definitions/CurrentTimeSource"
+    }
+    assert schema["definitions"]["CurrentTimeSource"]["enum"] == [
+        "system",
+        "external",
+    ]
+
+    assert "orchestrator" in schema["properties"]
+    orchestrator = schema["definitions"]["OrchestratorToml"]["properties"]
+    assert orchestrator["mcp"] == {"$ref": "#/definitions/OrchestratorFeatureToml"}
+    assert orchestrator["skills"] == {"$ref": "#/definitions/OrchestratorFeatureToml"}
 
 
 def test_codex_schema_repository_fallback_allows_advertised_reasoning_efforts(
