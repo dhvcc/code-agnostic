@@ -133,6 +133,36 @@ def test_entrypoint_status_fails_on_invalid_project_registry(
     assert registry.read_text(encoding="utf-8") == "{bad"
 
 
+def test_entrypoint_validate_includes_registered_project_source(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    project.mkdir()
+
+    add = _run_cli(home, "projects", "add", "--name", "demo", "--path", str(project))
+    assert add.returncode == 0, add.stderr + add.stdout
+
+    skill = home / ".config" / "code-agnostic" / "projects" / "demo" / "skills" / "bad"
+    skill.mkdir(parents=True)
+    (skill / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: bad\n"
+        "description: Bad skill\n"
+        "surprise: nope\n",
+        encoding="utf-8",
+    )
+    (skill / "prompt.md").write_text("Bad skill body\n", encoding="utf-8")
+
+    result = _run_cli(home, "validate")
+
+    assert result.returncode != 0
+    assert "projects/demo/skills/bad" in result.stdout
+    assert "Invalid config schema" in result.stdout
+    assert "surprise" in result.stdout
+
+
 def test_entrypoint_skills_remove_refuses_symlinked_source_dir(
     tmp_path: Path,
 ) -> None:

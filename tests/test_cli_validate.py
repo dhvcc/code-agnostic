@@ -100,3 +100,53 @@ def test_validate_workspace_sources(
 
     assert result.exit_code == 0
     assert "Validated 1 resources." in result.output
+
+
+def test_validate_includes_registered_project_sources(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    add_result = cli_runner.invoke(
+        cli, ["projects", "add", "--name", "demo", "--path", str(project_root)]
+    )
+    assert add_result.exit_code == 0
+
+    skill_dir = core_root / "projects" / "demo" / "skills" / "bad"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\n"
+        "kind: skill\n"
+        "name: bad\n"
+        "description: Bad skill\n"
+        "surprise: nope\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "prompt.md").write_text("Bad skill body\n", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["validate"])
+
+    assert result.exit_code != 0
+    assert "projects/demo/skills/bad" in result.output
+    assert "Invalid config schema" in result.output
+    assert "surprise" in result.output
+
+
+def test_validate_fails_on_invalid_project_registry_without_rewrite(
+    minimal_shared_config: Path,
+    core_root: Path,
+    cli_runner,
+) -> None:
+    registry = core_root / "config" / "projects.json"
+    registry.write_text("{bad", encoding="utf-8")
+
+    result = cli_runner.invoke(cli, ["validate"])
+
+    assert result.exit_code != 0
+    assert "projects.json" in result.output
+    assert "Invalid JSON format" in result.output
+    assert registry.read_text(encoding="utf-8") == "{bad"

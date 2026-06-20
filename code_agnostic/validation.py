@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from code_agnostic.agents.parser import parse_agent
+from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.rules.parser import parse_rule
@@ -25,7 +26,9 @@ class ValidationResult:
 
 class ConfigValidator:
     def validate_core_root(self, root: Path) -> ValidationResult:
-        return self._validate_repository(CoreRepository(root))
+        core = CoreRepository(root)
+        result = self._validate_repository(core)
+        return self._validate_registered_projects(core, result)
 
     def validate_workspace_root(self, root: Path) -> ValidationResult:
         return self._validate_repository(WorkspaceConfigRepository(root))
@@ -52,6 +55,27 @@ class ConfigValidator:
         validated, issues = self._validate_agents(
             repository.root / "agents", validated, issues
         )
+
+        return ValidationResult(validated=validated, issues=issues)
+
+    def _validate_registered_projects(
+        self, core: CoreRepository, result: ValidationResult
+    ) -> ValidationResult:
+        validated = result.validated
+        issues = list(result.issues)
+
+        try:
+            projects = core.load_projects()
+        except Exception as exc:
+            issues.append(ValidationIssue(core.projects_path, str(exc)))
+            return ValidationResult(validated=validated, issues=issues)
+
+        for project in projects:
+            project_result = self._validate_repository(
+                ProjectConfigRepository(core.project_config_dir(project["name"]))
+            )
+            validated += project_result.validated
+            issues.extend(project_result.issues)
 
         return ValidationResult(validated=validated, issues=issues)
 
