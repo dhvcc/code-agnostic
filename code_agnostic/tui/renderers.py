@@ -516,13 +516,25 @@ class SyncConsoleUI:
                 f"- code-agnostic import plan{target_flag} --on-conflict overwrite"
             )
 
-        if plan.skipped and all(
-            item.lower().startswith("source ") and " missing:" in item.lower()
-            for item in plan.skipped
+        if (
+            not plan.actions
+            and plan.skipped
+            and all(
+                item.lower().startswith("source ") and " missing:" in item.lower()
+                for item in plan.skipped
+            )
         ):
             return (
                 f"No importable {app_label(plan.source_app)} config found for the selected sections.\n"
                 "Check --source-root, or choose a different source app."
+            )
+
+        if plan.actions and all(
+            action.status == ImportActionStatus.NOOP for action in plan.actions
+        ):
+            return (
+                f"Importable {app_label(plan.source_app)} config already matches the hub.\n"
+                "- code-agnostic validate"
             )
 
         return "No import changes needed.\n- code-agnostic validate"
