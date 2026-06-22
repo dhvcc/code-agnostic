@@ -74,9 +74,14 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "local_thread_store_compression" in features
         assert "resize_all_images" in features
         assert "respect_system_proxy" in features
+        assert "current_time_reminder" in features
+        assert "deferred_executor" in features
+        assert "item_ids" in features
+        assert "multi_agent_mode" in features
         assert "rollout_budget" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
+        assert "use_agent_identity" in features
         assert "sleep_tool" in features
         assert "responses_websocket_response_processed" not in features
 
@@ -85,6 +90,37 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
     code_mode_config = schema["definitions"]["CodeModeConfigToml"]["properties"]
     assert "direct_only_tool_namespaces" in code_mode_config
     assert "excluded_tool_namespaces" in code_mode_config
+
+    current_time_reminder = global_features["current_time_reminder"]
+    assert current_time_reminder == {
+        "$ref": "#/definitions/FeatureToml_for_CurrentTimeReminderConfigToml"
+    }
+    assert profile_features["current_time_reminder"] == current_time_reminder
+    assert schema["definitions"]["CurrentTimeSource"] == {
+        "enum": ["system", "external"],
+        "type": "string",
+    }
+    current_time_config = schema["definitions"]["CurrentTimeReminderConfigToml"]
+    assert "clock_source" in current_time_config["properties"]
+    assert "reminder_interval_model_requests" in current_time_config["properties"]
+
+    token_budget = global_features["token_budget"]
+    assert token_budget == {
+        "$ref": "#/definitions/FeatureToml_for_TokenBudgetConfigToml"
+    }
+    assert profile_features["token_budget"] == token_budget
+    token_budget_config = schema["definitions"]["TokenBudgetConfigToml"]
+    assert "reminder_threshold_tokens" in token_budget_config["properties"]
+    assert "reminder_message_template" in token_budget_config["properties"]
+
+    assert schema["properties"]["orchestrator"] == {
+        "allOf": [{"$ref": "#/definitions/OrchestratorToml"}],
+        "description": "Orchestrator-owned feature settings.",
+    }
+    orchestrator_config = schema["definitions"]["OrchestratorToml"]
+    assert set(orchestrator_config["properties"]) == {"mcp", "skills"}
+
+    assert "RealtimeConversationArchitecture" not in schema["definitions"]
 
     rollout_budget = global_features["rollout_budget"]
     assert rollout_budget == {
