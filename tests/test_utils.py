@@ -95,6 +95,25 @@ def test_write_json_preserves_existing_file_mode(tmp_path: Path) -> None:
     assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
+def test_write_json_preserves_existing_file_when_final_replace_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text('{"existing": true}\n', encoding="utf-8")
+
+    def fail_replace(src: Path | str, dst: Path | str) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("code_agnostic.utils._replace_path", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        write_json(path, {"updated": True})
+
+    assert path.read_text(encoding="utf-8") == '{"existing": true}\n'
+    assert list(tmp_path.iterdir()) == [path]
+
+
 # --- is_under ---
 
 

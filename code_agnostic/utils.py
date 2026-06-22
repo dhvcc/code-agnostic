@@ -1,7 +1,12 @@
 import json
+import os
+import stat
+import tempfile
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+
+_replace_path = os.replace
 
 
 def read_json(path: Path) -> Any:
@@ -22,9 +27,45 @@ def read_json_safe(path: Path) -> tuple[Any | None, str | None]:
 
 def write_json(path: Path, payload: Any) -> None:
     rendered = json.dumps(payload, indent=2, sort_keys=False) + "\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        handle.write(rendered)
+    destination = path.resolve() if path.is_symlink() else path
+    if not path.is_symlink():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+    mode = _replacement_mode(destination)
+    fd, raw_temp_path = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temp_path = Path(raw_temp_path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(rendered)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp_path.chmod(mode)
+        _replace_path(temp_path, destination)
+        _fsync_directory(destination.parent)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def _replacement_mode(destination: Path) -> int:
+    if destination.exists():
+        return stat.S_IMODE(destination.stat().st_mode)
+    current_umask = os.umask(0)
+    os.umask(current_umask)
+    return 0o666 & ~current_umask
+
+
+def _fsync_directory(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def merge_dict_overlay(
