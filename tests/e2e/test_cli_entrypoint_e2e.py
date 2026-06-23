@@ -181,6 +181,36 @@ def test_entrypoint_skills_install_rejects_invalid_bundle_before_writing(
     assert not (home / ".config" / "code-agnostic" / "skills" / "bad-skill").exists()
 
 
+def test_entrypoint_validate_fails_on_invalid_project_source(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+    project_root = tmp_path / "demo-project"
+    project_root.mkdir()
+    hub_root = home / ".config" / "code-agnostic"
+    registry = hub_root / "config" / "projects.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(
+        json.dumps([{"name": "demo", "path": str(project_root)}]),
+        encoding="utf-8",
+    )
+
+    skill_dir = hub_root / "projects" / "demo" / "skills" / "bad"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "meta.yaml").write_text(
+        "spec_version: v1\n" "kind: skill\n" "name: bad\n" "surprise: nope\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "prompt.md").write_text("Bad skill\n", encoding="utf-8")
+
+    result = _run_cli(home, "validate")
+
+    assert result.returncode != 0
+    assert "projects/demo/skills/bad" in result.stdout
+    assert "Invalid config schema" in result.stdout
+    assert "surprise" in result.stdout
+
+
 def test_entrypoint_apply_fails_on_generated_skill_conflict(
     tmp_path: Path,
 ) -> None:

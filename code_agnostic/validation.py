@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from code_agnostic.agents.parser import parse_agent
+from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.rules.parser import parse_rule
@@ -25,7 +26,28 @@ class ValidationResult:
 
 class ConfigValidator:
     def validate_core_root(self, root: Path) -> ValidationResult:
-        return self._validate_repository(CoreRepository(root))
+        repository = CoreRepository(root)
+        result = self._validate_repository(repository)
+        try:
+            projects = repository.load_projects()
+        except Exception as exc:
+            return ValidationResult(
+                validated=result.validated,
+                issues=[
+                    *result.issues,
+                    ValidationIssue(repository.projects_path, str(exc)),
+                ],
+            )
+
+        for project in projects:
+            project_result = self._validate_repository(
+                ProjectConfigRepository(repository.project_config_dir(project["name"]))
+            )
+            result = ValidationResult(
+                validated=result.validated + project_result.validated,
+                issues=[*result.issues, *project_result.issues],
+            )
+        return result
 
     def validate_workspace_root(self, root: Path) -> ValidationResult:
         return self._validate_repository(WorkspaceConfigRepository(root))
