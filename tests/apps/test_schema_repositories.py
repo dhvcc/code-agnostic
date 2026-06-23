@@ -70,6 +70,7 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         "properties"
     ]
     for features in (global_features, profile_features):
+        assert "browser_use_full_cdp_access" in features
         assert "code_mode" in features
         assert "local_thread_store_compression" in features
         assert "resize_all_images" in features
@@ -148,10 +149,13 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
                 "minimum": 0.0,
                 "type": "number",
             },
-            "reminder_interval_tokens": {
-                "format": "int64",
-                "minimum": 1.0,
-                "type": "integer",
+            "reminder_at_remaining_tokens": {
+                "description": "Remaining weighted-token values that trigger reminders when crossed.",
+                "items": {
+                    "format": "int64",
+                    "type": "integer",
+                },
+                "type": "array",
             },
             "sampling_token_weight": {
                 "format": "double",
@@ -191,6 +195,17 @@ def test_codex_schema_repository_fallback_includes_current_app_config(
     apps_default_config = schema["definitions"]["AppsDefaultConfig"]["properties"]
     assert "approvals_reviewer" in app_config
     assert "default_tools_approval_mode" in apps_default_config
+    assert schema["definitions"]["LegacyAppPathString"] == {"type": "string"}
+    raw_mcp_config = schema["definitions"]["RawMcpServerConfig"]["properties"]
+    assert raw_mcp_config["cwd"] == {
+        "allOf": [{"$ref": "#/definitions/LegacyAppPathString"}],
+        "default": None,
+    }
+    multi_agent_config = schema["definitions"]["MultiAgentV2ConfigToml"]["properties"]
+    assert (
+        multi_agent_config["usage_hint_enabled"]["description"]
+        == "Deprecated compatibility field. Its value is ignored."
+    )
 
 
 def test_codex_schema_repository_fallback_includes_realtime_webrtc_base_url(
