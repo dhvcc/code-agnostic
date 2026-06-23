@@ -1,6 +1,6 @@
 import pytest
 
-from code_agnostic.apps.app_id import AppId, app_metadata, app_scope
+from code_agnostic.apps.app_id import AppId, app_display_name, app_metadata, app_scope
 
 
 @pytest.mark.parametrize(
@@ -40,3 +40,7 @@ def test_app_scope_builds_consistent_scope_names(
     app_id: AppId, resource: str, expected: str
 ) -> None:
     assert app_scope(app_id, resource) == expected
+
+
+def test_app_display_name_includes_user_label_and_cli_id() -> None:
+    assert app_display_name(AppId.COPILOT) == "GitHub Copilot (copilot)"

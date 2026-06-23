@@ -85,6 +85,18 @@ def test_plan_target_opencode_when_not_enabled(
     assert "code-agnostic apply -a opencode" in result.output
 
 
+def test_plan_target_copilot_when_not_enabled_uses_label_and_cli_id(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["plan", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    assert "Enable GitHub Copilot (copilot)" in result.output
+    assert "code-agnostic apps enable -a copilot" in result.output
+    assert "code-agnostic plan -a copilot" in result.output
+    assert "code-agnostic apply -a copilot" in result.output
+
+
 def test_plan_target_enabled_app_shows_scoped_apply_next_step(
     minimal_shared_config: Path, cli_runner, enable_app
 ) -> None:

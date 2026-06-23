@@ -1,6 +1,6 @@
 from rich.console import Console
 
-from code_agnostic.apps.app_id import app_label
+from code_agnostic.apps.app_id import app_display_name, app_label
 from code_agnostic.imports.models import (
     ImportActionStatus,
     ImportApplyResult,
@@ -28,6 +28,13 @@ from code_agnostic.tui.tables import (
     WorkspaceTable,
 )
 from code_agnostic.utils import compact_home_path, compact_home_paths_in_text
+
+
+def _app_display_name_or_original(name: str) -> str:
+    try:
+        return app_display_name(name)
+    except ValueError:
+        return name
 
 
 class SyncConsoleUI:
@@ -104,6 +111,7 @@ class SyncConsoleUI:
         target = target or "all"
         is_scoped = target != "all"
         target_flag = f" -a {target}" if is_scoped else ""
+        target_display = _app_display_name_or_original(target)
 
         if command == "apply":
             return None
@@ -122,7 +130,7 @@ class SyncConsoleUI:
 
         if is_scoped and f"{target} is disabled for sync." in plan.skipped:
             return (
-                f"Enable {target}, then preview and apply it.\n"
+                f"Enable {target_display}, then preview and apply it.\n"
                 f"- code-agnostic apps enable -a {target}\n"
                 f"- code-agnostic plan -a {target}\n"
                 f"- code-agnostic apply -a {target}"
@@ -131,7 +139,7 @@ class SyncConsoleUI:
         if "No apps enabled for sync." in plan.skipped:
             if is_scoped:
                 return (
-                    f"Enable {target}, then preview and apply it.\n"
+                    f"Enable {target_display}, then preview and apply it.\n"
                     f"- code-agnostic apps enable -a {target}\n"
                     f"- code-agnostic plan -a {target}\n"
                     f"- code-agnostic apply -a {target}"
@@ -145,7 +153,8 @@ class SyncConsoleUI:
 
         if is_scoped:
             return (
-                f"No changes needed for {target}.\n- code-agnostic status -a {target}"
+                f"No changes needed for {target_display}.\n"
+                f"- code-agnostic status -a {target}"
             )
         return "No changes needed.\n- code-agnostic status"
 
@@ -307,8 +316,9 @@ class SyncConsoleUI:
 
         if len(editors) == 1:
             app = editors[0].name
+            app_display = _app_display_name_or_original(app)
             return (
-                f"Enable {app}, then preview and apply it.\n"
+                f"Enable {app_display}, then preview and apply it.\n"
                 f"- code-agnostic apps enable -a {app}\n"
                 f"- code-agnostic plan -a {app}\n"
                 f"- code-agnostic apply -a {app}"
@@ -357,10 +367,11 @@ class SyncConsoleUI:
         )
 
     def render_app_enabled_next_steps(self, app: str) -> None:
+        app_display = _app_display_name_or_original(app)
         self.console.print(
             UISection.note(
                 "next",
-                f"Preview and apply {app}.\n"
+                f"Preview and apply {app_display}.\n"
                 f"- code-agnostic plan -a {app}\n"
                 f"- code-agnostic apply -a {app}",
                 style=UIStyle.DIM.value,

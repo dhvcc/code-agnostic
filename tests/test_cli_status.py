@@ -64,6 +64,17 @@ def test_status_empty_state_suggests_enabling_app(
     assert "code-agnostic apply -a <app>" in result.output
 
 
+def test_status_scoped_disabled_copilot_uses_label_and_cli_id(
+    minimal_shared_config: Path, cli_runner
+) -> None:
+    result = cli_runner.invoke(cli, ["status", "-a", "copilot"])
+
+    assert result.exit_code == 0
+    assert "GitHub Copilot (copilot)" in result.output
+    assert "Enable GitHub Copilot (copilot)" in result.output
+    assert "code-agnostic apps enable -a copilot" in result.output
+
+
 def test_status_help_mentions_project_status(cli_runner) -> None:
     result = cli_runner.invoke(cli, ["status", "--help"])
 

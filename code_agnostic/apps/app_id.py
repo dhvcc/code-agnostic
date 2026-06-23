@@ -115,6 +115,11 @@ def app_label(app: AppId | str) -> str:
     return app_metadata(app).label
 
 
+def app_display_name(app: AppId | str) -> str:
+    metadata = app_metadata(app)
+    return f"{metadata.label} ({metadata.app_id.value})"
+
+
 def app_scope(app: AppId | str, resource: str) -> str:
     app_id = app if isinstance(app, AppId) else AppId(app)
     return f"app:{app_id.value}:{resource}"

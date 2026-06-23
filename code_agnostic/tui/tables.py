@@ -6,7 +6,7 @@ from rich.panel import Panel
 from rich.table import Column, Table
 from rich.text import Text
 
-from code_agnostic.apps.app_id import AppId, app_label
+from code_agnostic.apps.app_id import AppId, app_display_name, app_label
 from code_agnostic.imports.models import ImportAction, ImportActionStatus, ImportPlan
 from code_agnostic.models import (
     Action,
@@ -32,6 +32,13 @@ IMPORT_STATUS_STYLE = {
     ImportActionStatus.SKIP: UIStyle.YELLOW.value,
     ImportActionStatus.CONFLICT: UIStyle.RED.value,
 }
+
+
+def _app_display_name_or_original(name: str) -> str:
+    try:
+        return app_display_name(name)
+    except ValueError:
+        return name
 
 
 class PlanTable:
@@ -211,7 +218,11 @@ class StatusTable:
                 if status == EditorSyncStatus.DISABLED
                 else UIStyle.RED.value
             )
-            table.add_row(item.name, f"[{style}]{status.value}[/{style}]", item.detail)
+            table.add_row(
+                _app_display_name_or_original(item.name),
+                f"[{style}]{status.value}[/{style}]",
+                item.detail,
+            )
         return table
 
     @staticmethod
@@ -315,7 +326,7 @@ class AppsTable:
     @staticmethod
     def apps_table(items: list[AppStatusRow]) -> Table:
         table = Table(
-            Column(header="App", width=14),
+            Column(header="App", width=24),
             Column(header="Status", width=12),
             Column(header="Detail", overflow="ellipsis"),
             expand=True,
@@ -328,7 +339,11 @@ class AppsTable:
                 if status == AppSyncStatus.ENABLED
                 else UIStyle.YELLOW.value
             )
-            table.add_row(item.name, f"[{style}]{status.value}[/{style}]", item.detail)
+            table.add_row(
+                _app_display_name_or_original(item.name),
+                f"[{style}]{status.value}[/{style}]",
+                item.detail,
+            )
         return table
 
 
