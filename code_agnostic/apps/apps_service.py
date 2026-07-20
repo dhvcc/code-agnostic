@@ -1,15 +1,25 @@
 from pathlib import Path
+from typing import Any
 
-from code_agnostic.apps.app_id import AppId, app_ids_by_capability
+from code_agnostic.apps.app_id import AppId, app_ids_by_capability, app_scope
 from code_agnostic.apps.common.framework import (
     create_registered_app_service,
     list_registered_app_services,
 )
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
+from code_agnostic.apps.common.symlink_planning import (
+    load_state_links,
+    load_state_paths,
+    plan_stale_files_group,
+    plan_stale_group,
+)
+from code_agnostic.core.project_repository import ProjectConfigRepository
+from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.executor import SyncExecutor
-from code_agnostic.models import AppStatusRow, AppSyncStatus, SyncPlan
+from code_agnostic.models import Action, AppStatusRow, AppSyncStatus, SyncPlan
 from code_agnostic.planner import SyncPlanner
+from code_agnostic.project_artifacts import load_project_entries, project_config_dir
 from code_agnostic.utils import read_json_safe, write_json
 
 
@@ -62,8 +72,153 @@ class AppsService:
     def enable(self, app_name: str) -> None:
         self.set_enabled(app_name=app_name, enabled=True)
 
-    def disable(self, app_name: str) -> None:
-        self.set_enabled(app_name=app_name, enabled=False)
+    def disable(self, app_name: str) -> tuple[int, int, list[str]]:
+        """Disable an app AND clean up everything it previously synced.
+
+        Removes tracked skills/agents/compiled files and prunes the MCP servers
+        we own from the app's shared config, across global, workspace, and
+        project scopes, then clears the corresponding state. Without this,
+        disabling would strand orphaned artifacts with no way to reclaim them.
+        """
+        normalized = app_name.lower()
+        plan = self._plan_app_cleanup(normalized)
+        result: tuple[int, int, list[str]] = (0, 0, [])
+        if plan.actions:
+            result = SyncExecutor(core=self.core_repository).execute(
+                plan, persist_state=True
+            )
+        self.set_enabled(app_name=normalized, enabled=False)
+        return result
+
+    def _plan_app_cleanup(self, app_name: str) -> SyncPlan:
+        try:
+            app_id = AppId(app_name)
+        except ValueError:
+            return SyncPlan([], [], [])
+
+        actions: list[Action] = []
+        skipped: list[str] = []
+        core = self.core_repository
+
+        # --- Global scopes (app:<app>:*) ---
+        global_state = core.load_state()
+        global_links = self._normalize_group(global_state.get("managed_links"))
+        global_paths = self._normalize_group(global_state.get("managed_paths"))
+        global_mcp = self._normalize_group(global_state.get("managed_mcp"))
+        global_prefix = f"app:{app_id.value}:"
+        for scope in sorted(s for s in global_links if s.startswith(global_prefix)):
+            actions.extend(self._cleanup_links(global_links, scope, app_id.value))
+        for scope in sorted(s for s in global_paths if s.startswith(global_prefix)):
+            actions.extend(
+                self._cleanup_paths(global_paths, scope, app_id.value, skipped)
+            )
+        actions.extend(self._cleanup_global_mcp(app_id, global_mcp))
+
+        # --- Workspace scopes (ws:<app>:*) ---
+        ws_prefix = f"ws:{app_id.value}:"
+        for workspace in core.load_workspaces():
+            ws_name = workspace["name"]
+            ws_repo = WorkspaceConfigRepository(root=core.workspace_config_dir(ws_name))
+            ws_state = ws_repo.load_state()
+            ws_links = self._normalize_group(ws_state.get("managed_links"))
+            ws_paths = self._normalize_group(ws_state.get("managed_paths"))
+            for scope in sorted(s for s in ws_links if s.startswith(ws_prefix)):
+                for action in self._cleanup_links(ws_links, scope, "workspace"):
+                    action.workspace = ws_name
+                    actions.append(action)
+            for scope in sorted(s for s in ws_paths if s.startswith(ws_prefix)):
+                for action in self._cleanup_paths(
+                    ws_paths, scope, "workspace", skipped
+                ):
+                    action.workspace = ws_name
+                    actions.append(action)
+
+        # --- Project scopes (project:<app>:*) ---
+        project_prefix = f"project:{app_id.value}:"
+        for project in load_project_entries(core):
+            project_name = project["name"]
+            project_repo = ProjectConfigRepository(
+                root=project_config_dir(core, project_name)
+            )
+            project_state = project_repo.load_state()
+            project_links = self._normalize_group(project_state.get("managed_links"))
+            project_paths = self._normalize_group(project_state.get("managed_paths"))
+            for scope in sorted(
+                s for s in project_links if s.startswith(project_prefix)
+            ):
+                for action in self._cleanup_links(project_links, scope, app_id.value):
+                    action.project = project_name
+                    actions.append(action)
+            for scope in sorted(
+                s for s in project_paths if s.startswith(project_prefix)
+            ):
+                for action in self._cleanup_paths(
+                    project_paths, scope, app_id.value, skipped
+                ):
+                    action.project = project_name
+                    actions.append(action)
+
+        return SyncPlan(actions=actions, errors=[], skipped=skipped)
+
+    @staticmethod
+    def _normalize_group(value: Any) -> dict[str, Any]:
+        return (
+            {scope: paths for scope, paths in value.items() if isinstance(scope, str)}
+            if isinstance(value, dict)
+            else {}
+        )
+
+    @staticmethod
+    def _cleanup_links(group: dict[str, Any], scope: str, app: str) -> list[Action]:
+        return plan_stale_group(
+            old_links=load_state_links(group, scope),
+            desired_links=[],
+            remove_detail=f"remove {scope} symlink on disable",
+            conflict_detail="managed path is not a symlink",
+            noop_detail="managed symlink already absent",
+            app=app,
+            scope=scope,
+            skipped=[],
+            skipped_message="Disable cleanup skipped (not symlink): {path}",
+        )
+
+    @staticmethod
+    def _cleanup_paths(
+        group: dict[str, Any], scope: str, app: str, skipped: list[str]
+    ) -> list[Action]:
+        return plan_stale_files_group(
+            old_paths=load_state_paths(group, scope),
+            desired_paths=[],
+            remove_detail=f"remove {scope} file on disable",
+            conflict_detail="managed path is not a file",
+            noop_detail="managed file already absent",
+            app=app,
+            scope=scope,
+            skipped=skipped,
+            skipped_message="Disable cleanup skipped (not file): {path}",
+        )
+
+    def _cleanup_global_mcp(
+        self, app_id: AppId, managed_mcp: dict[str, Any]
+    ) -> list[Action]:
+        scope = app_scope(app_id, "mcp")
+        raw = managed_mcp.get(scope, [])
+        managed = (
+            {item for item in raw if isinstance(item, str)}
+            if isinstance(raw, list)
+            else set()
+        )
+        if not managed:
+            return []
+        try:
+            service = create_registered_app_service(app_id)
+        except (KeyError, ValueError):
+            return []
+        if not service.repository.config_path.exists():
+            return []
+        # Empty desired + our previously-managed names → prune only our servers,
+        # keep the user's, and clear managed_mcp state (mcp_managed becomes []).
+        return [service.build_action({}, previously_managed=managed)]
 
     def list_status_rows(self) -> list[AppStatusRow]:
         apps = self.load_apps()

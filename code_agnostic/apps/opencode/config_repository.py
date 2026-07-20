@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
+from code_agnostic.apps.common.utils import apply_mcp_servers
 from code_agnostic.constants import (
     AGENTS_DIRNAME,
     OPENCODE_CONFIG_FILENAME,
@@ -70,7 +71,13 @@ class OpenCodeConfigRepository(IAppConfigRepository):
         self.save_config(config)
 
     def merge_config(
-        self, existing: dict[str, Any], base: dict[str, Any], mapped_mcp: dict[str, Any]
+        self,
+        existing: dict[str, Any],
+        base: dict[str, Any],
+        mapped_mcp: dict[str, Any],
+        previously_managed: set[str] | None = None,
+        *,
+        replace: bool = False,
     ) -> dict[str, Any]:
         merged = deepcopy(existing)
         self._migrate_legacy_permission(base, merged)
@@ -82,7 +89,9 @@ class OpenCodeConfigRepository(IAppConfigRepository):
                 merged[key] = merge_dict_overlay(current, value)
                 continue
             merged[key] = deepcopy(value)
-        merged["mcp"] = deepcopy(mapped_mcp)
+        merged["mcp"] = apply_mcp_servers(
+            merged.get("mcp"), mapped_mcp, previously_managed, replace=replace
+        )
         return merged
 
     @staticmethod

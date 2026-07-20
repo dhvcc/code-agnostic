@@ -756,7 +756,9 @@ class SyncExecutor:
     ) -> None:
         global_links: dict[str, list[str]] = {}
         global_paths: dict[str, list[str]] = {}
+        global_mcp: dict[str, list[str]] = {}
         global_touched_scopes: set[str] = set()
+        global_mcp_touched: set[str] = set()
         workspace_links: dict[str, dict[str, list[str]]] = {}
         workspace_paths: dict[str, dict[str, list[str]]] = {}
         workspace_touched_scopes: dict[str, set[str]] = {}
@@ -766,6 +768,14 @@ class SyncExecutor:
 
         for action in plan.actions:
             if action.scope is None:
+                continue
+
+            if action.mcp_managed is not None:
+                # User-shared MCP config: track the server names we own, never the
+                # shared config file itself (so cleanup prunes our servers only).
+                global_mcp_touched.add(action.scope)
+                if action.mcp_managed:
+                    global_mcp[action.scope] = sorted(set(action.mcp_managed))
                 continue
 
             if action.workspace is not None:
@@ -813,7 +823,7 @@ class SyncExecutor:
 
         # Persist global state
         core = self.context.core
-        if global_touched_scopes:
+        if global_touched_scopes or global_mcp_touched:
             existing_global_state = core.load_state()
             global_state = {
                 "updated_at": updated_at,
@@ -826,6 +836,11 @@ class SyncExecutor:
                     existing=existing_global_state.get("managed_paths"),
                     touched_scopes=global_touched_scopes,
                     current_links=global_paths,
+                ),
+                "managed_mcp": self._merge_managed_links(
+                    existing=existing_global_state.get("managed_mcp"),
+                    touched_scopes=global_mcp_touched,
+                    current_links=global_mcp,
                 ),
                 "skipped": plan.skipped,
             }

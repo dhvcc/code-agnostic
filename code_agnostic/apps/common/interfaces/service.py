@@ -11,6 +11,7 @@ from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.models import MCPServerDTO
+from code_agnostic.apps.common.utils import apply_mcp_servers
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
     load_state_paths,
@@ -52,6 +53,12 @@ class IAppConfigService(ABC):
     def mapper(self) -> IAppMCPMapper:
         raise NotImplementedError
 
+    @property
+    @abstractmethod
+    def mcp_config_key(self) -> str:
+        """Native config key that holds the MCP server map for this editor."""
+        raise NotImplementedError
+
     @abstractmethod
     def validate_config(self, payload: Any) -> None:
         raise NotImplementedError
@@ -60,11 +67,21 @@ class IAppConfigService(ABC):
     def build_action_payload(self, payload: dict[str, Any]) -> Any:
         raise NotImplementedError
 
-    @abstractmethod
     def set_mcp_payload(
-        self, merged: dict[str, Any], desired_mcp: dict[str, Any]
+        self,
+        merged: dict[str, Any],
+        desired_mcp: dict[str, Any],
+        previously_managed: set[str] | None = None,
+        *,
+        replace: bool = False,
     ) -> None:
-        raise NotImplementedError
+        result = apply_mcp_servers(
+            merged.get(self.mcp_config_key),
+            desired_mcp,
+            previously_managed,
+            replace=replace,
+        )
+        merged[self.mcp_config_key] = result
 
     @abstractmethod
     def derive_status(
@@ -236,6 +253,9 @@ class IAppConfigService(ABC):
         self,
         common_servers: dict[str, MCPServerDTO],
         agent_sources: list[Path] | None = None,
+        previously_managed: set[str] | None = None,
+        *,
+        replace_mcp: bool = False,
     ) -> Action:
         existing = self.repository.load_config()
         if existing or self.repository.config_path.exists():
@@ -243,10 +263,12 @@ class IAppConfigService(ABC):
 
         desired_mcp = self.mapper.from_common(common_servers)
         merged = dict(existing)
-        self.set_mcp_payload(merged, desired_mcp)
+        self.set_mcp_payload(
+            merged, desired_mcp, previously_managed, replace=replace_mcp
+        )
         self.validate_config(merged)
 
-        return Action(
+        action = Action(
             kind=self.action_kind,
             path=self.repository.config_path,
             status=self.derive_status(existing, merged),
@@ -254,6 +276,12 @@ class IAppConfigService(ABC):
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
         )
+        if not replace_mcp:
+            # User-shared global config: track which servers we own so a later
+            # source removal can be pruned without touching the user's servers.
+            action.scope = app_scope(self.app_id, "mcp")
+            action.mcp_managed = sorted(desired_mcp)
+        return action
 
     def build_plan(
         self,
@@ -263,8 +291,12 @@ class IAppConfigService(ABC):
         state = source_repository.load_state()
         managed_links_group = self._normalize_managed_group(state.get("managed_links"))
         managed_paths_group = self._normalize_managed_group(state.get("managed_paths"))
+        managed_mcp_group = self._normalize_managed_group(state.get("managed_mcp"))
         skill_scope = app_scope(self.app_id, "skills")
         agent_scope = app_scope(self.app_id, "agents")
+        previously_managed_mcp = self._load_state_names(
+            managed_mcp_group, app_scope(self.app_id, "mcp")
+        )
 
         skill_actions, skill_skipped = self._build_compiled_group(
             sources=source_repository.list_skill_sources(),
@@ -292,6 +324,7 @@ class IAppConfigService(ABC):
                 self.build_action(
                     common_servers,
                     agent_sources=source_repository.list_agent_sources(),
+                    previously_managed=previously_managed_mcp,
                 ),
                 *skill_actions,
                 *agent_actions,
@@ -299,3 +332,10 @@ class IAppConfigService(ABC):
             errors=[],
             skipped=[*skill_skipped, *agent_skipped],
         )
+
+    @staticmethod
+    def _load_state_names(group: dict[str, Any], scope: str) -> set[str]:
+        raw = group.get(scope, [])
+        if not isinstance(raw, list):
+            return set()
+        return {item for item in raw if isinstance(item, str)}

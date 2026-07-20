@@ -119,12 +119,14 @@ class BaseSourceRepository(ISourceRepository):
                 "managed_workspace_links": [],
                 "managed_links": {},
                 "managed_paths": {},
+                "managed_mcp": {},
             }
         payload.setdefault("managed_skill_links", [])
         payload.setdefault("managed_agent_links", [])
         payload.setdefault("managed_workspace_links", [])
         payload.setdefault("managed_links", {})
         payload.setdefault("managed_paths", {})
+        payload.setdefault("managed_mcp", {})
         if not isinstance(payload["managed_skill_links"], list):
             payload["managed_skill_links"] = []
         if not isinstance(payload["managed_agent_links"], list):
@@ -135,6 +137,8 @@ class BaseSourceRepository(ISourceRepository):
             payload["managed_links"] = {}
         if not isinstance(payload["managed_paths"], dict):
             payload["managed_paths"] = {}
+        if not isinstance(payload["managed_mcp"], dict):
+            payload["managed_mcp"] = {}
         return payload
 
     def save_state(self, data: dict[str, Any]) -> None:

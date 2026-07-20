@@ -293,6 +293,11 @@ class SyncPlanner:
             self._claude_project_mcp,
             base_payload=base_payload,
         )
+        if existing_action is not None:
+            # Carry global MCP ownership tracking onto the merged Claude action so
+            # top-level `mcpServers` orphans still get pruned on later applies.
+            project_action.scope = existing_action.scope
+            project_action.mcp_managed = existing_action.mcp_managed
         actions = [
             action
             for action in plan.actions
@@ -388,7 +393,7 @@ class SyncPlanner:
                 mcp_payload = common_mcp_to_dto(
                     mcp_servers_for_app(project_common_servers, svc.app_id)
                 )
-                mcp_action = target_service.build_action(mcp_payload)
+                mcp_action = target_service.build_action(mcp_payload, replace_mcp=True)
                 mcp_action.scope = scope
                 _prepare_project_action(mcp_action, project_name=project_name)
                 actions.append(mcp_action)
@@ -663,6 +668,7 @@ class SyncPlanner:
                 mcp_action = workspace_target_service.build_action(
                     mcp_payload,
                     agent_sources=agent_sources,
+                    replace_mcp=True,
                 )
                 _set_workspace_opencode_instructions(
                     workspace_target_service,
@@ -770,6 +776,7 @@ class SyncPlanner:
                     mcp_action = repo_target_service.build_action(
                         mcp_payload,
                         agent_sources=agent_sources,
+                        replace_mcp=True,
                     )
                     _set_workspace_opencode_instructions(
                         repo_target_service,

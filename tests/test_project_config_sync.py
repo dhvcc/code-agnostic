@@ -1,5 +1,6 @@
 """Tests for project-level config sync."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -142,7 +143,12 @@ def test_project_skill_apply_writes_project_local_outputs(
     assert (project_root / ".agents" / "skills" / "project-tool" / "SKILL.md").exists()
     assert (project_root / ".cursor" / "skills" / "project-tool" / "SKILL.md").exists()
     assert (core.root / "projects" / "service-api" / ".sync-state.json").exists()
-    assert not (core.root / ".sync-state.json").exists()
+    # Global state now records MCP ownership for the enabled apps (managed_mcp),
+    # so that a later removal of a global server can be pruned.
+    global_state_path = core.root / ".sync-state.json"
+    assert global_state_path.exists()
+    global_state = json.loads(global_state_path.read_text(encoding="utf-8"))
+    assert "managed_mcp" in global_state
 
 
 def test_project_status_reports_drift_and_synced_after_apply(

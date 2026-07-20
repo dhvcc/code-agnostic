@@ -23,6 +23,7 @@ def test_load_state_defaults_when_missing(core_repo: CoreRepository) -> None:
         "managed_workspace_links": [],
         "managed_links": {},
         "managed_paths": {},
+        "managed_mcp": {},
     }
 
 
@@ -208,6 +209,7 @@ def test_load_state_with_corrupted_json(
         "managed_workspace_links": [],
         "managed_links": {},
         "managed_paths": {},
+        "managed_mcp": {},
     }
 
 

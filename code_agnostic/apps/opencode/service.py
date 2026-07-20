@@ -5,7 +5,7 @@ from jsonschema import Draft202012Validator
 
 from code_agnostic.agents.compilers import OpenCodeAgentCompiler
 from code_agnostic.agents.parser import parse_agent
-from code_agnostic.apps.app_id import AppId, app_label
+from code_agnostic.apps.app_id import AppId, app_label, app_scope
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -100,6 +100,10 @@ class OpenCodeConfigService(RegisteredAppConfigService):
     def mapper(self) -> IAppMCPMapper:
         return self._mapper
 
+    @property
+    def mcp_config_key(self) -> str:
+        return "mcp"
+
     def validate_config(self, payload: Any) -> None:
         if not isinstance(payload, dict):
             raise InvalidConfigSchemaError(
@@ -136,6 +140,9 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         self,
         common_servers: dict[str, MCPServerDTO],
         agent_sources: list[Path] | None = None,
+        previously_managed: set[str] | None = None,
+        *,
+        replace_mcp: bool = False,
     ) -> Action:
         existing = self._opencode_repo.load_config()
         if existing or self._opencode_repo.config_path.exists():
@@ -147,15 +154,21 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         if self._base_config_path is not None:
             opencode_base = self._load_base_config()
             merged = self._opencode_repo.merge_config(
-                existing, opencode_base, desired_mcp
+                existing,
+                opencode_base,
+                desired_mcp,
+                previously_managed=previously_managed,
+                replace=replace_mcp,
             )
         else:
             merged = dict(existing)
-            self.set_mcp_payload(merged, desired_mcp)
+            self.set_mcp_payload(
+                merged, desired_mcp, previously_managed, replace=replace_mcp
+            )
 
         self.validate_config(merged)
 
-        return Action(
+        action = Action(
             kind=self.action_kind,
             path=self.repository.config_path,
             status=self.derive_status(existing, merged),
@@ -163,6 +176,10 @@ class OpenCodeConfigService(RegisteredAppConfigService):
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
         )
+        if not replace_mcp:
+            action.scope = app_scope(self.app_id, "mcp")
+            action.mcp_managed = sorted(desired_mcp)
+        return action
 
     def _validate_common_mcp(self, common_servers: dict[str, MCPServerDTO]) -> None:
         for server in common_servers.values():
@@ -232,11 +249,6 @@ class OpenCodeConfigService(RegisteredAppConfigService):
             update_detail="update compiled opencode agent",
             conflict_message="OpenCode agent sync skipped (conflict): {target}",
         )
-
-    def set_mcp_payload(
-        self, merged: dict[str, Any], desired_mcp: dict[str, Any]
-    ) -> None:
-        merged["mcp"] = desired_mcp
 
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]

@@ -40,8 +40,13 @@ def apps_enable(obj: dict[str, str], app: str) -> None:
 @manageable_app_option()
 @click.pass_obj
 def apps_disable(obj: dict[str, str], app: str) -> None:
-    ui = SyncConsoleUI(Console())
+    console = Console()
+    ui = SyncConsoleUI(console)
     core = CoreRepository()
     service = AppsService(core)
-    service.disable(app.lower())
+    applied, failed, failures = service.disable(app.lower())
+    if applied:
+        console.print(f"Cleaned up {applied} synced artifact(s) for {app.lower()}.")
+    for failure in failures:
+        console.print(f"[red]cleanup: {failure}[/red]")
     ui.render_apps(service.list_status_rows())

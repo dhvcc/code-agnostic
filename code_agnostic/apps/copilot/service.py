@@ -51,6 +51,10 @@ class CopilotConfigService(RegisteredAppConfigService):
     def mapper(self) -> IAppMCPMapper:
         return self._mapper
 
+    @property
+    def mcp_config_key(self) -> str:
+        return "mcpServers"
+
     def validate_config(self, payload: Any) -> None:
         if not isinstance(payload, dict):
             raise InvalidConfigSchemaError(
@@ -64,11 +68,6 @@ class CopilotConfigService(RegisteredAppConfigService):
 
     def build_action_payload(self, payload: dict[str, Any]) -> Any:
         return payload
-
-    def set_mcp_payload(
-        self, merged: dict[str, Any], desired_mcp: dict[str, Any]
-    ) -> None:
-        merged["mcpServers"] = desired_mcp
 
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]

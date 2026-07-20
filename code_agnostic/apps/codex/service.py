@@ -7,7 +7,7 @@ from jsonschema import Draft7Validator
 from code_agnostic.agents.codex import normalize_codex_agent_filename
 from code_agnostic.agents.compilers import CodexAgentCompiler
 from code_agnostic.agents.parser import parse_agent
-from code_agnostic.apps.app_id import AppId, app_label
+from code_agnostic.apps.app_id import AppId, app_label, app_scope
 from code_agnostic.apps.common.framework import (
     RegisteredAppConfigService,
     format_schema_error,
@@ -84,6 +84,10 @@ class CodexConfigService(RegisteredAppConfigService):
     def mapper(self) -> IAppMCPMapper:
         return self._mapper
 
+    @property
+    def mcp_config_key(self) -> str:
+        return "mcp_servers"
+
     def validate_config(self, payload: Any) -> None:
         error = next(iter(self._validator.iter_errors(payload)), None)
         if error is not None:
@@ -93,18 +97,6 @@ class CodexConfigService(RegisteredAppConfigService):
 
     def build_action_payload(self, payload: dict[str, Any]) -> Any:
         return self.repository.serialize_config(payload)
-
-    def set_mcp_payload(
-        self, merged: dict[str, Any], desired_mcp: dict[str, Any]
-    ) -> None:
-        existing_mcp = merged.get("mcp_servers")
-        preserved = dict(existing_mcp) if isinstance(existing_mcp, dict) else {}
-        for name, config in desired_mcp.items():
-            preserved[name] = deepcopy(config)
-        if preserved:
-            merged["mcp_servers"] = preserved
-        else:
-            merged.pop("mcp_servers", None)
 
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]
@@ -125,6 +117,9 @@ class CodexConfigService(RegisteredAppConfigService):
         self,
         common_servers: dict[str, MCPServerDTO],
         agent_sources: list[Path] | None = None,
+        previously_managed: set[str] | None = None,
+        *,
+        replace_mcp: bool = False,
     ) -> Action:
         existing = self._codex_repo.load_config()
         if existing or self._codex_repo.config_path.exists():
@@ -146,7 +141,9 @@ class CodexConfigService(RegisteredAppConfigService):
                 merged[key] = merge_dict_overlay(current, value)
                 continue
             merged[key] = deepcopy(value)
-        self.set_mcp_payload(merged, desired_mcp)
+        self.set_mcp_payload(
+            merged, desired_mcp, previously_managed, replace=replace_mcp
+        )
         if agent_sources:
             merged["agents"] = self._merge_agents_payload(
                 merged.get("agents"),
@@ -154,7 +151,7 @@ class CodexConfigService(RegisteredAppConfigService):
             )
         self.validate_config(merged)
 
-        return Action(
+        action = Action(
             kind=self.action_kind,
             path=self.repository.config_path,
             status=self.derive_status(existing, merged),
@@ -162,6 +159,10 @@ class CodexConfigService(RegisteredAppConfigService):
             payload=self.build_action_payload(merged),
             app=self.app_id.value,
         )
+        if not replace_mcp:
+            action.scope = app_scope(self.app_id, "mcp")
+            action.mcp_managed = sorted(desired_mcp)
+        return action
 
     def _merge_agents_payload(
         self, existing: Any, overlay: dict[str, Any]
