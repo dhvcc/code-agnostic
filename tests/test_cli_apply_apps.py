@@ -91,7 +91,7 @@ def test_apply_syncs_git_excludes_for_target_workspace_app(
     enable_app("codex")
     enable_app("cursor")
 
-    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex", "--apply-excludes"])
 
     assert result.exit_code == 0
     content = set(
@@ -109,6 +109,38 @@ def test_apply_syncs_git_excludes_for_target_workspace_app(
     assert ".codex" not in content
     assert ".agents" not in content
     assert ".cursor" not in content
+
+
+def test_apply_does_not_touch_git_excludes_without_flag(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git" / "info").mkdir(parents=True)
+
+    add_result = cli_runner.invoke(
+        cli, ["workspaces", "add", "--name", "myws", "--path", str(workspace_root)]
+    )
+    assert add_result.exit_code == 0
+
+    write_json(
+        core_root / "workspaces" / "myws" / "git-exclude.json",
+        {"include_defaults": True, "extra_patterns": ["*.generated"]},
+    )
+    ws_config = core_root / "workspaces" / "myws"
+    (ws_config / "AGENTS.md").write_text("workspace rules\n", encoding="utf-8")
+    enable_app("codex")
+
+    result = cli_runner.invoke(cli, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0
+    exclude_path = workspace_root / "repo-a" / ".git" / "info" / "exclude"
+    assert not exclude_path.exists()
 
 
 def test_apply_codex_target_writes_toml_config(
@@ -711,7 +743,9 @@ def test_apply_copilot_writes_workspace_and_repo_github_mcp_json(
         encoding="utf-8",
     )
 
-    apply_result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+    apply_result = cli_runner.invoke(
+        cli, ["apply", "-a", "copilot", "--apply-excludes"]
+    )
 
     assert apply_result.exit_code == 0
     workspace_mcp = workspace_root / ".github" / "mcp.json"
@@ -1073,7 +1107,7 @@ def test_apply_copilot_workspace_writes_repo_github_artifacts(
     )
     enable_app("copilot")
 
-    result = cli_runner.invoke(cli, ["apply", "-a", "copilot"])
+    result = cli_runner.invoke(cli, ["apply", "-a", "copilot", "--apply-excludes"])
 
     assert result.exit_code == 0
     assert (repo / ".github" / "mcp.json").exists()

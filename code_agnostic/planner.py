@@ -239,11 +239,13 @@ class SyncPlanner:
         app_services: list[IAppConfigService],
         workspace_service: WorkspaceService | None = None,
         include_workspace: bool = True,
+        include_git_excludes: bool = False,
     ) -> None:
         self.core = core
         self.app_services = app_services
         self.workspace_service = workspace_service or WorkspaceService()
         self.include_workspace = include_workspace
+        self.include_git_excludes = include_git_excludes
         self._claude_project_mcp: dict[Path, dict[str, MCPServerDTO]] = {}
 
     def build(self) -> SyncPlan:
@@ -833,29 +835,30 @@ class SyncPlanner:
                     desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
                     skipped.extend(agent_skipped)
 
-        exclude_service = GitExcludeService(self.core)
-        exclude_apps = [
-            svc.app_id.value
-            for svc in self.app_services
-            if app_metadata(svc.app_id).supports_workspace_propagation
-        ]
-        for repo in repos:
-            git_dir = self.workspace_service.resolve_git_dir(repo)
-            if git_dir is None:
-                continue
-            exclude_entries = exclude_service.compute_entries_for_repo(
-                workspace_name,
-                exclude_apps,
-                workspace_path=workspace_path,
-                repo_path=repo,
-            )
-            actions.append(
-                _plan_git_exclude_entries(
-                    exclude_path=git_dir / "info" / "exclude",
-                    entries=exclude_entries,
-                    workspace_name=workspace_name,
+        if self.include_git_excludes:
+            exclude_service = GitExcludeService(self.core)
+            exclude_apps = [
+                svc.app_id.value
+                for svc in self.app_services
+                if app_metadata(svc.app_id).supports_workspace_propagation
+            ]
+            for repo in repos:
+                git_dir = self.workspace_service.resolve_git_dir(repo)
+                if git_dir is None:
+                    continue
+                exclude_entries = exclude_service.compute_entries_for_repo(
+                    workspace_name,
+                    exclude_apps,
+                    workspace_path=workspace_path,
+                    repo_path=repo,
                 )
-            )
+                actions.append(
+                    _plan_git_exclude_entries(
+                        exclude_path=git_dir / "info" / "exclude",
+                        entries=exclude_entries,
+                        workspace_name=workspace_name,
+                    )
+                )
 
         # --- Stale cleanup ---
         selected_workspace_apps = {svc.app_id.value for svc in self.app_services}

@@ -518,7 +518,11 @@ def test_workspace_rules_sync_to_codex_repo_override_and_git_exclude(
     (ws_config / AGENTS_FILENAME).write_text("workspace rules\n", encoding="utf-8")
 
     codex_root = tmp_path / ".codex"
-    plan = SyncPlanner(core=core, app_services=[_codex_service(codex_root)]).build()
+    plan = SyncPlanner(
+        core=core,
+        app_services=[_codex_service(codex_root)],
+        include_git_excludes=True,
+    ).build()
 
     override_actions = [
         a

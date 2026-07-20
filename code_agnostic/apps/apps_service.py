@@ -84,7 +84,7 @@ class AppsService:
         apps = self.load_apps()
         return [name for name in self.available_apps() if apps.get(name, False)]
 
-    def plan_for_target(self, target: str) -> SyncPlan:
+    def plan_for_target(self, target: str, *, apply_excludes: bool = False) -> SyncPlan:
         normalized = target.lower()
         if normalized != "all" and not self.is_enabled(normalized):
             return SyncPlan([], [], [f"{normalized} is disabled for sync."])
@@ -94,6 +94,7 @@ class AppsService:
             core=self.core_repository,
             app_services=app_services,
             include_workspace=True,
+            include_git_excludes=apply_excludes,
         ).build()
         if normalized == "all":
             if (

@@ -95,7 +95,19 @@ def test_plan_target_enabled_app_shows_scoped_apply_next_step(
     assert result.exit_code == 0
     assert "Review the planned changes" in result.output
     assert "code-agnostic apply -a cursor" in result.output
+    assert "--apply-excludes" not in result.output
     assert "code-agnostic apps enable -a <app>" not in result.output
+
+
+def test_plan_apply_excludes_next_step_recommends_flag(
+    minimal_shared_config: Path, cli_runner, enable_app
+) -> None:
+    enable_app("cursor")
+
+    result = cli_runner.invoke(cli, ["plan", "-a", "cursor", "--apply-excludes"])
+
+    assert result.exit_code == 0
+    assert "code-agnostic apply -a cursor --apply-excludes" in result.output
 
 
 def test_plan_missing_mcp_base_json(tmp_path: Path, cli_runner, enable_app) -> None:

@@ -34,7 +34,13 @@ class SyncConsoleUI:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
 
-    def render_plan(self, plan: SyncPlan, mode: str, verbose: bool = False) -> None:
+    def render_plan(
+        self,
+        plan: SyncPlan,
+        mode: str,
+        verbose: bool = False,
+        apply_excludes: bool = False,
+    ) -> None:
         app_actions, workspace_actions, project_actions = PlanTable.split_actions(plan)
 
         self.console.print(
@@ -92,18 +98,21 @@ class SyncConsoleUI:
                 UISection.note("skipped", skipped_text, style=UIStyle.YELLOW.value)
             )
 
-        next_steps = self._next_steps(plan, mode)
+        next_steps = self._next_steps(plan, mode, apply_excludes=apply_excludes)
         if next_steps:
             self.console.print(
                 UISection.note("next", next_steps, style=UIStyle.DIM.value)
             )
 
     @staticmethod
-    def _next_steps(plan: SyncPlan, mode: str) -> str | None:
+    def _next_steps(
+        plan: SyncPlan, mode: str, apply_excludes: bool = False
+    ) -> str | None:
         command, _, target = mode.partition(":")
         target = target or "all"
         is_scoped = target != "all"
         target_flag = f" -a {target}" if is_scoped else ""
+        exclude_flag = " --apply-excludes" if apply_excludes else ""
 
         if command == "apply":
             return None
@@ -117,7 +126,7 @@ class SyncConsoleUI:
         if plan.actions:
             return (
                 "Review the planned changes. If they match what you expect, apply them.\n"
-                f"- code-agnostic apply{target_flag}"
+                f"- code-agnostic apply{target_flag}{exclude_flag}"
             )
 
         if is_scoped and f"{target} is disabled for sync." in plan.skipped:

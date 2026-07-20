@@ -280,7 +280,10 @@ code-agnostic workspaces list
 
 Prevent synced paths from showing up in `git status`. Managed per-workspace with customizable patterns.
 
+Writing `.git/info/exclude` is always explicit — `apply` does **not** touch it by default. Opt in per run with `apply --apply-excludes`, or use the standalone command:
+
 ```bash
+code-agnostic apply --apply-excludes                           # apply + write excludes
 code-agnostic workspaces git-exclude                            # all workspaces
 code-agnostic workspaces git-exclude -w myproject               # one workspace
 code-agnostic workspaces exclude-add --pattern "*.generated" -w myproject
