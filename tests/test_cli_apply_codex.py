@@ -103,7 +103,9 @@ def test_apply_codex_renders_agents_and_global_agents_config(
     enable_app("codex")
     (core_root / "config" / "codex.base.json").parent.mkdir(parents=True, exist_ok=True)
     (core_root / "config" / "codex.base.json").write_text(
-        json.dumps({"agents": {"max_threads": 6, "max_depth": 1}}),
+        json.dumps(
+            {"agents": {"max_concurrent_threads_per_session": 6, "max_depth": 1}}
+        ),
         encoding="utf-8",
     )
     (tmp_path / ".codex").mkdir(parents=True, exist_ok=True)
@@ -140,7 +142,7 @@ def test_apply_codex_renders_agents_and_global_agents_config(
     config_payload = tomllib.loads(
         (tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8")
     )
-    assert config_payload["agents"]["max_threads"] == 6
+    assert config_payload["agents"]["max_concurrent_threads_per_session"] == 6
     assert config_payload["agents"]["max_depth"] == 1
     assert config_payload["agents"]["1"] == {
         "description": "1",

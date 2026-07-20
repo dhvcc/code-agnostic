@@ -77,7 +77,6 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
         assert "rollout_budget" in features
         assert "terminal_visualization_instructions" in features
         assert "token_budget" in features
-        assert "sleep_tool" in features
         assert "responses_websocket_response_processed" not in features
 
     code_mode = global_features["code_mode"]
@@ -112,10 +111,16 @@ def test_codex_schema_repository_fallback_includes_current_feature_flags(
                 "minimum": 0.0,
                 "type": "number",
             },
-            "reminder_interval_tokens": {
-                "format": "int64",
-                "minimum": 1.0,
-                "type": "integer",
+            "reminder_at_remaining_tokens": {
+                "description": (
+                    "Remaining weighted-token values that trigger reminders "
+                    "when crossed."
+                ),
+                "items": {
+                    "format": "int64",
+                    "type": "integer",
+                },
+                "type": "array",
             },
             "sampling_token_weight": {
                 "format": "double",
