@@ -104,11 +104,15 @@ tracked state, then clears its state entries.
   project state (removes compiled skills/agents, prunes our MCP servers) and
   clears the state. Covered by `tests/test_cli_disable_cleanup.py`.
 
-### Follow-up (tracked, not in 0.4.0)
-- P1: typed `SyncState`/`WorkspaceConfig`, **mypy strict** (8 pre-existing
-  `ISourceRepository` attribute errors surface the `getattr`/contract-bypass
-  debt), planner de-duplication, `validate_config` unification, README/`.mdc`
-  reconciliation.
+### 0.5.0 (shipped) — contract & type hardening
+- Removed the `getattr`/`hasattr` contract bypass in the planner; typed `core`
+  as `CoreRepository`; **enabled mypy `strict`** (0 errors) and fixed a latent
+  narrowing bug in `restore_active_revision`.
+
+### Follow-up (tracked)
+- P1: unify `validate_config` (claude/copilot lack schema validation) — next.
+- P1: typed `SyncState`/`WorkspaceConfig` model, planner de-duplication,
+  README/`.mdc` reconciliation.
 - P1: codex agent-registry prune, claude project-entry prune.
 - P2: remove dead legacy state keys (`managed_skill_links`/…), remaining
   mapper/service/repository de-duplication, concurrency lock.

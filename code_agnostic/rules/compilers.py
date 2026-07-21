@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import yaml
 
@@ -20,7 +21,7 @@ class CursorRuleCompiler(IRuleCompiler):
 
     def compile(self, rule: Rule) -> tuple[str, str]:
         filename = f"{rule.name}.mdc"
-        fm: dict = {}
+        fm: dict[str, Any] = {}
         if rule.metadata.description:
             fm["description"] = rule.metadata.description
         if rule.metadata.globs:

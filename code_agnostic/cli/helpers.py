@@ -7,7 +7,12 @@ import click
 from code_agnostic.apps.apps_service import AppsService
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.errors import SyncAppError
-from code_agnostic.models import ActionStatus, EditorStatusRow, EditorSyncStatus
+from code_agnostic.models import (
+    ActionStatus,
+    EditorStatusRow,
+    EditorSyncStatus,
+    SyncPlan,
+)
 
 
 def _workspace_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]]:
@@ -64,7 +69,9 @@ def reject_symlinked_source_dir(path: Path, resource_type: str) -> None:
         )
 
 
-def status_row_for_app(app_name: str, plan, apps: AppsService) -> EditorStatusRow:
+def status_row_for_app(
+    app_name: str, plan: SyncPlan, apps: AppsService
+) -> EditorStatusRow:
     if not apps.is_enabled(app_name):
         return EditorStatusRow(
             name=app_name,

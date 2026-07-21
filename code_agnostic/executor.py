@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Any
 from typing import Protocol
 
-from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.constants import (
     SYNC_REVISIONS_DIRNAME,
     SYNC_STAGING_DIRNAME,
     SYNC_STATE_FILENAME,
 )
 from code_agnostic.core.project_repository import ProjectConfigRepository
+from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
 from code_agnostic.utils import write_json
@@ -21,7 +21,7 @@ from code_agnostic.utils import write_json
 
 @dataclass
 class ExecutionContext:
-    core: ISourceRepository
+    core: CoreRepository
 
 
 @dataclass(frozen=True)
@@ -189,7 +189,7 @@ class WriteRuleHandler:
 
 
 class SyncExecutor:
-    def __init__(self, core: ISourceRepository) -> None:
+    def __init__(self, core: CoreRepository) -> None:
         self.context = ExecutionContext(core=core)
         self.handlers: dict[ActionKind, ActionHandler] = {
             ActionKind.WRITE_JSON: WriteJsonHandler(),
@@ -421,12 +421,12 @@ class SyncExecutor:
         if workspace is not None and project is not None:
             raise ValueError("Choose only one scope: workspace or project.")
 
-        if workspace is None and project is None:
-            root = self.context.core.root
-        elif workspace is not None:
+        if workspace is not None:
             root = self.context.core.workspace_config_dir(workspace)
-        else:
+        elif project is not None:
             root = self.context.core.project_config_dir(project)
+        else:
+            root = self.context.core.root
 
         revision_record = self._build_revision_record(
             root=root, workspace=workspace, project=project, revision_id="restore"

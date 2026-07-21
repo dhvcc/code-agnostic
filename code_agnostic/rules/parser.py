@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -37,7 +38,7 @@ def parse_rule(path: Path) -> Rule:
 
 
 def serialize_rule(rule: Rule) -> str:
-    fm: dict = {}
+    fm: dict[str, Any] = {}
     if rule.metadata.description:
         fm["description"] = rule.metadata.description
     if rule.metadata.globs:

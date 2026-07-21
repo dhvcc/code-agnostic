@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from code_agnostic.apps.app_id import AppId
 from code_agnostic.apps.codex.config_repository import CodexConfigRepository
@@ -24,8 +25,11 @@ class ImportAdapter:
     mapper: IAppMCPMapper
     config_repository: object
 
-    def load_mcp_payload(self) -> dict:
-        return self.config_repository.load_mcp_payload()  # type: ignore[attr-defined]
+    def load_mcp_payload(self) -> dict[str, Any]:
+        return cast(
+            "dict[str, Any]",
+            self.config_repository.load_mcp_payload(),  # type: ignore[attr-defined]
+        )
 
 
 def create_import_adapter(app: str, source_root: Path | None = None) -> ImportAdapter:

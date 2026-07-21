@@ -5,7 +5,6 @@ from code_agnostic.apps.common.compiled_planning import (
     plan_owned_compiled_text_action,
 )
 from code_agnostic.apps.common.framework import create_registered_app_service
-from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
@@ -34,6 +33,7 @@ from code_agnostic.constants import (
     SKILLS_DIRNAME,
 )
 from code_agnostic.core.project_repository import ProjectConfigRepository
+from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
@@ -44,11 +44,12 @@ from code_agnostic.project_artifacts import (
     project_skills_dir,
 )
 from code_agnostic.rules.compilers import OpenCodeRuleCompiler
+from code_agnostic.rules.models import Rule
 from code_agnostic.rules.repository import RulesRepository
 from code_agnostic.workspaces import WorkspaceService
 
 
-def _compile_workspace_agents(rules) -> str:
+def _compile_workspace_agents(rules: list[Rule]) -> str:
     compiler = OpenCodeRuleCompiler()
     sections = [compiler.compile(rule)[1] for rule in rules]
     return "\n\n".join(sections) + "\n"
@@ -143,16 +144,9 @@ def _set_workspace_opencode_instructions(
     else:
         payload["instructions"] = [str(workspace_agents_path)]
 
-    validate_config = getattr(service, "validate_config", None)
-    if callable(validate_config):
-        validate_config(payload)
-
+    service.validate_config(payload)
     existing = service.repository.load_config()
-    derive_status = getattr(service, "derive_status", None)
-    if callable(derive_status):
-        derived_status = derive_status(existing, payload)
-        if isinstance(derived_status, ActionStatus):
-            action.status = derived_status
+    action.status = service.derive_status(existing, payload)
     action.payload = payload
 
 
@@ -235,7 +229,7 @@ def _prepare_project_action(action: Action, *, project_name: str) -> Action:
 class SyncPlanner:
     def __init__(
         self,
-        core: ISourceRepository,
+        core: CoreRepository,
         app_services: list[IAppConfigService],
         workspace_service: WorkspaceService | None = None,
         include_workspace: bool = True,
@@ -379,7 +373,7 @@ class SyncPlanner:
 
         for svc in self.app_services:
             meta = app_metadata(svc.app_id)
-            if meta.project_dir_name is None or not hasattr(svc, "plan_skill_actions"):
+            if meta.project_dir_name is None:
                 continue
 
             target_service = _create_workspace_project_service(
@@ -400,14 +394,15 @@ class SyncPlanner:
                 desired_paths_by_scope.setdefault(scope, []).append(mcp_action.path)
 
             scope = f"project:{svc.app_id.value}:{project_name}:skills_dir"
-            plan_skill_actions = getattr(target_service, "plan_skill_actions")
-            skill_actions, desired_paths, skill_skipped = plan_skill_actions(
-                skill_sources,
-                project_skills_dir(svc.app_id, project_root),
-                scope,
-                svc.app_id.value,
-                load_state_paths(managed_paths, scope),
-                load_state_links(managed_links, scope),
+            skill_actions, desired_paths, skill_skipped = (
+                target_service.plan_skill_actions(
+                    skill_sources,
+                    project_skills_dir(svc.app_id, project_root),
+                    scope,
+                    svc.app_id.value,
+                    load_state_paths(managed_paths, scope),
+                    load_state_links(managed_links, scope),
+                )
             )
             for action in skill_actions:
                 _prepare_project_action(action, project_name=project_name)
@@ -459,7 +454,7 @@ class SyncPlanner:
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
 
-    def _plan_single_workspace(self, workspace: dict) -> SyncPlan:
+    def _plan_single_workspace(self, workspace: dict[str, str]) -> SyncPlan:
         workspace_name = workspace["name"]
         workspace_path = Path(workspace["path"])
 
@@ -685,18 +680,17 @@ class SyncPlanner:
                 desired_paths_by_scope.setdefault(scope, []).append(mcp_action.path)
             if skill_sources:
                 scope = f"ws:{svc.app_id.value}:workspace_root_skills_dir"
-                plan_skill_actions = getattr(
-                    workspace_target_service, "plan_skill_actions"
-                )
-                skill_actions, desired_paths, skill_skipped = plan_skill_actions(
-                    skill_sources,
-                    _workspace_skills_dir(
-                        svc.app_id, workspace_target_service.repository.root
-                    ),
-                    scope,
-                    "workspace",
-                    load_state_paths(managed_paths, scope),
-                    load_state_links(managed_links, scope),
+                skill_actions, desired_paths, skill_skipped = (
+                    workspace_target_service.plan_skill_actions(
+                        skill_sources,
+                        _workspace_skills_dir(
+                            svc.app_id, workspace_target_service.repository.root
+                        ),
+                        scope,
+                        "workspace",
+                        load_state_paths(managed_paths, scope),
+                        load_state_links(managed_links, scope),
+                    )
                 )
                 for a in skill_actions:
                     _prepare_workspace_action(
@@ -710,16 +704,15 @@ class SyncPlanner:
                 skipped.extend(skill_skipped)
             if agent_sources and meta.supports_import_agents:
                 scope = f"ws:{svc.app_id.value}:workspace_root_agents_dir"
-                plan_agent_actions = getattr(
-                    workspace_target_service, "plan_agent_actions"
-                )
-                agent_actions, desired_paths, agent_skipped = plan_agent_actions(
-                    agent_sources,
-                    getattr(workspace_target_service.repository, "agents_dir"),
-                    scope,
-                    "workspace",
-                    load_state_paths(managed_paths, scope),
-                    load_state_links(managed_links, scope),
+                agent_actions, desired_paths, agent_skipped = (
+                    workspace_target_service.plan_agent_actions(
+                        agent_sources,
+                        workspace_target_service.repository.agents_dir,
+                        scope,
+                        "workspace",
+                        load_state_paths(managed_paths, scope),
+                        load_state_links(managed_links, scope),
+                    )
                 )
                 for a in agent_actions:
                     _prepare_workspace_action(
@@ -794,18 +787,17 @@ class SyncPlanner:
 
                 if skill_sources:
                     scope = f"ws:{svc.app_id.value}:repo_skills_dir"
-                    plan_skill_actions = getattr(
-                        repo_target_service, "plan_skill_actions"
-                    )
-                    skill_actions, desired_paths, skill_skipped = plan_skill_actions(
-                        skill_sources,
-                        _workspace_skills_dir(
-                            svc.app_id, repo_target_service.repository.root
-                        ),
-                        scope,
-                        "workspace",
-                        load_state_paths(managed_paths, scope),
-                        load_state_links(managed_links, scope),
+                    skill_actions, desired_paths, skill_skipped = (
+                        repo_target_service.plan_skill_actions(
+                            skill_sources,
+                            _workspace_skills_dir(
+                                svc.app_id, repo_target_service.repository.root
+                            ),
+                            scope,
+                            "workspace",
+                            load_state_paths(managed_paths, scope),
+                            load_state_links(managed_links, scope),
+                        )
                     )
                     for a in skill_actions:
                         _prepare_workspace_action(
@@ -820,16 +812,15 @@ class SyncPlanner:
 
                 if agent_sources and meta.supports_import_agents:
                     scope = f"ws:{svc.app_id.value}:repo_agents_dir"
-                    plan_agent_actions = getattr(
-                        repo_target_service, "plan_agent_actions"
-                    )
-                    agent_actions, desired_paths, agent_skipped = plan_agent_actions(
-                        agent_sources,
-                        getattr(repo_target_service.repository, "agents_dir"),
-                        scope,
-                        "workspace",
-                        load_state_paths(managed_paths, scope),
-                        load_state_links(managed_links, scope),
+                    agent_actions, desired_paths, agent_skipped = (
+                        repo_target_service.plan_agent_actions(
+                            agent_sources,
+                            repo_target_service.repository.agents_dir,
+                            scope,
+                            "workspace",
+                            load_state_paths(managed_paths, scope),
+                            load_state_links(managed_links, scope),
+                        )
                     )
                     for a in agent_actions:
                         _prepare_workspace_action(

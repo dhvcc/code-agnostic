@@ -20,12 +20,12 @@ class AppServiceRegistryMeta(ABCMeta):
         bases: tuple[type, ...],
         namespace: dict[str, Any],
         **kwargs: Any,
-    ):
+    ) -> "AppServiceRegistryMeta":
         cls = super().__new__(mcls, name, bases, namespace, **kwargs)
         app_id = getattr(cls, "APP_ID", None)
         is_abstract = bool(getattr(cls, "__abstractmethods__", False))
         if app_id is not None and not is_abstract:
-            mcls._registry[app_id] = cast(type["RegisteredAppConfigService"], cls)  # type: ignore[assignment]
+            mcls._registry[app_id] = cast(type["RegisteredAppConfigService"], cls)
         return cls
 
 

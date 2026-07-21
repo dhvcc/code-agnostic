@@ -1,3 +1,5 @@
+from typing import Any
+
 from rich.console import Console
 
 from code_agnostic.apps.app_id import app_label
@@ -191,7 +193,7 @@ class SyncConsoleUI:
             )
         )
 
-    def render_workspaces_overview(self, items: list[dict]) -> None:
+    def render_workspaces_overview(self, items: list[dict[str, Any]]) -> None:
         if not items:
             self.console.print(
                 UISection.note(

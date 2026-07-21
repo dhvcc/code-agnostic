@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 from code_agnostic.agents.codex import normalize_codex_agent_filename, parse_codex_agent
 from code_agnostic.agents.parser import serialize_agent
@@ -8,7 +9,7 @@ from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.utils import common_mcp_to_dto, dto_to_common_mcp
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
-from code_agnostic.imports.adapters import create_import_adapter
+from code_agnostic.imports.adapters import ImportAdapter, create_import_adapter
 from code_agnostic.imports.filesystem import (
     content_equal,
     copy_path,
@@ -261,7 +262,9 @@ class ImportService:
             unsupported.append(ImportSection.AGENTS)
         return unsupported
 
-    def _plan_mcp(self, adapter, conflict_policy: ConflictPolicy):
+    def _plan_mcp(
+        self, adapter: ImportAdapter, conflict_policy: ConflictPolicy
+    ) -> tuple[list[ImportAction], list[str], list[str]]:
         actions: list[ImportAction] = []
         errors: list[str] = []
         skipped: list[str] = []
@@ -272,7 +275,7 @@ class ImportService:
             return actions, [str(exc)], skipped
 
         if not source_dto:
-            source_config = adapter.config_repository.config_path
+            source_config = adapter.config_repository.config_path  # type: ignore[attr-defined]
             if source_config.exists():
                 skipped.append(
                     f"No MCP servers found in source config: {source_config}"
@@ -368,7 +371,7 @@ class ImportService:
             else:
                 skipped.append(f"MCP server skipped due to conflict: {name}")
 
-        normalized_payload = {}
+        normalized_payload: dict[str, Any] = {}
         existing_schema = existing_payload.get("$schema")
         if isinstance(existing_schema, str) and existing_schema:
             normalized_payload["$schema"] = existing_schema
@@ -399,7 +402,7 @@ class ImportService:
         target_dir: Path,
         conflict_policy: ConflictPolicy,
         follow_symlinks: bool,
-    ):
+    ) -> tuple[list[ImportAction], list[str], list[str]]:
         actions: list[ImportAction] = []
         errors: list[str] = []
         skipped: list[str] = []
@@ -518,10 +521,10 @@ class ImportService:
 
     def _plan_codex_agents(
         self,
-        adapter,
+        adapter: ImportAdapter,
         conflict_policy: ConflictPolicy,
         follow_symlinks: bool,
-    ):
+    ) -> tuple[list[ImportAction], list[str], list[str]]:
         actions: list[ImportAction] = []
         errors: list[str] = []
         skipped: list[str] = []
@@ -584,10 +587,10 @@ class ImportService:
 
     def _plan_copilot_agents(
         self,
-        adapter,
+        adapter: ImportAdapter,
         conflict_policy: ConflictPolicy,
         follow_symlinks: bool,
-    ):
+    ) -> tuple[list[ImportAction], list[str], list[str]]:
         actions: list[ImportAction] = []
         errors: list[str] = []
         skipped: list[str] = []
@@ -707,7 +710,7 @@ class ImportService:
         section: ImportSection,
         detail_name: str,
         target: Path,
-        payload: dict,
+        payload: dict[str, Any],
         conflict_policy: ConflictPolicy,
     ) -> tuple[ImportAction, str | None, str | None]:
         existing_payload, existing_error = read_json_safe(target)

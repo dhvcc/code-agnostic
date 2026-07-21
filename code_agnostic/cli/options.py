@@ -1,6 +1,7 @@
 """Shared option decorators for CLI commands."""
 
 from collections.abc import Callable
+from typing import Any
 
 import click
 
@@ -38,7 +39,9 @@ def _import_source_values() -> list[str]:
     ]
 
 
-def app_option(required: bool = False) -> Callable:
+def app_option(
+    required: bool = False,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return click.option(
         "-a",
         "--app",
@@ -49,7 +52,9 @@ def app_option(required: bool = False) -> Callable:
     )
 
 
-def manageable_app_option(required: bool = True) -> Callable:
+def manageable_app_option(
+    required: bool = True,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return click.option(
         "-a",
         "--app",
@@ -59,7 +64,9 @@ def manageable_app_option(required: bool = True) -> Callable:
     )
 
 
-def import_app_option(required: bool = True) -> Callable:
+def import_app_option(
+    required: bool = True,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return click.option(
         "-a",
         "--app",
@@ -69,7 +76,9 @@ def import_app_option(required: bool = True) -> Callable:
     )
 
 
-def workspace_option(required: bool = False) -> Callable:
+def workspace_option(
+    required: bool = False,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return click.option(
         "-w",
         "--workspace",
@@ -79,7 +88,9 @@ def workspace_option(required: bool = False) -> Callable:
     )
 
 
-def project_option(required: bool = False) -> Callable:
+def project_option(
+    required: bool = False,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return click.option(
         "--project",
         required=required,
@@ -88,5 +99,5 @@ def project_option(required: bool = False) -> Callable:
     )
 
 
-def verbose_option() -> Callable:
+def verbose_option() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return click.option("-v", "--verbose", is_flag=True, default=False)

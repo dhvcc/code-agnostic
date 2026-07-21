@@ -51,6 +51,6 @@ class JsonSchemaRepository(ISchemaRepository):
         now = time.time()
         if cached and now - cached[0] < self.ttl_seconds:
             return cached[1]
-        schema = json.loads(path.read_text(encoding="utf-8"))
+        schema: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
         _SCHEMA_CACHE[key] = (now, schema)
         return schema

@@ -14,7 +14,9 @@ class AliasedGroup(click.Group):
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
         return super().get_command(ctx, self.ALIASES.get(cmd_name, cmd_name))
 
-    def resolve_command(self, ctx: click.Context, args: list[str]):
+    def resolve_command(
+        self, ctx: click.Context, args: list[str]
+    ) -> tuple[str | None, click.Command | None, list[str]]:
         if args and args[0] in self.ALIASES:
             args[0] = self.ALIASES[args[0]]
         return super().resolve_command(ctx, args)

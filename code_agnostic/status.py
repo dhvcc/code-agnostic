@@ -1,10 +1,10 @@
 from pathlib import Path
 
 from code_agnostic.apps.app_id import AppId, AppMetadata, app_metadata
-from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.constants import CLAUDE_CONFIG_FILENAME
 from code_agnostic.core.project_repository import ProjectConfigRepository
+from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import (
     Action,
@@ -32,7 +32,7 @@ class StatusService:
 
     def build_workspace_status(
         self,
-        source_repo: ISourceRepository,
+        source_repo: CoreRepository,
         app_services: list[IAppConfigService] | None = None,
     ) -> list[WorkspaceStatusRow]:
         status_rows: list[WorkspaceStatusRow] = []
@@ -118,7 +118,7 @@ class StatusService:
 
     def build_project_status(
         self,
-        source_repo: ISourceRepository,
+        source_repo: CoreRepository,
         app_services: list[IAppConfigService] | None = None,
         planned_actions: list[Action] | None = None,
     ) -> list[ProjectStatusRow]:
@@ -192,7 +192,7 @@ class StatusService:
 
     @staticmethod
     def _workspace_actions(
-        source_repo: ISourceRepository,
+        source_repo: CoreRepository,
         app_services: list[IAppConfigService] | None,
     ) -> list[Action]:
         if not app_services:

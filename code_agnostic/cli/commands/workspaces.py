@@ -1,6 +1,7 @@
 """Workspaces group commands."""
 
 from pathlib import Path
+from typing import Any
 
 import click
 from rich.console import Console
@@ -63,7 +64,7 @@ def workspaces_list(obj: dict[str, str]) -> None:
     core = CoreRepository()
     workspace_service = WorkspaceService()
 
-    overview: list[dict] = []
+    overview: list[dict[str, Any]] = []
     try:
         workspaces = core.load_workspaces()
     except SyncAppError as exc:

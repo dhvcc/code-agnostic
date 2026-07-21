@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -52,13 +53,13 @@ def parse_skill(path: Path) -> Skill:
 
 
 def serialize_skill(skill: Skill) -> str:
-    fm: dict = {}
+    fm: dict[str, Any] = {}
     if skill.metadata.name:
         fm["name"] = skill.metadata.name
     if skill.metadata.description:
         fm["description"] = skill.metadata.description
 
-    tools: dict = {}
+    tools: dict[str, Any] = {}
     if skill.metadata.tools.read is not True:
         tools["read"] = skill.metadata.tools.read
     if skill.metadata.tools.write is not False:
@@ -85,7 +86,9 @@ def _is_skill_bundle_dir(path: Path) -> bool:
     )
 
 
-def _coerce_skill_app_overrides(payload: dict) -> dict[str, dict[str, object]]:
+def _coerce_skill_app_overrides(
+    payload: dict[str, Any],
+) -> dict[str, dict[str, object]]:
     overrides: dict[str, dict[str, object]] = {}
     for app_name in ("cursor", "codex", "opencode", "claude", "copilot"):
         raw = payload.get(f"x-{app_name}")

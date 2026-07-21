@@ -1,4 +1,5 @@
 from collections import Counter
+from typing import Any
 
 from rich.console import Group
 from rich.padding import Padding
@@ -36,7 +37,7 @@ IMPORT_STATUS_STYLE = {
 
 class PlanTable:
     @staticmethod
-    def summary_block(plan: SyncPlan, mode: str):
+    def summary_block(plan: SyncPlan, mode: str) -> Table:
         counts = Counter(action.status.value for action in plan.actions)
         chips = [f"{key}={value}" for key, value in sorted(counts.items()) if value > 0]
         if not chips:
@@ -146,7 +147,7 @@ class ApplyTable:
 
 class WorkspaceTable:
     @staticmethod
-    def overview_table(items: list[dict]) -> Table:
+    def overview_table(items: list[dict[str, Any]]) -> Table:
         table = Table(
             Column(header="Workspace", width=20),
             Column(header="Path", overflow="ellipsis"),
@@ -175,7 +176,7 @@ class WorkspaceTable:
         return table
 
     @staticmethod
-    def repos_table(items: list[dict]) -> Table:
+    def repos_table(items: list[dict[str, Any]]) -> Table:
         table = Table(
             Column(header="Workspace", width=24),
             Column(header="Repositories", overflow="fold"),
@@ -242,7 +243,7 @@ class StatusTable:
         return table
 
     @staticmethod
-    def workspace_repos_group(items: list[WorkspaceStatusRow]):
+    def workspace_repos_group(items: list[WorkspaceStatusRow]) -> Group | Text:
         blocks = []
         for item in items:
             repos = item.repos
@@ -344,7 +345,7 @@ class ConfigListTable:
 
 class ImportTable:
     @staticmethod
-    def summary_block(plan: ImportPlan, mode: str):
+    def summary_block(plan: ImportPlan, mode: str) -> Table:
         counts = Counter(action.status.value for action in plan.actions)
         chips = [f"{key}={value}" for key, value in sorted(counts.items()) if value > 0]
         if not chips:

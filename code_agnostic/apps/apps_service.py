@@ -7,7 +7,6 @@ from code_agnostic.apps.common.framework import (
     list_registered_app_services,
 )
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
-from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
     load_state_paths,
@@ -15,6 +14,7 @@ from code_agnostic.apps.common.symlink_planning import (
     plan_stale_group,
 )
 from code_agnostic.core.project_repository import ProjectConfigRepository
+from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.executor import SyncExecutor
 from code_agnostic.models import Action, AppStatusRow, AppSyncStatus, SyncPlan
@@ -24,7 +24,7 @@ from code_agnostic.utils import read_json_safe, write_json
 
 
 class AppsService:
-    def __init__(self, core_repository: ISourceRepository) -> None:
+    def __init__(self, core_repository: CoreRepository) -> None:
         self.core_repository = core_repository
 
     @property

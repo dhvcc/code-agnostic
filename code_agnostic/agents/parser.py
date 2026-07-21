@@ -83,7 +83,7 @@ def parse_agent(path: Path) -> Agent:
 
 
 def serialize_agent(agent: Agent, *, target_app: str | None = None) -> str:
-    fm: dict = {}
+    fm: dict[str, Any] = {}
     if agent.metadata.name:
         fm["name"] = agent.metadata.name
     if agent.metadata.description:
@@ -105,7 +105,7 @@ def serialize_agent(agent: Agent, *, target_app: str | None = None) -> str:
     if nickname_candidates:
         fm["nickname_candidates"] = list(nickname_candidates)
 
-    tools: dict = {}
+    tools: dict[str, Any] = {}
     if agent.metadata.tools.read is not True:
         tools["read"] = agent.metadata.tools.read
     if agent.metadata.tools.write is not True:

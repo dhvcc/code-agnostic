@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 try:
-    import tomllib
+    import tomllib  # type: ignore[import-not-found]
 except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore
+    import tomli as tomllib
 
 import tomlkit
 

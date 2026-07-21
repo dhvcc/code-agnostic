@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0
+
+Contract & type-safety hardening (pre-1.0). No user-facing behavior change.
+
+### Changed
+- **Killed `getattr`/`hasattr` contract bypass in the planner.** Methods that are
+  already declared abstract on `IAppConfigService` / `IAppConfigRepository`
+  (`plan_skill_actions`, `plan_agent_actions`, `validate_config`,
+  `derive_status`, `agents_dir`) are now called through the typed interface
+  instead of stringly-typed duck-typing.
+- **`core` is typed as `CoreRepository`** across the planner, executor,
+  `AppsService`, and `StatusService` — the honest contract (they operate on the
+  global source root), which also removed the untyped attribute access.
+- **mypy `strict` is now enforced** (`[tool.mypy]` in `pyproject.toml`); the
+  package type-checks clean (0 errors, 109 files). Enabling it surfaced and
+  fixed a latent type-narrowing bug in `SyncExecutor.restore_active_revision`.
+
 ## 0.4.0
 
 Enterprise-readiness release focused on cleanup correctness and a single MCP
