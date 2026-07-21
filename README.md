@@ -34,7 +34,7 @@ AI coding tools each want config in a different place and format. When you use m
 ~/.copilot/ and repo .github/      Compiled & synced for GitHub Copilot
 ```
 
-Each resource is cross-compiled to the target editor's native format. Rules become `.mdc` files for Cursor, `AGENTS.md` sections for OpenCode/Codex/Copilot, and `CLAUDE.local.md` memory for Claude Code.
+Each resource is cross-compiled to the target editor's native format. Rules become `AGENTS.md` sections consumed by Cursor/OpenCode/Codex/Copilot, mirrored into `CLAUDE.local.md` memory for Claude Code.
 
 Legacy single-file rules, `skills/<name>/SKILL.md`, and markdown agents are still supported for migration, but bundle directories are the preferred source format for new config.
 
@@ -191,7 +191,7 @@ always_apply: false
 Always use type hints. Prefer dataclasses over dicts.
 ```
 
-Cross-compiled per editor: Cursor gets `.mdc` files with native frontmatter, OpenCode/Codex get `AGENTS.md` sections.
+Compiled to `AGENTS.md` sections, consumed natively by Cursor/OpenCode/Codex/Copilot and mirrored into `CLAUDE.local.md` for Claude Code.
 Legacy single-file rule markdown with YAML frontmatter remains supported for migration.
 
 ```bash

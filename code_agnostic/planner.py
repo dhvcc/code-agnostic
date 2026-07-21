@@ -49,14 +49,14 @@ from code_agnostic.project_artifacts import (
     project_config_dir,
     project_skills_dir,
 )
-from code_agnostic.rules.compilers import OpenCodeRuleCompiler
+from code_agnostic.rules.compilers import AgentsRuleCompiler
 from code_agnostic.rules.models import Rule
 from code_agnostic.rules.repository import RulesRepository
 from code_agnostic.workspaces import WorkspaceService
 
 
 def _compile_workspace_agents(rules: list[Rule]) -> str:
-    compiler = OpenCodeRuleCompiler()
+    compiler = AgentsRuleCompiler()
     sections = [compiler.compile(rule)[1] for rule in rules]
     return "\n\n".join(sections) + "\n"
 
