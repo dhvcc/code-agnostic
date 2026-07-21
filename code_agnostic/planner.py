@@ -373,6 +373,23 @@ class SyncPlanner:
         skipped: list[str] = []
         desired_paths_by_scope: dict[str, list[Path]] = {}
 
+        def emit_stale_files(scope: str, desired: list[Path]) -> None:
+            app_name = scope.split(":", 2)[1]
+            stale = plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, scope),
+                desired_paths=desired,
+                remove_detail=f"remove stale project {scope} file",
+                conflict_detail=f"stale project {scope} path is not a file",
+                noop_detail=f"stale project {scope} file already absent",
+                app=app_name,
+                scope=scope,
+                skipped=skipped,
+                skipped_message="Stale project cleanup skipped (not file): {path}",
+            )
+            for action in stale:
+                _prepare_project_action(action, project_name=project_name)
+            actions.extend(stale)
+
         project_common_servers = None
         if project_source.has_mcp():
             try:
@@ -421,21 +438,7 @@ class SyncPlanner:
             skipped.extend(skill_skipped)
 
         for scope, desired in desired_paths_by_scope.items():
-            app_name = scope.split(":", 2)[1]
-            stale_actions = plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, scope),
-                desired_paths=desired,
-                remove_detail=f"remove stale project {scope} file",
-                conflict_detail=f"stale project {scope} path is not a file",
-                noop_detail=f"stale project {scope} file already absent",
-                app=app_name,
-                scope=scope,
-                skipped=skipped,
-                skipped_message="Stale project cleanup skipped (not file): {path}",
-            )
-            for action in stale_actions:
-                _prepare_project_action(action, project_name=project_name)
-            actions.extend(stale_actions)
+            emit_stale_files(scope, desired)
 
         selected_project_apps = {svc.app_id.value for svc in self.app_services}
         all_stale_path_scopes = {
@@ -446,21 +449,7 @@ class SyncPlanner:
             and f":{project_name}:" in scope
         }
         for scope in sorted(all_stale_path_scopes):
-            app_name = scope.split(":", 2)[1]
-            stale_actions = plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, scope),
-                desired_paths=[],
-                remove_detail=f"remove stale project {scope} file",
-                conflict_detail=f"stale project {scope} path is not a file",
-                noop_detail=f"stale project {scope} file already absent",
-                app=app_name,
-                scope=scope,
-                skipped=skipped,
-                skipped_message="Stale project cleanup skipped (not file): {path}",
-            )
-            for action in stale_actions:
-                _prepare_project_action(action, project_name=project_name)
-            actions.extend(stale_actions)
+            emit_stale_files(scope, [])
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
 
@@ -490,81 +479,20 @@ class SyncPlanner:
 
         actions: list[Action] = []
         skipped: list[str] = []
-
-        # --- Rules compilation ---
         desired_paths_by_scope: dict[str, list[Path]] = {}
-        rules_repo = RulesRepository(ws_source.root)
-        rules = rules_repo.list_rules()
-        workspace_agents_target: Path | None = None
-        workspace_agents_content: str | None = None
-        if rules:
-            content = _compile_workspace_agents(rules)
-            workspace_agents_content = content
-            target = workspace_path / AGENTS_FILENAME
-            rule_action = plan_owned_compiled_text_action(
-                target=target,
-                payload=content,
-                managed_paths={
-                    path.resolve(strict=False)
-                    for path in load_state_paths(managed_paths, "rules")
-                },
-                removable_link_paths={
-                    path.resolve(strict=False)
-                    for path in load_state_links(managed_links, "rules")
-                },
-                scope="rules",
-                app="workspace",
-                create_detail="create workspace rules file",
-                noop_detail="workspace rules file already up to date",
-                update_detail="update workspace rules file",
-            )
-            _prepare_workspace_action(
-                rule_action,
-                workspace_name=workspace_name,
-                scope="rules",
-                removable_links=load_state_links(managed_links, "rules"),
-            )
-            actions.append(rule_action)
-            desired_paths_by_scope.setdefault("rules", []).append(target)
-            workspace_agents_target = target
-        elif not rules_repo.rules_dir.exists() and ws_source.rules_file.exists():
-            content = ws_source.rules_file.read_text(encoding="utf-8")
-            workspace_agents_content = content
-            target = workspace_path / AGENTS_FILENAME
-            rule_action = plan_owned_compiled_text_action(
-                target=target,
-                payload=content,
-                managed_paths={
-                    path.resolve(strict=False)
-                    for path in load_state_paths(managed_paths, "rules")
-                },
-                removable_link_paths={
-                    path.resolve(strict=False)
-                    for path in load_state_links(managed_links, "rules")
-                },
-                scope="rules",
-                app="workspace",
-                create_detail="create workspace rules file",
-                noop_detail="workspace rules file already up to date",
-                update_detail="update workspace rules file",
-            )
-            _prepare_workspace_action(
-                rule_action,
-                workspace_name=workspace_name,
-                scope="rules",
-                removable_links=load_state_links(managed_links, "rules"),
-            )
-            actions.append(rule_action)
-            desired_paths_by_scope.setdefault("rules", []).append(target)
-            workspace_agents_target = target
 
-        claude_enabled = any(svc.app_id == AppId.CLAUDE for svc in self.app_services)
-        if workspace_agents_content is not None and claude_enabled:
-            scope = "ws:claude:workspace_memory"
-            target = workspace_path / CLAUDE_LOCAL_FILENAME
+        def emit_compiled(
+            target: Path,
+            payload: str,
+            scope: str,
+            *,
+            create_detail: str,
+            noop_detail: str,
+            update_detail: str,
+        ) -> None:
             action = plan_owned_compiled_text_action(
                 target=target,
-                payload=workspace_agents_content,
+                payload=payload,
                 managed_paths={
                     path.resolve(strict=False)
                     for path in load_state_paths(managed_paths, scope)
@@ -575,9 +503,9 @@ class SyncPlanner:
                 },
                 scope=scope,
                 app="workspace",
-                create_detail="create claude workspace local memory",
-                noop_detail="claude workspace local memory already up to date",
-                update_detail="update claude workspace local memory",
+                create_detail=create_detail,
+                noop_detail=noop_detail,
+                update_detail=update_detail,
             )
             _prepare_workspace_action(
                 action,
@@ -588,34 +516,101 @@ class SyncPlanner:
             actions.append(action)
             desired_paths_by_scope.setdefault(scope, []).append(target)
 
-            scope = "ws:claude:repo_memory"
+        def emit_stale_links(
+            scope: str,
+            desired: list[Path],
+            *,
+            skipped_message: str = (
+                "Stale workspace cleanup skipped (not symlink): {path}"
+            ),
+        ) -> None:
+            stale = plan_stale_group(
+                old_links=load_state_links(managed_links, scope),
+                desired_links=desired,
+                remove_detail=f"remove stale workspace {scope} symlink",
+                conflict_detail=f"stale workspace {scope} path is not a symlink",
+                noop_detail=f"stale workspace {scope} symlink already absent",
+                app="workspace",
+                scope=scope,
+                skipped=skipped,
+                skipped_message=skipped_message,
+            )
+            for a in stale:
+                _prepare_workspace_action(
+                    a, workspace_name=workspace_name, scope=scope, removable_links=[]
+                )
+            actions.extend(stale)
+
+        def emit_stale_files(scope: str, desired: list[Path]) -> None:
+            stale = plan_stale_files_group(
+                old_paths=load_state_paths(managed_paths, scope),
+                desired_paths=desired,
+                remove_detail=f"remove stale workspace {scope} file",
+                conflict_detail=f"stale workspace {scope} path is not a file",
+                noop_detail=f"stale workspace {scope} file already absent",
+                app="workspace",
+                scope=scope,
+                skipped=skipped,
+                skipped_message="Stale workspace cleanup skipped (not file): {path}",
+            )
+            for a in stale:
+                _prepare_workspace_action(
+                    a, workspace_name=workspace_name, scope=scope, removable_links=[]
+                )
+            actions.extend(stale)
+
+        # --- Rules compilation ---
+        rules_repo = RulesRepository(ws_source.root)
+        rules = rules_repo.list_rules()
+        workspace_agents_target: Path | None = None
+        workspace_agents_content: str | None = None
+        if rules:
+            content = _compile_workspace_agents(rules)
+            workspace_agents_content = content
+            target = workspace_path / AGENTS_FILENAME
+            emit_compiled(
+                target,
+                content,
+                "rules",
+                create_detail="create workspace rules file",
+                noop_detail="workspace rules file already up to date",
+                update_detail="update workspace rules file",
+            )
+            workspace_agents_target = target
+        elif not rules_repo.rules_dir.exists() and ws_source.rules_file.exists():
+            content = ws_source.rules_file.read_text(encoding="utf-8")
+            workspace_agents_content = content
+            target = workspace_path / AGENTS_FILENAME
+            emit_compiled(
+                target,
+                content,
+                "rules",
+                create_detail="create workspace rules file",
+                noop_detail="workspace rules file already up to date",
+                update_detail="update workspace rules file",
+            )
+            workspace_agents_target = target
+
+        claude_enabled = any(svc.app_id == AppId.CLAUDE for svc in self.app_services)
+        if workspace_agents_content is not None and claude_enabled:
+            emit_compiled(
+                workspace_path / CLAUDE_LOCAL_FILENAME,
+                workspace_agents_content,
+                "ws:claude:workspace_memory",
+                create_detail="create claude workspace local memory",
+                noop_detail="claude workspace local memory already up to date",
+                update_detail="update claude workspace local memory",
+            )
+
             for repo in repos:
-                target = repo / CLAUDE_LOCAL_FILENAME
-                action = plan_owned_compiled_text_action(
-                    target=target,
-                    payload=workspace_agents_content,
-                    managed_paths={
-                        path.resolve(strict=False)
-                        for path in load_state_paths(managed_paths, scope)
-                    },
-                    removable_link_paths={
-                        path.resolve(strict=False)
-                        for path in load_state_links(managed_links, scope)
-                    },
-                    scope=scope,
-                    app="workspace",
+                emit_compiled(
+                    repo / CLAUDE_LOCAL_FILENAME,
+                    workspace_agents_content,
+                    "ws:claude:repo_memory",
                     create_detail="create claude repo local memory",
                     noop_detail="claude repo local memory already up to date",
                     update_detail="update claude repo local memory",
                 )
-                _prepare_workspace_action(
-                    action,
-                    workspace_name=workspace_name,
-                    scope=scope,
-                    removable_links=load_state_links(managed_links, scope),
-                )
-                actions.append(action)
-                desired_paths_by_scope.setdefault(scope, []).append(target)
 
         # --- Workspace-level app config rendering + direct target writes ---
 
@@ -742,33 +737,14 @@ class SyncPlanner:
                     self._claude_project_mcp[repo] = mcp_payload
 
                 if svc.app_id == AppId.CODEX and workspace_agents_content is not None:
-                    scope = "ws:codex:repo_agents_override"
-                    override_target = repo / CODEX_AGENTS_OVERRIDE_FILENAME
-                    override_action = plan_owned_compiled_text_action(
-                        target=override_target,
-                        payload=workspace_agents_content,
-                        managed_paths={
-                            path.resolve(strict=False)
-                            for path in load_state_paths(managed_paths, scope)
-                        },
-                        removable_link_paths={
-                            path.resolve(strict=False)
-                            for path in load_state_links(managed_links, scope)
-                        },
-                        scope=scope,
-                        app="workspace",
+                    emit_compiled(
+                        repo / CODEX_AGENTS_OVERRIDE_FILENAME,
+                        workspace_agents_content,
+                        "ws:codex:repo_agents_override",
                         create_detail="create codex workspace override",
                         noop_detail="codex workspace override already up to date",
                         update_detail="update codex workspace override",
                     )
-                    _prepare_workspace_action(
-                        override_action,
-                        workspace_name=workspace_name,
-                        scope=scope,
-                        removable_links=load_state_links(managed_links, scope),
-                    )
-                    actions.append(override_action)
-                    desired_paths_by_scope.setdefault(scope, []).append(override_target)
 
                 if should_render_workspace_config:
                     scope = f"ws:{svc.app_id.value}:repo_mcp"
@@ -867,126 +843,30 @@ class SyncPlanner:
         # --- Stale cleanup ---
         selected_workspace_apps = {svc.app_id.value for svc in self.app_services}
 
-        stale_rules = plan_stale_group(
-            old_links=load_state_links(managed_links, "rules"),
-            desired_links=desired_paths_by_scope.get("rules", []),
-            remove_detail="remove stale workspace rules symlink",
-            conflict_detail="stale workspace rules path is not a symlink",
-            noop_detail="stale workspace rules symlink already absent",
-            app="workspace",
-            scope="rules",
-            skipped=skipped,
-            skipped_message="Stale workspace rules cleanup skipped (not symlink): {path}",
+        emit_stale_links(
+            "rules",
+            desired_paths_by_scope.get("rules", []),
+            skipped_message=(
+                "Stale workspace rules cleanup skipped (not symlink): {path}"
+            ),
         )
-        for a in stale_rules:
-            _prepare_workspace_action(
-                a,
-                workspace_name=workspace_name,
-                scope="rules",
-                removable_links=[],
-            )
-        actions.extend(stale_rules)
 
         for scope, desired in desired_paths_by_scope.items():
             if scope == "rules":
                 continue
-            stale_actions = plan_stale_group(
-                old_links=load_state_links(managed_links, scope),
-                desired_links=desired,
-                remove_detail=f"remove stale workspace {scope} symlink",
-                conflict_detail=f"stale workspace {scope} path is not a symlink",
-                noop_detail=f"stale workspace {scope} symlink already absent",
-                app="workspace",
-                scope=scope,
-                skipped=skipped,
-                skipped_message="Stale workspace cleanup skipped (not symlink): {path}",
-            )
-            for a in stale_actions:
-                _prepare_workspace_action(
-                    a,
-                    workspace_name=workspace_name,
-                    scope=scope,
-                    removable_links=[],
-                )
-            actions.extend(stale_actions)
-            stale_actions = plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, scope),
-                desired_paths=desired,
-                remove_detail=f"remove stale workspace {scope} file",
-                conflict_detail=f"stale workspace {scope} path is not a file",
-                noop_detail=f"stale workspace {scope} file already absent",
-                app="workspace",
-                scope=scope,
-                skipped=skipped,
-                skipped_message="Stale workspace cleanup skipped (not file): {path}",
-            )
-            for a in stale_actions:
-                _prepare_workspace_action(
-                    a,
-                    workspace_name=workspace_name,
-                    scope=scope,
-                    removable_links=[],
-                )
-            actions.extend(stale_actions)
+            emit_stale_links(scope, desired)
+            emit_stale_files(scope, desired)
 
-        all_stale_scopes = {
-            scope
-            for scope in managed_links.keys()
-            if scope not in desired_paths_by_scope
-            and (
+        def _is_stale_scope(scope: str) -> bool:
+            return scope not in desired_paths_by_scope and (
                 scope == "rules"
                 or _workspace_scope_matches_app(scope, selected_workspace_apps)
             )
-        }
-        for scope in sorted(all_stale_scopes):
-            stale_actions = plan_stale_group(
-                old_links=load_state_links(managed_links, scope),
-                desired_links=[],
-                remove_detail=f"remove stale workspace {scope} symlink",
-                conflict_detail=f"stale workspace {scope} path is not a symlink",
-                noop_detail=f"stale workspace {scope} symlink already absent",
-                app="workspace",
-                scope=scope,
-                skipped=skipped,
-                skipped_message="Stale workspace cleanup skipped (not symlink): {path}",
-            )
-            for a in stale_actions:
-                _prepare_workspace_action(
-                    a,
-                    workspace_name=workspace_name,
-                    scope=scope,
-                    removable_links=[],
-                )
-            actions.extend(stale_actions)
 
-        all_stale_path_scopes = {
-            scope
-            for scope in managed_paths.keys()
-            if scope not in desired_paths_by_scope
-            and (
-                scope == "rules"
-                or _workspace_scope_matches_app(scope, selected_workspace_apps)
-            )
-        }
-        for scope in sorted(all_stale_path_scopes):
-            stale_actions = plan_stale_files_group(
-                old_paths=load_state_paths(managed_paths, scope),
-                desired_paths=[],
-                remove_detail=f"remove stale workspace {scope} file",
-                conflict_detail=f"stale workspace {scope} path is not a file",
-                noop_detail=f"stale workspace {scope} file already absent",
-                app="workspace",
-                scope=scope,
-                skipped=skipped,
-                skipped_message="Stale workspace cleanup skipped (not file): {path}",
-            )
-            for a in stale_actions:
-                _prepare_workspace_action(
-                    a,
-                    workspace_name=workspace_name,
-                    scope=scope,
-                    removable_links=[],
-                )
-            actions.extend(stale_actions)
+        for scope in sorted(s for s in managed_links.keys() if _is_stale_scope(s)):
+            emit_stale_links(scope, [])
+
+        for scope in sorted(s for s in managed_paths.keys() if _is_stale_scope(s)):
+            emit_stale_files(scope, [])
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
