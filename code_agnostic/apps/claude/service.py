@@ -5,7 +5,7 @@ from typing import Any
 from code_agnostic.agents.claude import claude_agent_target_path
 from code_agnostic.agents.compilers import ClaudeAgentCompiler
 from code_agnostic.agents.parser import parse_agent
-from code_agnostic.apps.app_id import AppId, app_label
+from code_agnostic.apps.app_id import AppId, app_label, app_scope
 from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
 from code_agnostic.apps.common.framework import RegisteredAppConfigService
@@ -72,6 +72,7 @@ class ClaudeConfigService(RegisteredAppConfigService):
         self,
         project_servers: dict[Path, dict[str, MCPServerDTO]],
         base_payload: dict[str, Any] | None = None,
+        previously_managed_projects: set[str] | None = None,
     ) -> Action:
         existing = self._repository.load_config()
         if existing or self.repository.config_path.exists():
@@ -86,8 +87,10 @@ class ClaudeConfigService(RegisteredAppConfigService):
         else:
             projects = deepcopy(projects)
 
+        desired_keys: set[str] = set()
         for project_path, servers in project_servers.items():
             key = str(project_path.resolve())
+            desired_keys.add(key)
             project = projects.get(key)
             if not isinstance(project, dict):
                 project = {}
@@ -96,10 +99,18 @@ class ClaudeConfigService(RegisteredAppConfigService):
             project["mcpServers"] = self.mapper.from_common(servers)
             projects[key] = project
 
+        # Prune the `mcpServers` sub-key from project entries we previously wrote
+        # but no longer sync (e.g. a repo removed from a workspace). Leave the rest
+        # of the project entry (history etc.) and non-managed projects untouched.
+        for stale_key in (previously_managed_projects or set()) - desired_keys:
+            stale_project = projects.get(stale_key)
+            if isinstance(stale_project, dict):
+                stale_project.pop("mcpServers", None)
+
         merged["projects"] = projects
         self.validate_config(merged)
 
-        return Action(
+        action = Action(
             kind=self.action_kind,
             path=self.repository.config_path,
             status=self.derive_status(existing, merged),
@@ -107,6 +118,12 @@ class ClaudeConfigService(RegisteredAppConfigService):
             payload=merged,
             app=self.app_id.value,
         )
+        # Track which project paths we own so a later source removal prunes only
+        # our `mcpServers` sub-keys without touching the user's project entries.
+        projects_scope = app_scope(self.app_id, "projects")
+        action.scope = projects_scope
+        action.managed_entries = {projects_scope: sorted(desired_keys)}
+        return action
 
     def plan_skill_actions(
         self,

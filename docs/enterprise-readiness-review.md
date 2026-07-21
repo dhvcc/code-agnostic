@@ -117,9 +117,15 @@ tracked state, then clears its state entries.
 - Codex agent-registry prune via a generalized ownership mechanism
   (`Action.managed_entries`, scope→names); `apps disable` prunes it too.
 
+### 0.7.0 (shipped)
+- Claude per-project MCP prune. Project paths we write are tracked under
+  `app:claude:projects` (via the same `managed_entries` mechanism);
+  `build_project_mcp_action` takes `previously_managed_projects` and drops the
+  `mcpServers` sub-key of any previously-managed path no longer synced, leaving
+  the rest of the entry and user-added projects intact. `apps disable` prunes
+  them too. All merge-without-prune orphan classes from P0-1/P1 are now closed.
+
 ### Follow-up (tracked)
-- P1: claude project-entry prune (bespoke `build_project_mcp_action` flow) —
-  next.
 - P1: typed `SyncState`/`WorkspaceConfig` model, planner de-duplication,
   README/`.mdc` reconciliation.
 - P2: remove dead legacy state keys (`managed_skill_links`/…), remaining
@@ -129,9 +135,10 @@ tracked state, then clears its state entries.
 
 ## Handoff notes for the next session
 
-State of the world: 0.4.0–0.6.0 shipped to PyPI + ghcr (tags `v*` trigger
+State of the world: 0.4.0–0.7.0 shipped to PyPI + ghcr (tags `v*` trigger
 `.github/workflows/publish_to_pypi.yml` + `publish-docker.yml`). `main` is the
-release branch, mypy `strict` is green, full suite green (~757 tests).
+release branch, mypy `strict` is green, full suite green (~760 tests). Every
+merge-without-prune orphan class flagged in P0-1/P1 is now closed.
 
 **The ownership pattern to reuse** (this is the backbone of all cleanup work):
 - `apply_mcp_servers(existing, desired, previously_managed, replace=False)` in
@@ -140,28 +147,22 @@ release branch, mypy `strict` is green, full suite green (~757 tests).
 - Ownership is recorded on `Action.managed_entries: dict[scope, list[str]]` and
   persisted by `executor._persist_state` into `sync_state.json` under
   `managed_mcp` (a generic `scope → names` map despite the name). Scopes so far:
-  `app:<app>:mcp`, `app:codex:agents_registry`.
+  `app:<app>:mcp`, `app:codex:agents_registry`, `app:claude:projects` (the names
+  there are resolved project *paths*, not server names).
 - `build_plan` reads previous names from state and threads them into
   `build_action(..., previously_managed=..., previously_managed_agents=...)`.
+  The claude project variant reads previous paths in
+  `planner._merge_claude_project_mcp` and threads them into
+  `build_project_mcp_action(..., previously_managed_projects=...)`, then merges
+  the projects scope into the global action's `managed_entries`.
 - Generated/owned files (workspace/project) pass `replace_mcp=True` (full
   replace); user-shared global configs use ownership-aware (default).
 
-**Next: claude project-entry prune.** `ClaudeConfigService.build_project_mcp_action`
-(`apps/claude/service.py`) copies `projects` and only updates currently-desired
-paths, never removing the `mcpServers` sub-key of project paths we previously
-wrote but no longer sync (e.g. a repo removed from a workspace). Plan:
-1. Track managed project paths under a new scope, e.g. `app:claude:projects`, on
-   the merged Claude action's `managed_entries` (the action is assembled in
-   `planner._merge_claude_project_mcp`, which already carries `managed_entries`
-   from the global action — extend it there).
-2. Read previous project paths from state in the planner (it has `self.core`)
-   and pass them into `build_project_mcp_action`.
-3. For each previously-managed path NOT in the current desired set, delete only
-   its `mcpServers` sub-key (leave the rest of the Claude project entry — history
-   etc. — untouched). Never remove non-managed project entries.
-4. TDD: mirror `tests/test_cli_apply_mcp_cleanup.py` — sync two workspace repos,
-   then remove one, assert its `projects.<path>.mcpServers` is gone and the
-   other + any user project entry survive.
+**Next: typed `SyncState`/`WorkspaceConfig` model.** State is passed around as
+`dict[str, Any]` and re-validated defensively in ~5 places; introduce a typed
+`SyncState` and use the existing-but-unused `WorkspaceConfig` (`models.py:148`)
+across boundaries. Then planner de-duplication (compiled-text emit block ×5,
+stale-cleanup logic) and README/`.mdc` reconciliation, then the P2 debt.
 
 **Release mechanics gotcha:** the pre-commit `ruff-format` hook can reformat a
 file and *reject* the commit; always `git add -A` again and re-commit. Bump

@@ -6,6 +6,7 @@ from code_agnostic.apps.common.framework import (
     create_registered_app_service,
     list_registered_app_services,
 )
+from code_agnostic.apps.claude.service import ClaudeConfigService
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
@@ -113,6 +114,8 @@ class AppsService:
                 self._cleanup_paths(global_paths, scope, app_id.value, skipped)
             )
         actions.extend(self._cleanup_global_mcp(app_id, global_mcp))
+        if app_id == AppId.CLAUDE:
+            actions.extend(self._cleanup_claude_projects(global_mcp))
 
         # --- Workspace scopes (ws:<app>:*) ---
         ws_prefix = f"ws:{app_id.value}:"
@@ -222,6 +225,27 @@ class AppsService:
                 previously_managed=managed,
                 previously_managed_agents=managed_agents,
             )
+        ]
+
+    def _cleanup_claude_projects(self, managed_mcp: dict[str, Any]) -> list[Action]:
+        managed = self._names_for_scope(
+            managed_mcp, app_scope(AppId.CLAUDE, "projects")
+        )
+        if not managed:
+            return []
+        try:
+            service = create_registered_app_service(AppId.CLAUDE)
+        except (KeyError, ValueError):
+            return []
+        if not isinstance(service, ClaudeConfigService):
+            return []
+        if not service.repository.config_path.exists():
+            return []
+        # Empty desired + our previously-managed project paths → prune only the
+        # `mcpServers` sub-keys we wrote, keep the rest of each project entry, and
+        # clear the ownership state (managed_entries becomes empty).
+        return [
+            service.build_project_mcp_action({}, previously_managed_projects=managed)
         ]
 
     @staticmethod

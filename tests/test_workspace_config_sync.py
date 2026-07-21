@@ -1,5 +1,7 @@
 """Tests for workspace-level config sync (MCP, skills, agents, rules)."""
 
+import json
+import shutil
 from pathlib import Path
 
 try:
@@ -744,6 +746,81 @@ def test_workspace_claude_mcp_merges_project_entries_into_home_config(
     }
     assert payload["projects"][str(repo.resolve())]["mcpServers"] == {
         "ws-server": {"type": "http", "url": "https://example.com/mcp"}
+    }
+
+
+def test_workspace_claude_removed_repo_prunes_project_mcp_keeps_others(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    """P1: a repo removed from a workspace has its `projects.<path>.mcpServers`
+    pruned from ~/.claude.json on the next apply, while the other repo, the
+    workspace root, and a user-added project entry are all preserved."""
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo_a = workspace_root / "repo-a"
+    repo_b = workspace_root / "repo-b"
+    (repo_a / ".git").mkdir(parents=True)
+    (repo_b / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"ws-server": {"url": "https://example.com/mcp"}}},
+    )
+
+    # User has their own project entry in ~/.claude.json that we must never touch.
+    user_project = str((tmp_path / "user-repo").resolve())
+    config_path = tmp_path / ".claude.json"
+    write_json(
+        config_path,
+        {"projects": {user_project: {"mcpServers": {"personal": {"type": "http"}}}}},
+    )
+
+    def _apply() -> dict:
+        plan = SyncPlanner(
+            core=core,
+            app_services=[_claude_service(tmp_path / ".claude")],
+        ).build()
+        _applied, failed, failures = SyncExecutor(core=core).execute(plan)
+        assert failed == 0, failures
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    payload = _apply()
+    projects = payload["projects"]
+    assert str(workspace_root.resolve()) in projects
+    assert "mcpServers" in projects[str(repo_a.resolve())]
+    assert "mcpServers" in projects[str(repo_b.resolve())]
+    assert user_project in projects
+
+    state = json.loads((core_root / ".sync-state.json").read_text(encoding="utf-8"))
+    assert set(state["managed_mcp"]["app:claude:projects"]) == {
+        str(workspace_root.resolve()),
+        str(repo_a.resolve()),
+        str(repo_b.resolve()),
+    }
+
+    # Remove repo-a from the workspace and re-apply.
+    shutil.rmtree(repo_a)
+    payload = _apply()
+    projects = payload["projects"]
+
+    assert "mcpServers" not in projects.get(
+        str(repo_a.resolve()), {}
+    ), "removed repo's mcpServers must be pruned"
+    assert "mcpServers" in projects[str(repo_b.resolve())]
+    assert "mcpServers" in projects[str(workspace_root.resolve())]
+    assert projects[user_project] == {"mcpServers": {"personal": {"type": "http"}}}
+
+    state = json.loads((core_root / ".sync-state.json").read_text(encoding="utf-8"))
+    assert set(state["managed_mcp"]["app:claude:projects"]) == {
+        str(workspace_root.resolve()),
+        str(repo_b.resolve()),
     }
 
 

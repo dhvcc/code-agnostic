@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from code_agnostic.apps.app_id import AppId, app_metadata
+from code_agnostic.apps.app_id import AppId, app_metadata, app_scope
 from code_agnostic.apps.common.compiled_planning import (
     plan_owned_compiled_text_action,
 )
@@ -283,15 +283,29 @@ class SyncPlanner:
             if existing_action is not None and isinstance(existing_action.payload, dict)
             else None
         )
+        state = self.core.load_state()
+        managed_mcp = state.get("managed_mcp")
+        if not isinstance(managed_mcp, dict):
+            managed_mcp = {}
+        prev_projects_raw = managed_mcp.get(app_scope(AppId.CLAUDE, "projects"), [])
+        previously_managed_projects = (
+            {path for path in prev_projects_raw if isinstance(path, str)}
+            if isinstance(prev_projects_raw, list)
+            else set()
+        )
         project_action = claude_service.build_project_mcp_action(
             self._claude_project_mcp,
             base_payload=base_payload,
+            previously_managed_projects=previously_managed_projects,
         )
         if existing_action is not None:
             # Carry global MCP ownership tracking onto the merged Claude action so
-            # top-level `mcpServers` orphans still get pruned on later applies.
-            project_action.scope = existing_action.scope
-            project_action.managed_entries = existing_action.managed_entries
+            # top-level `mcpServers` orphans still get pruned on later applies. The
+            # project-path ownership set by build_project_mcp_action is preserved.
+            project_action.scope = existing_action.scope or project_action.scope
+            merged_entries = dict(existing_action.managed_entries or {})
+            merged_entries.update(project_action.managed_entries or {})
+            project_action.managed_entries = merged_entries
         actions = [
             action
             for action in plan.actions

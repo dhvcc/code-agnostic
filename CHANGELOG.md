@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+### Fixed
+- **Claude per-project MCP is now pruned when a repo leaves a workspace.**
+  Previously the `mcpServers` block under `projects.<path>` in `~/.claude.json`
+  lingered forever once a repo was removed from a synced workspace (the top-level
+  `mcpServers` was ownership-tracked, but per-project entries were merge-only).
+  Project paths we write are now tracked per-path (`app:claude:projects`), so a
+  removed repo has only its `mcpServers` sub-key pruned — the rest of the project
+  entry (history etc.) and any project the user added by hand are left untouched.
+  `apps disable` prunes the project entries it owns too.
+
 ## 0.6.0
 
 ### Fixed
