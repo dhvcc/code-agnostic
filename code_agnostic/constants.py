@@ -9,6 +9,7 @@ GIT_DIRNAME: Final[str] = ".git"
 SYNC_STATE_FILENAME: Final[str] = ".sync-state.json"
 SYNC_REVISIONS_DIRNAME: Final[str] = ".sync-revisions"
 SYNC_STAGING_DIRNAME: Final[str] = ".sync-staging"
+SYNC_LOCK_FILENAME: Final[str] = ".sync.lock"
 
 RULES_DIRNAME: Final[str] = "rules"
 SKILLS_DIRNAME: Final[str] = "skills"

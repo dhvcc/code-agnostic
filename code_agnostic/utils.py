@@ -1,7 +1,32 @@
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+
+
+@contextmanager
+def file_lock(path: Path) -> Iterator[None]:
+    """Advisory inter-process lock on `path` for a read-modify-write section.
+
+    Serializes concurrent `apply` runs so they can't race on shared state
+    (`sync_state.json`). Uses `fcntl.flock` on POSIX; on platforms without it
+    (e.g. Windows) it degrades to a no-op rather than failing.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - non-POSIX fallback
+        yield
+        return
+
+    with path.open("w", encoding="utf-8") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def read_json(path: Path) -> Any:

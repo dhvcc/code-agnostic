@@ -75,9 +75,6 @@ class CursorConfigService(RegisteredAppConfigService):
                 self.repository.config_path, format_schema_error(error)
             )
 
-    def build_action_payload(self, payload: dict[str, Any]) -> Any:
-        return payload
-
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]
     ) -> ActionStatus:

@@ -8,6 +8,7 @@ from typing import Any
 from typing import Protocol
 
 from code_agnostic.constants import (
+    SYNC_LOCK_FILENAME,
     SYNC_REVISIONS_DIRNAME,
     SYNC_STAGING_DIRNAME,
     SYNC_STATE_FILENAME,
@@ -16,7 +17,7 @@ from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
-from code_agnostic.utils import write_json
+from code_agnostic.utils import file_lock, write_json
 
 
 @dataclass
@@ -201,6 +202,16 @@ class SyncExecutor:
         }
 
     def execute(
+        self, plan: SyncPlan, persist_state: bool = True
+    ) -> tuple[int, int, list[str]]:
+        if not persist_state:
+            return self._execute(plan, persist_state=persist_state)
+        # Serialize concurrent applies so they can't race on shared sync state.
+        lock_path = self.context.core.root / SYNC_LOCK_FILENAME
+        with file_lock(lock_path):
+            return self._execute(plan, persist_state=persist_state)
+
+    def _execute(
         self, plan: SyncPlan, persist_state: bool = True
     ) -> tuple[int, int, list[str]]:
         applied = 0

@@ -112,9 +112,6 @@ class OpenCodeConfigService(RegisteredAppConfigService):
                 self.repository.config_path, format_schema_error(error)
             )
 
-    def build_action_payload(self, payload: dict[str, Any]) -> Any:
-        return payload
-
     def _load_base_config(self) -> dict[str, Any]:
         from code_agnostic.errors import InvalidJsonFormatError
         from code_agnostic.utils import read_json_safe

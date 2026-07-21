@@ -56,9 +56,6 @@ class ClaudeConfigService(RegisteredAppConfigService):
     def mcp_config_key(self) -> str:
         return "mcpServers"
 
-    def build_action_payload(self, payload: dict[str, Any]) -> Any:
-        return payload
-
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]
     ) -> ActionStatus:

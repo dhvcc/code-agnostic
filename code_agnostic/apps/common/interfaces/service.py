@@ -79,9 +79,13 @@ class IAppConfigService(ABC):
         """Editor-specific validation hook. Default: no schema."""
         return
 
-    @abstractmethod
     def build_action_payload(self, payload: dict[str, Any]) -> Any:
-        raise NotImplementedError
+        """Transform the merged config before it becomes the action payload.
+
+        Defaults to the merged dict as-is; editors that persist a non-JSON
+        rendering (e.g. Codex TOML) override this.
+        """
+        return payload
 
     def set_mcp_payload(
         self,
