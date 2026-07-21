@@ -15,9 +15,11 @@ export const roadmap: RoadmapItem[] = [
 	{ label: 'Cross-compilation for skills and agents', done: true },
 	{ label: 'Per-workspace git-exclude customization', done: true },
 	{ label: 'Interactive TUI for import selection', done: true },
-	{ label: 'Claude Code support', done: false },
+	{ label: 'Claude Code support', done: true },
+	{ label: 'GitHub Copilot support', done: true },
+	{ label: 'Planner integration for cross-compiled skills and agents', done: true },
+	{ label: 'Ownership-aware cleanup (prune only what we wrote)', done: true },
 	{ label: 'rules/skills/agents add commands', done: false },
-	{ label: 'Planner integration for cross-compiled skills and agents', done: false },
 	{ label: 'Shell auto-complete', done: false },
 	{ label: 'Full TUI mode', done: false }
 ];

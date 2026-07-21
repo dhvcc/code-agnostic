@@ -32,8 +32,10 @@
 				<div class="space-y-3">
 					{#each [
 						{ name: 'OpenCode', path: '~/.config/opencode/', detail: 'opencode.json + skills/ + agents/' },
-						{ name: 'Cursor', path: '~/.cursor/', detail: '.mdc rules + skills/ + agents/' },
-						{ name: 'Codex', path: '~/.codex/', detail: 'config.toml + skills/' }
+						{ name: 'Cursor', path: '~/.cursor/', detail: 'mcp.json + skills/ + agents/' },
+						{ name: 'Codex', path: '~/.codex/', detail: 'config.toml + skills/ + agents/' },
+						{ name: 'Claude Code', path: '~/.claude.json + ~/.claude/', detail: 'mcpServers + skills/ + agents/' },
+						{ name: 'GitHub Copilot', path: '~/.copilot/ + .github/', detail: 'mcp + skills/ + agents/' }
 					] as target}
 						<div class="border border-border rounded-lg px-4 py-3 bg-bg/50">
 							<div class="font-mono text-sm text-text">{target.name}</div>

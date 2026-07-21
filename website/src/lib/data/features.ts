@@ -17,7 +17,7 @@ export const features: Feature[] = [
 	},
 	{
 		title: 'Rules with metadata',
-		description: 'YAML frontmatter in markdown. Cross-compiled per editor — .mdc for Cursor, AGENTS.md for OpenCode/Codex.'
+		description: 'YAML frontmatter in markdown. Cross-compiled to AGENTS.md for every editor, mirrored to CLAUDE.local.md memory for Claude Code.'
 	},
 	{
 		title: 'Skills & agents',
@@ -26,7 +26,7 @@ export const features: Feature[] = [
 	{
 		title: 'Workspaces',
 		description:
-			'Register workspace directories. Repos inside get rules, skills, and agents propagated as symlinks for OpenCode and Codex. Cursor workspace propagation is intentionally disabled to avoid duplicate MCP initialization in multi-root workspaces.',
+			'Register workspace directories. Repos inside get MCP, rules, skills, and agents propagated for all five editors. Cursor stays repo-local and does not copy the shared workspace AGENTS.md into child repos.',
 		snippet: 'code-agnostic workspaces add \\\n  --name myproject \\\n  --path ~/code/myproject'
 	},
 	{
