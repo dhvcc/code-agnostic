@@ -2,6 +2,7 @@ from copy import deepcopy
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.mapper_utils import coerce_int_timeout_ms
 from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
 
 
@@ -25,12 +26,7 @@ class CursorMCPMapper(IAppMCPMapper):
                     env_file=server.get("envFile")
                     if isinstance(server.get("envFile"), str)
                     else None,
-                    timeout_ms=(
-                        int(server["timeout"])
-                        if isinstance(server.get("timeout"), int)
-                        and not isinstance(server.get("timeout"), bool)
-                        else None
-                    ),
+                    timeout_ms=coerce_int_timeout_ms(server.get("timeout")),
                     env={k: str(v) for k, v in (server.get("env") or {}).items()},
                     headers={
                         k: str(v) for k, v in (server.get("headers") or {}).items()
@@ -66,12 +62,7 @@ class CursorMCPMapper(IAppMCPMapper):
                 name=name,
                 type=server_type,
                 url=url,
-                timeout_ms=(
-                    int(server["timeout"])
-                    if isinstance(server.get("timeout"), int)
-                    and not isinstance(server.get("timeout"), bool)
-                    else None
-                ),
+                timeout_ms=coerce_int_timeout_ms(server.get("timeout")),
                 headers={k: str(v) for k, v in (server.get("headers") or {}).items()},
                 env={k: str(v) for k, v in (server.get("env") or {}).items()},
                 auth=auth,

@@ -102,14 +102,10 @@ class CodexConfigService(RegisteredAppConfigService):
     def derive_status(
         self, existing: dict[str, Any], merged: dict[str, Any]
     ) -> ActionStatus:
-        rendered = self.repository.serialize_config(merged)
-        existing_text = (
-            self.repository.config_path.read_text(encoding="utf-8")
-            if self.repository.config_path.exists()
-            else ""
-        )
         if not self.repository.config_path.exists():
             return ActionStatus.CREATE
+        rendered = self.repository.serialize_config(merged)
+        existing_text = self.repository.config_path.read_text(encoding="utf-8")
         if existing_text == rendered:
             return ActionStatus.NOOP
         return ActionStatus.UPDATE

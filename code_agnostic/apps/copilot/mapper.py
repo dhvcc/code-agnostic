@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.mapper_utils import as_str_dict
 from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
 from code_agnostic.errors import InvalidConfigSchemaError
 
@@ -23,12 +24,6 @@ def _timeout_ms(value: Any) -> int | None:
     return None
 
 
-def _str_dict(value: Any) -> dict[str, str]:
-    if not isinstance(value, dict):
-        return {}
-    return {str(k): str(v) for k, v in value.items()}
-
-
 class CopilotMCPMapper(IAppMCPMapper):
     def to_common(self, payload: dict[str, Any]) -> dict[str, MCPServerDTO]:
         mapped: dict[str, MCPServerDTO] = {}
@@ -47,8 +42,8 @@ class CopilotMCPMapper(IAppMCPMapper):
                     command=command,
                     args=_as_string_list(server.get("args")),
                     timeout_ms=_timeout_ms(server.get("timeout")),
-                    env=_str_dict(server.get("env")),
-                    headers=_str_dict(server.get("headers")),
+                    env=as_str_dict(server.get("env")),
+                    headers=as_str_dict(server.get("headers")),
                 )
                 continue
 
@@ -59,8 +54,8 @@ class CopilotMCPMapper(IAppMCPMapper):
                     type=MCPServerType.HTTP,
                     url=url,
                     timeout_ms=_timeout_ms(server.get("timeout")),
-                    env=_str_dict(server.get("env")),
-                    headers=_str_dict(server.get("headers")),
+                    env=as_str_dict(server.get("env")),
+                    headers=as_str_dict(server.get("headers")),
                 )
         return mapped
 

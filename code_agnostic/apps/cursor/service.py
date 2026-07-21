@@ -97,9 +97,6 @@ class CursorConfigService(RegisteredAppConfigService):
             return ActionStatus.NOOP
         return ActionStatus.UPDATE
 
-    def agent_action_removable_links(self, removable_links: list[Path]) -> list[Path]:
-        return removable_links
-
     def plan_skill_actions(
         self,
         sources: list[Path],

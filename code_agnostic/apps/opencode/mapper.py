@@ -2,15 +2,11 @@ from copy import deepcopy
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.mapper_utils import (
+    as_command_list,
+    coerce_int_timeout_ms,
+)
 from code_agnostic.apps.common.models import MCPAuthDTO, MCPServerDTO, MCPServerType
-
-
-def _as_list(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    if isinstance(value, str):
-        return [value]
-    return []
 
 
 class OpenCodeMCPMapper(IAppMCPMapper):
@@ -22,7 +18,7 @@ class OpenCodeMCPMapper(IAppMCPMapper):
 
             server_type = server.get("type")
             if server_type == "local" or "command" in server:
-                command_parts = _as_list(server.get("command"))
+                command_parts = as_command_list(server.get("command"))
                 command = command_parts[0] if command_parts else None
                 args = command_parts[1:] if command_parts else []
                 if not command:
@@ -35,12 +31,7 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                     cwd=server.get("cwd")
                     if isinstance(server.get("cwd"), str)
                     else None,
-                    timeout_ms=(
-                        int(server["timeout"])
-                        if isinstance(server.get("timeout"), int)
-                        and not isinstance(server.get("timeout"), bool)
-                        else None
-                    ),
+                    timeout_ms=coerce_int_timeout_ms(server.get("timeout")),
                     env={
                         k: str(v) for k, v in (server.get("environment") or {}).items()
                     },
@@ -72,12 +63,7 @@ class OpenCodeMCPMapper(IAppMCPMapper):
                 name=name,
                 type=normalized_type,
                 url=url,
-                timeout_ms=(
-                    int(server["timeout"])
-                    if isinstance(server.get("timeout"), int)
-                    and not isinstance(server.get("timeout"), bool)
-                    else None
-                ),
+                timeout_ms=coerce_int_timeout_ms(server.get("timeout")),
                 env={k: str(v) for k, v in (server.get("environment") or {}).items()},
                 headers={k: str(v) for k, v in (server.get("headers") or {}).items()},
                 auth=auth,

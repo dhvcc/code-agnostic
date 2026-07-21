@@ -2,25 +2,12 @@ from copy import deepcopy
 from typing import Any
 
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.mapper_utils import (
+    as_command_list,
+    as_str_dict,
+    coerce_int_timeout_ms,
+)
 from code_agnostic.apps.common.models import MCPServerDTO, MCPServerType
-
-
-def _as_list(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item) for item in value]
-    if isinstance(value, str):
-        return [value]
-    return []
-
-
-def _as_str_dict(value: Any) -> dict[str, str]:
-    return {str(k): str(v) for k, v in value.items()} if isinstance(value, dict) else {}
-
-
-def _timeout(value: Any) -> int | None:
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    return None
 
 
 class ClaudeMCPMapper(IAppMCPMapper):
@@ -39,13 +26,13 @@ class ClaudeMCPMapper(IAppMCPMapper):
                     name=name,
                     type=MCPServerType.STDIO,
                     command=command,
-                    args=_as_list(server.get("args")),
+                    args=as_command_list(server.get("args")),
                     cwd=server.get("cwd")
                     if isinstance(server.get("cwd"), str)
                     else None,
-                    env=_as_str_dict(server.get("env")),
-                    headers=_as_str_dict(server.get("headers")),
-                    timeout_ms=_timeout(server.get("timeout")),
+                    env=as_str_dict(server.get("env")),
+                    headers=as_str_dict(server.get("headers")),
+                    timeout_ms=coerce_int_timeout_ms(server.get("timeout")),
                 )
                 continue
 
@@ -56,9 +43,9 @@ class ClaudeMCPMapper(IAppMCPMapper):
                 name=name,
                 type=MCPServerType.HTTP,
                 url=url,
-                env=_as_str_dict(server.get("env")),
-                headers=_as_str_dict(server.get("headers")),
-                timeout_ms=_timeout(server.get("timeout")),
+                env=as_str_dict(server.get("env")),
+                headers=as_str_dict(server.get("headers")),
+                timeout_ms=coerce_int_timeout_ms(server.get("timeout")),
             )
         return mapped
 
