@@ -150,7 +150,7 @@ def test_build_plan_and_apply_create_opencode_and_workspace_links(
 
     ws_repo = WorkspaceConfigRepository(root=ws_config_dir)
     ws_state = ws_repo.load_state()
-    assert len(ws_state["managed_paths"]["rules"]) == 1
+    assert len(ws_state.managed_paths["rules"]) == 1
 
 
 def test_plan_marks_config_create_when_missing(
@@ -283,9 +283,7 @@ def test_targeted_execute_preserves_workspace_state_for_other_apps(
     assert failures == []
     assert applied > 0
 
-    managed_paths = WorkspaceConfigRepository(root=ws_config).load_state()[
-        "managed_paths"
-    ]
+    managed_paths = WorkspaceConfigRepository(root=ws_config).load_state().managed_paths
     assert "ws:codex:workspace_root_mcp" in managed_paths
     assert "ws:codex:repo_mcp" in managed_paths
     assert "ws:opencode:workspace_root_mcp" in managed_paths

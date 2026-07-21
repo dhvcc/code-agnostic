@@ -10,6 +10,7 @@ from code_agnostic.errors import (
     InvalidJsonFormatError,
     MissingConfigFileError,
 )
+from code_agnostic.models import SyncState
 from code_agnostic.spec.loaders import (
     load_mcp_base as load_mcp_bundle,
     validate_schema_payload,
@@ -110,36 +111,11 @@ class BaseSourceRepository(ISourceRepository):
                 result.append(child)
         return result
 
-    def load_state(self) -> dict[str, Any]:
+    def load_state(self) -> SyncState:
         payload, error = read_json_safe(self.state_json)
-        if error is not None or not isinstance(payload, dict):
-            return {
-                "managed_skill_links": [],
-                "managed_agent_links": [],
-                "managed_workspace_links": [],
-                "managed_links": {},
-                "managed_paths": {},
-                "managed_mcp": {},
-            }
-        payload.setdefault("managed_skill_links", [])
-        payload.setdefault("managed_agent_links", [])
-        payload.setdefault("managed_workspace_links", [])
-        payload.setdefault("managed_links", {})
-        payload.setdefault("managed_paths", {})
-        payload.setdefault("managed_mcp", {})
-        if not isinstance(payload["managed_skill_links"], list):
-            payload["managed_skill_links"] = []
-        if not isinstance(payload["managed_agent_links"], list):
-            payload["managed_agent_links"] = []
-        if not isinstance(payload["managed_workspace_links"], list):
-            payload["managed_workspace_links"] = []
-        if not isinstance(payload["managed_links"], dict):
-            payload["managed_links"] = {}
-        if not isinstance(payload["managed_paths"], dict):
-            payload["managed_paths"] = {}
-        if not isinstance(payload["managed_mcp"], dict):
-            payload["managed_mcp"] = {}
-        return payload
+        if error is not None:
+            return SyncState()
+        return SyncState.from_payload(payload)
 
     def save_state(self, data: dict[str, Any]) -> None:
         write_json(self.state_json, data)

@@ -135,10 +135,6 @@ class IAppConfigService(ABC):
     def compiled_resource_ownership_policy(self) -> OwnershipPolicy:
         return OwnershipPolicy.OWNED_ONLY
 
-    @staticmethod
-    def _normalize_managed_group(value: Any) -> dict[str, Any]:
-        return value if isinstance(value, dict) else {}
-
     def _plan_compiled_text_actions(
         self,
         *,
@@ -308,9 +304,9 @@ class IAppConfigService(ABC):
         source_repository: ISourceRepository,
     ) -> SyncPlan:
         state = source_repository.load_state()
-        managed_links_group = self._normalize_managed_group(state.get("managed_links"))
-        managed_paths_group = self._normalize_managed_group(state.get("managed_paths"))
-        managed_mcp_group = self._normalize_managed_group(state.get("managed_mcp"))
+        managed_links_group = state.managed_links
+        managed_paths_group = state.managed_paths
+        managed_mcp_group = state.managed_mcp
         skill_scope = app_scope(self.app_id, "skills")
         agent_scope = app_scope(self.app_id, "agents")
         previously_managed_mcp = self._load_state_names(

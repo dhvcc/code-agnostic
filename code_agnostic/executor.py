@@ -830,17 +830,17 @@ class SyncExecutor:
             global_state = {
                 "updated_at": updated_at,
                 "managed_links": self._merge_managed_links(
-                    existing=existing_global_state.get("managed_links"),
+                    existing=existing_global_state.managed_links,
                     touched_scopes=global_touched_scopes,
                     current_links=global_links,
                 ),
                 "managed_paths": self._merge_managed_links(
-                    existing=existing_global_state.get("managed_paths"),
+                    existing=existing_global_state.managed_paths,
                     touched_scopes=global_touched_scopes,
                     current_links=global_paths,
                 ),
                 "managed_mcp": self._merge_managed_links(
-                    existing=existing_global_state.get("managed_mcp"),
+                    existing=existing_global_state.managed_mcp,
                     touched_scopes=global_mcp_touched,
                     current_links=global_mcp,
                 ),
@@ -863,12 +863,12 @@ class SyncExecutor:
             ws_state = {
                 "updated_at": updated_at,
                 "managed_links": self._merge_managed_links(
-                    existing=existing_workspace_state.get("managed_links"),
+                    existing=existing_workspace_state.managed_links,
                     touched_scopes=workspace_touched_scopes[ws_name],
                     current_links=workspace_links.get(ws_name, {}),
                 ),
                 "managed_paths": self._merge_managed_links(
-                    existing=existing_workspace_state.get("managed_paths"),
+                    existing=existing_workspace_state.managed_paths,
                     touched_scopes=workspace_touched_scopes[ws_name],
                     current_links=workspace_paths.get(ws_name, {}),
                 ),
@@ -893,12 +893,12 @@ class SyncExecutor:
             project_state = {
                 "updated_at": updated_at,
                 "managed_links": self._merge_managed_links(
-                    existing=existing_project_state.get("managed_links"),
+                    existing=existing_project_state.managed_links,
                     touched_scopes=project_touched_scopes[project_name],
                     current_links=project_links.get(project_name, {}),
                 ),
                 "managed_paths": self._merge_managed_links(
-                    existing=existing_project_state.get("managed_paths"),
+                    existing=existing_project_state.managed_paths,
                     touched_scopes=project_touched_scopes[project_name],
                     current_links=project_paths.get(project_name, {}),
                 ),

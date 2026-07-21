@@ -32,7 +32,7 @@ from code_agnostic.constants import (
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.executor import SyncExecutor
-from code_agnostic.models import ActionKind, ActionStatus
+from code_agnostic.models import ActionKind, ActionStatus, SyncState
 from code_agnostic.planner import SyncPlanner
 
 
@@ -153,11 +153,11 @@ def test_workspace_config_repository_state_roundtrip(tmp_path: Path) -> None:
     repo = WorkspaceConfigRepository(root=ws_root)
 
     state = repo.load_state()
-    assert isinstance(state, dict)
+    assert isinstance(state, SyncState)
 
     repo.save_state({"managed_links": {"rules": ["/path/to/link"]}})
     loaded = repo.load_state()
-    assert loaded["managed_links"]["rules"] == ["/path/to/link"]
+    assert loaded.managed_links["rules"] == ["/path/to/link"]
 
 
 # --- Workspace rules files ---
@@ -920,8 +920,8 @@ def test_workspace_targeted_plan_cleans_stale_cursor_workspace_outputs(
     assert not stale_mcp.exists()
     assert not stale_agent.exists()
     state = ws_repo.load_state()
-    assert "ws:cursor:repo_mcp" not in state["managed_paths"]
-    assert "ws:cursor:repo_agents_dir" not in state["managed_links"]
+    assert "ws:cursor:repo_mcp" not in state.managed_paths
+    assert "ws:cursor:repo_agents_dir" not in state.managed_links
 
 
 def test_workspace_plan_skips_legacy_link_cleanup_when_same_path_is_now_generated(
@@ -1419,13 +1419,13 @@ def test_executor_persists_workspace_state_separately(
     # Workspace state persisted to workspace state file.
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     ws_state = ws_repo.load_state()
-    managed = ws_state["managed_paths"]
+    managed = ws_state.managed_paths
     assert "rules" in managed
     assert len(managed["rules"]) == 1
 
     # Global state should not contain workspace links
     global_state = core.load_state()
-    assert "rules" not in global_state.get("managed_links", {})
+    assert "rules" not in global_state.managed_links
 
 
 # --- Full roundtrip with apply ---
@@ -1548,7 +1548,7 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_codex(
     # Verify state was persisted with workspace scopes
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     state = ws_repo.load_state()
-    assert "ws:codex:repo_skills_dir" in state["managed_paths"]
+    assert "ws:codex:repo_skills_dir" in state.managed_paths
 
     # Remove all skills from workspace config
     import shutil
@@ -1597,7 +1597,7 @@ def test_workspace_stale_skills_cleanup_when_skills_removed_for_claude(
 
     ws_repo = WorkspaceConfigRepository(root=ws_config)
     state = ws_repo.load_state()
-    assert "ws:claude:repo_skills_dir" in state["managed_paths"]
+    assert "ws:claude:repo_skills_dir" in state.managed_paths
 
     import shutil
 

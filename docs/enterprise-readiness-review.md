@@ -125,8 +125,16 @@ tracked state, then clears its state entries.
   the rest of the entry and user-added projects intact. `apps disable` prunes
   them too. All merge-without-prune orphan classes from P0-1/P1 are now closed.
 
+### 0.8.0 (shipped)
+- Typed `SyncState` replaces the `dict[str, Any]` state. `load_state()` returns
+  a `SyncState`; `SyncState.from_payload` centralizes normalization once,
+  removing ~11 defensive `isinstance` read sites and the `_normalize_group` /
+  `_normalize_managed_group` helpers. On-disk layout unchanged.
+
 ### Follow-up (tracked)
-- P1: typed `SyncState`/`WorkspaceConfig` model, planner de-duplication,
+- P1: adopt `WorkspaceConfig` (still unused) for `load_workspaces()`/
+  `load_projects()` return types across the planner/status/CLI/TUI boundaries;
+  planner de-duplication (compiled-text emit ×5, stale-cleanup);
   README/`.mdc` reconciliation.
 - P2: remove dead legacy state keys (`managed_skill_links`/…), remaining
   mapper/service/repository de-duplication, concurrency lock.
@@ -158,11 +166,18 @@ merge-without-prune orphan class flagged in P0-1/P1 is now closed.
 - Generated/owned files (workspace/project) pass `replace_mcp=True` (full
   replace); user-shared global configs use ownership-aware (default).
 
-**Next: typed `SyncState`/`WorkspaceConfig` model.** State is passed around as
-`dict[str, Any]` and re-validated defensively in ~5 places; introduce a typed
-`SyncState` and use the existing-but-unused `WorkspaceConfig` (`models.py:148`)
-across boundaries. Then planner de-duplication (compiled-text emit block ×5,
-stale-cleanup logic) and README/`.mdc` reconciliation, then the P2 debt.
+**Next: adopt `WorkspaceConfig`.** `SyncState` is done (0.8.0). The remaining
+typed-boundary work is the still-unused `WorkspaceConfig` dataclass
+(`models.py`): `CoreRepository.load_workspaces()` / `load_projects()` return
+`list[dict[str, str]]` (`{"name","path"}`) and ~15 sites consume
+`workspace["name"]`/`["path"]` (planner `_plan_single_workspace`/
+`_plan_single_project`, `status.py`, `apps_service.py`, `mcp_service.py`,
+`git_exclude_service.py`, `cli/helpers.py`, `cli/commands/{workspaces,projects,
+skills}.py`, `tui/tables.py`). Convert the return types to `list[WorkspaceConfig]`
+(projects can reuse it or get a sibling), thread it through, and update
+`save_workspaces`/`add`/`remove` + the tests that assert on the entry dicts.
+Then planner de-duplication (compiled-text emit block ×5, stale-cleanup logic)
+and README/`.mdc` reconciliation, then the P2 debt.
 
 **Release mechanics gotcha:** the pre-commit `ruff-format` hook can reformat a
 file and *reject* the commit; always `git add -A` again and re-commit. Bump

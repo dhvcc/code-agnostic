@@ -5,6 +5,7 @@ from code_agnostic.models import (
     ActionKind,
     ActionStatus,
     SyncPlan,
+    SyncState,
 )
 
 
@@ -205,3 +206,46 @@ def test_is_valid_with_errors() -> None:
     plan = SyncPlan(actions=[], errors=[ValueError("err")], skipped=[])
 
     assert plan.is_valid() is False
+
+
+def test_sync_state_from_non_dict_payload_is_empty() -> None:
+    assert SyncState.from_payload(None) == SyncState()
+    assert SyncState.from_payload("garbage") == SyncState()
+    assert SyncState.from_payload([1, 2, 3]) == SyncState()
+
+
+def test_sync_state_from_payload_normalizes_all_fields() -> None:
+    state = SyncState.from_payload(
+        {
+            "managed_links": {"app:cursor:skills": ["/a", 5, "/b"]},
+            "managed_paths": {"scope": ["/p"], 7: ["ignored"]},
+            "managed_mcp": {"app:claude:projects": ["/repo"]},
+            "managed_skill_links": ["x", 1, "y"],
+            "skipped": ["s1"],
+            "updated_at": "2026-07-21T00:00:00",
+        }
+    )
+
+    # non-str entries and non-str scope keys are dropped
+    assert state.managed_links == {"app:cursor:skills": ["/a", "/b"]}
+    assert state.managed_paths == {"scope": ["/p"]}
+    assert state.managed_mcp == {"app:claude:projects": ["/repo"]}
+    assert state.managed_skill_links == ["x", "y"]
+    assert state.skipped == ["s1"]
+    assert state.updated_at == "2026-07-21T00:00:00"
+
+
+def test_sync_state_from_payload_coerces_wrong_types() -> None:
+    state = SyncState.from_payload(
+        {
+            "managed_links": "not-a-dict",
+            "managed_paths": {"scope": "not-a-list"},
+            "managed_skill_links": "not-a-list",
+            "updated_at": 12345,
+        }
+    )
+
+    assert state.managed_links == {}
+    assert state.managed_paths == {}  # non-list value drops the scope
+    assert state.managed_skill_links == []
+    assert state.updated_at is None

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0
+
+Contract & type-safety hardening (pre-1.0). No user-facing behavior change.
+
+### Changed
+- **Typed `SyncState` replaces the stringly-typed state dict.**
+  `Repository.load_state()` now returns a `SyncState` dataclass; all defensive
+  normalization (missing keys, wrong JSON types, stray non-string entries) is
+  centralized once in `SyncState.from_payload` instead of being re-implemented
+  with `isinstance` guards at ~11 read sites (planner, executor, status,
+  `AppsService`, and the app-service `build_plan`). The on-disk
+  `.sync-state.json` layout is unchanged; `save_state` still accepts a dict.
+
+### Internal
+- Removed the duplicated `_normalize_group` / `_normalize_managed_group`
+  state-shape helpers now that `SyncState` guarantees the field types.
+
 ## 0.7.0
 
 ### Fixed

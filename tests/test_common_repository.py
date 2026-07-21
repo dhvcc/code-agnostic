@@ -5,6 +5,7 @@ import pytest
 
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from code_agnostic.core.repository import CoreRepository
+from code_agnostic.models import SyncState
 
 
 @pytest.fixture
@@ -17,14 +18,7 @@ def test_load_state_defaults_when_missing(core_repo: CoreRepository) -> None:
 
     state = repo.load_state()
 
-    assert state == {
-        "managed_skill_links": [],
-        "managed_agent_links": [],
-        "managed_workspace_links": [],
-        "managed_links": {},
-        "managed_paths": {},
-        "managed_mcp": {},
-    }
+    assert state == SyncState()
 
 
 def test_add_and_remove_workspace_persists_config(
@@ -203,14 +197,7 @@ def test_load_state_with_corrupted_json(
 
     state = repo.load_state()
 
-    assert state == {
-        "managed_skill_links": [],
-        "managed_agent_links": [],
-        "managed_workspace_links": [],
-        "managed_links": {},
-        "managed_paths": {},
-        "managed_mcp": {},
-    }
+    assert state == SyncState()
 
 
 def test_load_state_coerces_managed_skill_links_string_to_list(
@@ -224,7 +211,7 @@ def test_load_state_coerces_managed_skill_links_string_to_list(
 
     state = repo.load_state()
 
-    assert state["managed_skill_links"] == []
+    assert state.managed_skill_links == []
 
 
 def test_list_skill_sources_when_dir_missing(core_repo: CoreRepository) -> None:

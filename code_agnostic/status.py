@@ -157,8 +157,8 @@ class StatusService:
                 root=project_config_dir(source_repo, project_name)
             )
             state = project_source.load_state()
-            has_managed_paths = bool(state.get("managed_paths"))
-            has_managed_links = bool(state.get("managed_links"))
+            has_managed_paths = bool(state.managed_paths)
+            has_managed_links = bool(state.managed_links)
             has_project_actions = any(
                 f":{project_name}:" in (action.scope or "")
                 for action in project_actions

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from code_agnostic.models import SyncState
+
 
 class ISchemaRepository(ABC):
     @abstractmethod
@@ -59,7 +61,7 @@ class IConfigRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def load_state(self) -> dict[str, Any]:
+    def load_state(self) -> SyncState:
         raise NotImplementedError
 
     @abstractmethod

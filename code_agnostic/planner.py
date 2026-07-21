@@ -284,14 +284,8 @@ class SyncPlanner:
             else None
         )
         state = self.core.load_state()
-        managed_mcp = state.get("managed_mcp")
-        if not isinstance(managed_mcp, dict):
-            managed_mcp = {}
-        prev_projects_raw = managed_mcp.get(app_scope(AppId.CLAUDE, "projects"), [])
-        previously_managed_projects = (
-            {path for path in prev_projects_raw if isinstance(path, str)}
-            if isinstance(prev_projects_raw, list)
-            else set()
+        previously_managed_projects = set(
+            state.managed_mcp.get(app_scope(AppId.CLAUDE, "projects"), [])
         )
         project_action = claude_service.build_project_mcp_action(
             self._claude_project_mcp,
@@ -366,12 +360,8 @@ class SyncPlanner:
         skill_sources = project_source.list_skill_sources()
 
         state = project_source.load_state()
-        managed_links = state.get("managed_links", {})
-        if not isinstance(managed_links, dict):
-            managed_links = {}
-        managed_paths = state.get("managed_paths", {})
-        if not isinstance(managed_paths, dict):
-            managed_paths = {}
+        managed_links = state.managed_links
+        managed_paths = state.managed_paths
 
         actions: list[Action] = []
         skipped: list[str] = []
@@ -485,12 +475,8 @@ class SyncPlanner:
 
         repos = self.workspace_service.discover_git_repos(workspace_path)
         state = ws_source.load_state()
-        managed_links = state.get("managed_links", {})
-        if not isinstance(managed_links, dict):
-            managed_links = {}
-        managed_paths = state.get("managed_paths", {})
-        if not isinstance(managed_paths, dict):
-            managed_paths = {}
+        managed_links = state.managed_links
+        managed_paths = state.managed_paths
 
         has_config = ws_source.has_any_config()
         if not has_config and not repos:

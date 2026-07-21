@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -144,6 +144,68 @@ class SyncPlan:
         return SyncPlan(
             actions=filtered_actions, errors=self.errors, skipped=self.skipped
         )
+
+
+@dataclass(frozen=True)
+class SyncState:
+    """Typed view of a repository's `.sync-state.json`.
+
+    All defensive normalization (missing keys, wrong JSON types, stray non-string
+    entries) happens once in `from_payload`; consumers read the typed fields
+    directly instead of re-guarding with `isinstance` at every call site.
+
+    `managed_links`/`managed_paths`/`managed_mcp` are `scope -> names` maps (the
+    live ownership model). The three `managed_*_links` lists are vestigial — no
+    production reader consumes them — but are kept for on-disk round-trips.
+    """
+
+    managed_links: dict[str, list[str]] = field(default_factory=dict)
+    managed_paths: dict[str, list[str]] = field(default_factory=dict)
+    managed_mcp: dict[str, list[str]] = field(default_factory=dict)
+    managed_skill_links: list[str] = field(default_factory=list)
+    managed_agent_links: list[str] = field(default_factory=list)
+    managed_workspace_links: list[str] = field(default_factory=list)
+    updated_at: str | None = None
+    skipped: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "SyncState":
+        if not isinstance(payload, dict):
+            return cls()
+        updated_at = payload.get("updated_at")
+        return cls(
+            managed_links=cls._coerce_group(payload.get("managed_links")),
+            managed_paths=cls._coerce_group(payload.get("managed_paths")),
+            managed_mcp=cls._coerce_group(payload.get("managed_mcp")),
+            managed_skill_links=cls._coerce_str_list(
+                payload.get("managed_skill_links")
+            ),
+            managed_agent_links=cls._coerce_str_list(
+                payload.get("managed_agent_links")
+            ),
+            managed_workspace_links=cls._coerce_str_list(
+                payload.get("managed_workspace_links")
+            ),
+            updated_at=updated_at if isinstance(updated_at, str) else None,
+            skipped=cls._coerce_str_list(payload.get("skipped")),
+        )
+
+    @staticmethod
+    def _coerce_group(value: Any) -> dict[str, list[str]]:
+        if not isinstance(value, dict):
+            return {}
+        result: dict[str, list[str]] = {}
+        for scope, names in value.items():
+            if not isinstance(scope, str) or not isinstance(names, list):
+                continue
+            result[scope] = [name for name in names if isinstance(name, str)]
+        return result
+
+    @staticmethod
+    def _coerce_str_list(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, str)]
 
 
 @dataclass(frozen=True)

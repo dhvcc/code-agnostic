@@ -103,9 +103,9 @@ class AppsService:
 
         # --- Global scopes (app:<app>:*) ---
         global_state = core.load_state()
-        global_links = self._normalize_group(global_state.get("managed_links"))
-        global_paths = self._normalize_group(global_state.get("managed_paths"))
-        global_mcp = self._normalize_group(global_state.get("managed_mcp"))
+        global_links = global_state.managed_links
+        global_paths = global_state.managed_paths
+        global_mcp = global_state.managed_mcp
         global_prefix = f"app:{app_id.value}:"
         for scope in sorted(s for s in global_links if s.startswith(global_prefix)):
             actions.extend(self._cleanup_links(global_links, scope, app_id.value))
@@ -123,8 +123,8 @@ class AppsService:
             ws_name = workspace["name"]
             ws_repo = WorkspaceConfigRepository(root=core.workspace_config_dir(ws_name))
             ws_state = ws_repo.load_state()
-            ws_links = self._normalize_group(ws_state.get("managed_links"))
-            ws_paths = self._normalize_group(ws_state.get("managed_paths"))
+            ws_links = ws_state.managed_links
+            ws_paths = ws_state.managed_paths
             for scope in sorted(s for s in ws_links if s.startswith(ws_prefix)):
                 for action in self._cleanup_links(ws_links, scope, "workspace"):
                     action.workspace = ws_name
@@ -144,8 +144,8 @@ class AppsService:
                 root=project_config_dir(core, project_name)
             )
             project_state = project_repo.load_state()
-            project_links = self._normalize_group(project_state.get("managed_links"))
-            project_paths = self._normalize_group(project_state.get("managed_paths"))
+            project_links = project_state.managed_links
+            project_paths = project_state.managed_paths
             for scope in sorted(
                 s for s in project_links if s.startswith(project_prefix)
             ):
@@ -162,14 +162,6 @@ class AppsService:
                     actions.append(action)
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
-
-    @staticmethod
-    def _normalize_group(value: Any) -> dict[str, Any]:
-        return (
-            {scope: paths for scope, paths in value.items() if isinstance(scope, str)}
-            if isinstance(value, dict)
-            else {}
-        )
 
     @staticmethod
     def _cleanup_links(group: dict[str, Any], scope: str, app: str) -> list[Action]:
