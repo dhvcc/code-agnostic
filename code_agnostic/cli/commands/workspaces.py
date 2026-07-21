@@ -48,7 +48,7 @@ def workspaces_remove(obj: dict[str, str], name: str) -> None:
     ui = SyncConsoleUI(Console())
     core = CoreRepository()
     try:
-        existing = {item["name"]: item["path"] for item in core.load_workspaces()}
+        existing = {item.name: str(item.path) for item in core.load_workspaces()}
         removed = core.remove_workspace(name)
     except SyncAppError as exc:
         raise click.ClickException(str(exc))
@@ -70,20 +70,18 @@ def workspaces_list(obj: dict[str, str]) -> None:
     except SyncAppError as exc:
         raise click.ClickException(str(exc))
     for item in workspaces:
-        workspace_path = Path(item["path"])
+        workspace_path = item.path
         repos: list[str] = []
         if workspace_path.exists() and workspace_path.is_dir():
             repos = [
                 str(path.relative_to(workspace_path))
                 for path in workspace_service.discover_git_repos(workspace_path)
             ]
-        ws_source = WorkspaceConfigRepository(
-            root=core.workspace_config_dir(item["name"])
-        )
+        ws_source = WorkspaceConfigRepository(root=core.workspace_config_dir(item.name))
         overview.append(
             {
-                "name": item["name"],
-                "path": item["path"],
+                "name": item.name,
+                "path": str(item.path),
                 "repos": repos,
                 "has_mcp": ws_source.has_mcp(),
                 "has_rules": ws_source.has_rules(),
@@ -123,7 +121,7 @@ def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
     added_lines = 0
 
     for item in ws_list:
-        workspace_path = Path(item["path"])
+        workspace_path = item.path
         if not workspace_path.exists() or not workspace_path.is_dir():
             continue
         repos = workspace_service.discover_git_repos(workspace_path)
@@ -132,7 +130,7 @@ def workspaces_git_exclude(obj: dict[str, str], workspace: str | None) -> None:
             if git_dir is None:
                 continue
             entries = exclude_service.compute_entries_for_repo(
-                item["name"],
+                item.name,
                 enabled_apps,
                 workspace_path=workspace_path,
                 repo_path=repo,

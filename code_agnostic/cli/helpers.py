@@ -12,18 +12,19 @@ from code_agnostic.models import (
     EditorStatusRow,
     EditorSyncStatus,
     SyncPlan,
+    WorkspaceConfig,
 )
 
 
-def _workspace_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]]:
-    return {item["name"]: item for item in core.load_workspaces()}
+def _workspace_entries_by_name(core: CoreRepository) -> dict[str, WorkspaceConfig]:
+    return {item.name: item for item in core.load_workspaces()}
 
 
-def _project_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]]:
-    return {item["name"]: item for item in core.load_projects()}
+def _project_entries_by_name(core: CoreRepository) -> dict[str, WorkspaceConfig]:
+    return {item.name: item for item in core.load_projects()}
 
 
-def require_workspace_entry(core: CoreRepository, workspace: str) -> dict[str, str]:
+def require_workspace_entry(core: CoreRepository, workspace: str) -> WorkspaceConfig:
     try:
         entry = _workspace_entries_by_name(core).get(workspace)
     except SyncAppError as exc:
@@ -33,7 +34,7 @@ def require_workspace_entry(core: CoreRepository, workspace: str) -> dict[str, s
     return entry
 
 
-def require_project_entry(core: CoreRepository, project: str) -> dict[str, str]:
+def require_project_entry(core: CoreRepository, project: str) -> WorkspaceConfig:
     try:
         entry = _project_entries_by_name(core).get(project)
     except SyncAppError as exc:

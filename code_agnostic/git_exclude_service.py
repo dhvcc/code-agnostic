@@ -35,7 +35,7 @@ class GitExcludeService:
         write_json(path, config)
 
     def _ensure_workspace_exists(self, workspace_name: str) -> None:
-        names = {item["name"] for item in self._core.load_workspaces()}
+        names = {item.name for item in self._core.load_workspaces()}
         if workspace_name not in names:
             raise ValueError(f"Workspace not found: {workspace_name}")
 

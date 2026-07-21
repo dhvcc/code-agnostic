@@ -110,7 +110,7 @@ def test_apply_codex_renders_agents_and_global_agents_config(
     )
     (tmp_path / ".codex").mkdir(parents=True, exist_ok=True)
     (tmp_path / ".codex" / "config.toml").write_text(
-        "[agents.1]\n" 'description = "1"\n' 'config_file = "agents/1.toml"\n',
+        '[agents.1]\ndescription = "1"\nconfig_file = "agents/1.toml"\n',
         encoding="utf-8",
     )
     (core_root / "agents").mkdir(parents=True, exist_ok=True)

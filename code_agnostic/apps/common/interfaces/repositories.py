@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from code_agnostic.models import SyncState
+from code_agnostic.models import SyncState, WorkspaceConfig
 
 
 class ISchemaRepository(ABC):
@@ -93,7 +93,7 @@ class ISourceRepository(IConfigRepository):
         raise NotImplementedError
 
     @abstractmethod
-    def load_workspaces(self) -> list[dict[str, str]]:
+    def load_workspaces(self) -> list[WorkspaceConfig]:
         raise NotImplementedError
 
     def workspace_config_dir(self, name: str) -> Path:

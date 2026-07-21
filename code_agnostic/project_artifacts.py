@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from code_agnostic.apps.app_id import AppId
+from code_agnostic.models import WorkspaceConfig
 from code_agnostic.constants import (
     AGENTS_PROJECT_DIRNAME,
     CLAUDE_PROJECT_DIRNAME,
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from code_agnostic.core.repository import CoreRepository
 
 
-def load_project_entries(core: CoreRepository) -> list[dict[str, str]]:
+def load_project_entries(core: CoreRepository) -> list[WorkspaceConfig]:
     return core.load_projects()
 
 

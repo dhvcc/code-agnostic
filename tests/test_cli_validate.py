@@ -41,10 +41,7 @@ def test_validate_fails_for_unknown_bundle_key(
     skill_dir = core_root / "skills" / "bundle-skill"
     skill_dir.mkdir(parents=True)
     (skill_dir / "meta.yaml").write_text(
-        "spec_version: v1\n"
-        "kind: skill\n"
-        "name: bundle-skill\n"
-        "unsupported: true\n",
+        "spec_version: v1\nkind: skill\nname: bundle-skill\nunsupported: true\n",
         encoding="utf-8",
     )
     (skill_dir / "prompt.md").write_text("Skill body.\n", encoding="utf-8")

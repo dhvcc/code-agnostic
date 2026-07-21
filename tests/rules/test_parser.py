@@ -31,7 +31,7 @@ def test_parse_with_all_fields(tmp_path: Path) -> None:
 def test_parse_minimal_frontmatter(tmp_path: Path) -> None:
     path = tmp_path / "minimal.md"
     path.write_text(
-        "---\n" "description: Minimal rule\n" "---\n" "\n" "Content here.\n",
+        "---\ndescription: Minimal rule\n---\n\nContent here.\n",
         encoding="utf-8",
     )
     rule = parse_rule(path)

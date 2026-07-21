@@ -210,6 +210,13 @@ class SyncState:
 
 @dataclass(frozen=True)
 class WorkspaceConfig:
+    """A named config root — a registered workspace or project (`{name, path}`).
+
+    Replaces the raw `dict[str, str]` entries that `load_workspaces()` /
+    `load_projects()` used to hand out, so consumers read `.name` / `.path`
+    (already a `Path`) instead of stringly-typed lookups.
+    """
+
     name: str
     path: Path
 

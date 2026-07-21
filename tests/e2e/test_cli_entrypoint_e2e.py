@@ -192,7 +192,7 @@ def test_entrypoint_apply_fails_on_generated_skill_conflict(
     source_skill = home / ".config" / "code-agnostic" / "skills" / "reviewer"
     source_skill.mkdir(parents=True)
     (source_skill / "SKILL.md").write_text(
-        "---\n" "name: reviewer\n" "---\n" "\n" "Review carefully.\n",
+        "---\nname: reviewer\n---\n\nReview carefully.\n",
         encoding="utf-8",
     )
 
@@ -221,7 +221,7 @@ def test_entrypoint_import_apply_preflights_before_writing(
     source_skill = home / ".agents" / "skills" / "reviewer"
     source_skill.mkdir(parents=True)
     (source_skill / "SKILL.md").write_text(
-        "---\n" "name: reviewer\n" "---\n" "\n" "Review carefully.\n",
+        "---\nname: reviewer\n---\n\nReview carefully.\n",
         encoding="utf-8",
     )
 
@@ -418,12 +418,7 @@ def test_entrypoint_apply_reports_pending_repair_failure_without_writes(
     reviewer = source_root / "reviewer"
     reviewer.mkdir(parents=True)
     (reviewer / "SKILL.md").write_text(
-        "---\n"
-        "name: reviewer\n"
-        "description: Review code\n"
-        "---\n"
-        "\n"
-        "Review carefully.\n",
+        "---\nname: reviewer\ndescription: Review code\n---\n\nReview carefully.\n",
         encoding="utf-8",
     )
 
@@ -448,12 +443,7 @@ def test_entrypoint_apply_reports_pending_repair_failure_without_writes(
     triage = source_root / "triage"
     triage.mkdir()
     (triage / "SKILL.md").write_text(
-        "---\n"
-        "name: triage\n"
-        "description: Triage code\n"
-        "---\n"
-        "\n"
-        "Triage carefully.\n",
+        "---\nname: triage\ndescription: Triage code\n---\n\nTriage carefully.\n",
         encoding="utf-8",
     )
 

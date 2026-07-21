@@ -39,8 +39,8 @@ class StatusService:
         workspace_actions = self._workspace_actions(source_repo, app_services)
 
         for workspace in source_repo.load_workspaces():
-            workspace_name = workspace["name"]
-            workspace_path = Path(workspace["path"])
+            workspace_name = workspace.name
+            workspace_path = workspace.path
 
             if not workspace_path.exists() or not workspace_path.is_dir():
                 status_rows.append(
@@ -139,8 +139,8 @@ class StatusService:
 
         rows: list[ProjectStatusRow] = []
         for project in projects:
-            project_name = project["name"]
-            project_path = Path(project["path"])
+            project_name = project.name
+            project_path = project.path
 
             if not project_path.exists() or not project_path.is_dir():
                 rows.append(

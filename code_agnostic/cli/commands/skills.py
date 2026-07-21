@@ -14,6 +14,7 @@ from code_agnostic.cli.helpers import (
 from code_agnostic.cli.options import workspace_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.errors import SyncAppError
+from code_agnostic.models import WorkspaceConfig
 from code_agnostic.skills.install_sources import (
     SkillInstallSourceError,
     cleanup_skill_install_resolution,
@@ -25,18 +26,18 @@ from code_agnostic.utils import compact_home_path
 
 
 def _entries_containing_cwd(
-    entries: list[dict[str, str]], cwd: Path
-) -> list[dict[str, str]]:
+    entries: list[WorkspaceConfig], cwd: Path
+) -> list[WorkspaceConfig]:
     matches = []
     for entry in entries:
-        root = Path(entry["path"]).expanduser().resolve()
+        root = entry.path.expanduser().resolve()
         if cwd == root or cwd.is_relative_to(root):
             matches.append(entry)
     return matches
 
 
-def _project_entries_by_name(core: CoreRepository) -> dict[str, dict[str, str]]:
-    return {item["name"]: item for item in core.load_projects()}
+def _project_entries_by_name(core: CoreRepository) -> dict[str, WorkspaceConfig]:
+    return {item.name: item for item in core.load_projects()}
 
 
 def _install_root(
@@ -72,12 +73,12 @@ def _install_root(
         cwd = Path.cwd().resolve()
         project_matches = _entries_containing_cwd(core.load_projects(), cwd)
         if len(project_matches) == 1:
-            name = project_matches[0]["name"]
+            name = project_matches[0].name
             return core.project_config_dir(name), f"project:{name}", None
 
         workspace_matches = _entries_containing_cwd(core.load_workspaces(), cwd)
         if len(project_matches) == 0 and len(workspace_matches) == 1:
-            name = workspace_matches[0]["name"]
+            name = workspace_matches[0].name
             return core.workspace_config_dir(name), f"workspace:{name}", None
     except SyncAppError as exc:
         raise click.ClickException(str(exc)) from exc

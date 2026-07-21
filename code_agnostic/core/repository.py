@@ -10,7 +10,7 @@ from code_agnostic.errors import (
     InvalidJsonFormatError,
     MissingConfigFileError,
 )
-from code_agnostic.models import SyncState
+from code_agnostic.models import SyncState, WorkspaceConfig
 from code_agnostic.spec.loaders import (
     load_mcp_base as load_mcp_bundle,
     validate_schema_payload,
@@ -120,7 +120,7 @@ class BaseSourceRepository(ISourceRepository):
     def save_state(self, data: dict[str, Any]) -> None:
         write_json(self.state_json, data)
 
-    def load_workspaces(self) -> list[dict[str, str]]:
+    def load_workspaces(self) -> list[WorkspaceConfig]:
         return []
 
 
@@ -190,7 +190,7 @@ class CoreRepository(BaseSourceRepository):
             )
         return payload
 
-    def load_workspaces(self) -> list[dict[str, str]]:
+    def load_workspaces(self) -> list[WorkspaceConfig]:
         payload, error = read_json_safe(self.workspaces_path)
         if error is not None:
             raise InvalidJsonFormatError(self.workspaces_path, error)
@@ -199,7 +199,7 @@ class CoreRepository(BaseSourceRepository):
         if not isinstance(payload, list):
             raise InvalidConfigSchemaError(self.workspaces_path, "must be a JSON array")
 
-        result: list[dict[str, str]] = []
+        result: list[WorkspaceConfig] = []
         seen_names: set[str] = set()
         seen_paths: set[Path] = set()
         for item in payload:
@@ -231,14 +231,16 @@ class CoreRepository(BaseSourceRepository):
                 raise InvalidConfigSchemaError(
                     self.workspaces_path, f"duplicate workspace path: {normalized_path}"
                 )
-            result.append({"name": normalized_name, "path": normalized_path})
+            result.append(
+                WorkspaceConfig(name=normalized_name, path=Path(normalized_path))
+            )
             seen_names.add(normalized_name)
             seen_paths.add(Path(normalized_path))
         return result
 
-    def save_workspaces(self, workspaces: list[dict[str, str]]) -> None:
+    def save_workspaces(self, workspaces: list[WorkspaceConfig]) -> None:
         serialized = sorted(
-            [{"name": item["name"], "path": item["path"]} for item in workspaces],
+            [{"name": item.name, "path": str(item.path)} for item in workspaces],
             key=lambda item: item["name"].lower(),
         )
         write_json(self.workspaces_path, serialized)
@@ -257,25 +259,25 @@ class CoreRepository(BaseSourceRepository):
 
         workspaces = self.load_workspaces()
         for item in workspaces:
-            if item["name"] == normalized_name:
+            if item.name == normalized_name:
                 raise ValueError(f"Workspace name already exists: {normalized_name}")
-            if Path(item["path"]) == normalized_path:
+            if item.path == normalized_path:
                 raise ValueError(f"Workspace path already exists: {normalized_path}")
 
-        workspaces.append({"name": normalized_name, "path": str(normalized_path)})
+        workspaces.append(WorkspaceConfig(name=normalized_name, path=normalized_path))
         self.save_workspaces(workspaces)
         self.workspace_config_dir(normalized_name).mkdir(parents=True, exist_ok=True)
 
     def remove_workspace(self, name: str) -> bool:
         target_name = name.strip()
         workspaces = self.load_workspaces()
-        kept = [item for item in workspaces if item["name"] != target_name]
+        kept = [item for item in workspaces if item.name != target_name]
         if len(kept) == len(workspaces):
             return False
         self.save_workspaces(kept)
         return True
 
-    def load_projects(self) -> list[dict[str, str]]:
+    def load_projects(self) -> list[WorkspaceConfig]:
         payload, error = read_json_safe(self.projects_path)
         if error is not None:
             raise InvalidJsonFormatError(self.projects_path, error)
@@ -284,7 +286,7 @@ class CoreRepository(BaseSourceRepository):
         if not isinstance(payload, list):
             raise InvalidConfigSchemaError(self.projects_path, "must be a JSON array")
 
-        result: list[dict[str, str]] = []
+        result: list[WorkspaceConfig] = []
         seen_names: set[str] = set()
         seen_paths: set[Path] = set()
         for item in payload:
@@ -316,14 +318,14 @@ class CoreRepository(BaseSourceRepository):
                 raise InvalidConfigSchemaError(
                     self.projects_path, f"duplicate project path: {normalized_path}"
                 )
-            result.append({"name": normalized_name, "path": str(normalized_path)})
+            result.append(WorkspaceConfig(name=normalized_name, path=normalized_path))
             seen_names.add(normalized_name)
             seen_paths.add(normalized_path)
         return result
 
-    def save_projects(self, projects: list[dict[str, str]]) -> None:
+    def save_projects(self, projects: list[WorkspaceConfig]) -> None:
         serialized = sorted(
-            [{"name": item["name"], "path": item["path"]} for item in projects],
+            [{"name": item.name, "path": str(item.path)} for item in projects],
             key=lambda item: item["name"].lower(),
         )
         write_json(self.projects_path, serialized)
@@ -342,19 +344,19 @@ class CoreRepository(BaseSourceRepository):
 
         projects = self.load_projects()
         for item in projects:
-            if item["name"] == normalized_name:
+            if item.name == normalized_name:
                 raise ValueError(f"Project name already exists: {normalized_name}")
-            if Path(item["path"]) == normalized_path:
+            if item.path == normalized_path:
                 raise ValueError(f"Project path already exists: {normalized_path}")
 
-        projects.append({"name": normalized_name, "path": str(normalized_path)})
+        projects.append(WorkspaceConfig(name=normalized_name, path=normalized_path))
         self.save_projects(projects)
         self.project_config_dir(normalized_name).mkdir(parents=True, exist_ok=True)
 
     def remove_project(self, name: str) -> bool:
         target_name = name.strip()
         projects = self.load_projects()
-        kept = [item for item in projects if item["name"] != target_name]
+        kept = [item for item in projects if item.name != target_name]
         if len(kept) == len(projects):
             return False
         self.save_projects(kept)

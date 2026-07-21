@@ -29,7 +29,7 @@ class MCPManagementService:
         return ws_repo.mcp_base_path
 
     def _ensure_workspace_exists(self, workspace: str) -> None:
-        names = {item["name"] for item in self._core.load_workspaces()}
+        names = {item.name for item in self._core.load_workspaces()}
         if workspace not in names:
             raise ValueError(f"Workspace not found: {workspace}")
 

@@ -5,7 +5,7 @@ import pytest
 
 from code_agnostic.errors import InvalidConfigSchemaError, InvalidJsonFormatError
 from code_agnostic.core.repository import CoreRepository
-from code_agnostic.models import SyncState
+from code_agnostic.models import SyncState, WorkspaceConfig
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def test_add_and_remove_workspace_persists_config(
     workspaces = repo.load_workspaces()
 
     assert workspaces == [
-        {"name": "workspace-example", "path": str(workspace_dir.resolve())}
+        WorkspaceConfig(name="workspace-example", path=workspace_dir.resolve())
     ]
 
     removed = repo.remove_workspace("workspace-example")

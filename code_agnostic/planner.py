@@ -37,7 +37,13 @@ from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
-from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
+from code_agnostic.models import (
+    Action,
+    ActionKind,
+    ActionStatus,
+    SyncPlan,
+    WorkspaceConfig,
+)
 from code_agnostic.project_artifacts import (
     load_project_entries,
     project_config_dir,
@@ -343,9 +349,9 @@ class SyncPlanner:
             plans.append(self._plan_single_project(project))
         return _merge_plans(*plans) if plans else SyncPlan([], [], [])
 
-    def _plan_single_project(self, project: dict[str, str]) -> SyncPlan:
-        project_name = project["name"]
-        project_root = Path(project["path"])
+    def _plan_single_project(self, project: WorkspaceConfig) -> SyncPlan:
+        project_name = project.name
+        project_root = project.path
 
         if not project_root.exists() or not project_root.is_dir():
             return SyncPlan(
@@ -458,9 +464,9 @@ class SyncPlanner:
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
 
-    def _plan_single_workspace(self, workspace: dict[str, str]) -> SyncPlan:
-        workspace_name = workspace["name"]
-        workspace_path = Path(workspace["path"])
+    def _plan_single_workspace(self, workspace: WorkspaceConfig) -> SyncPlan:
+        workspace_name = workspace.name
+        workspace_path = workspace.path
 
         if not workspace_path.exists() or not workspace_path.is_dir():
             return SyncPlan(

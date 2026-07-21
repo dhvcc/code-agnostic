@@ -120,7 +120,7 @@ class AppsService:
         # --- Workspace scopes (ws:<app>:*) ---
         ws_prefix = f"ws:{app_id.value}:"
         for workspace in core.load_workspaces():
-            ws_name = workspace["name"]
+            ws_name = workspace.name
             ws_repo = WorkspaceConfigRepository(root=core.workspace_config_dir(ws_name))
             ws_state = ws_repo.load_state()
             ws_links = ws_state.managed_links
@@ -139,7 +139,7 @@ class AppsService:
         # --- Project scopes (project:<app>:*) ---
         project_prefix = f"project:{app_id.value}:"
         for project in load_project_entries(core):
-            project_name = project["name"]
+            project_name = project.name
             project_repo = ProjectConfigRepository(
                 root=project_config_dir(core, project_name)
             )

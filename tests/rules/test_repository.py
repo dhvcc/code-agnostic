@@ -32,11 +32,7 @@ def test_list_includes_bundle_rules(tmp_path: Path) -> None:
     bundle_dir = rules_dir / "python-style"
     bundle_dir.mkdir(parents=True)
     (bundle_dir / "meta.yaml").write_text(
-        "spec_version: v1\n"
-        "kind: rule\n"
-        "description: Python style\n"
-        "globs:\n"
-        '  - "*.py"\n',
+        'spec_version: v1\nkind: rule\ndescription: Python style\nglobs:\n  - "*.py"\n',
         encoding="utf-8",
     )
     (bundle_dir / "prompt.md").write_text("Use type hints.\n", encoding="utf-8")

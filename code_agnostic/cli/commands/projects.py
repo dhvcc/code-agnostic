@@ -63,7 +63,7 @@ def projects_list(obj: dict[str, str]) -> None:
 
     for item in items:
         project_source = ProjectConfigRepository(
-            root=core.project_config_dir(item["name"])
+            root=core.project_config_dir(item.name)
         )
         markers = []
         if project_source.has_mcp():
@@ -75,4 +75,4 @@ def projects_list(obj: dict[str, str]) -> None:
         if project_source.has_agents():
             markers.append("agents")
         suffix = f" [{', '.join(markers)}]" if markers else ""
-        click.echo(f"{item['name']}: {item['path']}{suffix}")
+        click.echo(f"{item.name}: {item.path}{suffix}")
