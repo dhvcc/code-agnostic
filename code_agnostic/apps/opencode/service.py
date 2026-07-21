@@ -104,11 +104,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
     def mcp_config_key(self) -> str:
         return "mcp"
 
-    def validate_config(self, payload: Any) -> None:
-        if not isinstance(payload, dict):
-            raise InvalidConfigSchemaError(
-                self.repository.config_path, "must be a JSON object"
-            )
+    def _validate_schema(self, payload: dict[str, Any]) -> None:
         for error in self._validator.iter_errors(payload):
             if _is_unknown_provider_model_enum_error(error):
                 continue

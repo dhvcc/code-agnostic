@@ -109,8 +109,11 @@ tracked state, then clears its state entries.
   as `CoreRepository`; **enabled mypy `strict`** (0 errors) and fixed a latent
   narrowing bug in `restore_active_revision`.
 
+### 0.5.1 (shipped)
+- Unified `validate_config` into one base contract (empty-ok, object-required,
+  `_validate_schema` hook); Claude/Copilot no longer skip validation.
+
 ### Follow-up (tracked)
-- P1: unify `validate_config` (claude/copilot lack schema validation) — next.
 - P1: typed `SyncState`/`WorkspaceConfig` model, planner de-duplication,
   README/`.mdc` reconciliation.
 - P1: codex agent-registry prune, claude project-entry prune.

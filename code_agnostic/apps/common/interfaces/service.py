@@ -12,6 +12,7 @@ from code_agnostic.apps.common.interfaces.repositories import IAppConfigReposito
 from code_agnostic.apps.common.interfaces.repositories import ISourceRepository
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.apps.common.utils import apply_mcp_servers
+from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
     load_state_paths,
@@ -59,9 +60,24 @@ class IAppConfigService(ABC):
         """Native config key that holds the MCP server map for this editor."""
         raise NotImplementedError
 
-    @abstractmethod
     def validate_config(self, payload: Any) -> None:
-        raise NotImplementedError
+        """Single validation contract for every editor config.
+
+        Empty/absent config is always valid; anything present must be a JSON
+        object; schema-backed editors add their own checks via
+        ``_validate_schema``.
+        """
+        if payload is None or payload == {}:
+            return
+        if not isinstance(payload, dict):
+            raise InvalidConfigSchemaError(
+                self.repository.config_path, "must be a JSON object"
+            )
+        self._validate_schema(payload)
+
+    def _validate_schema(self, payload: dict[str, Any]) -> None:
+        """Editor-specific validation hook. Default: no schema."""
+        return
 
     @abstractmethod
     def build_action_payload(self, payload: dict[str, Any]) -> Any:

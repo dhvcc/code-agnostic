@@ -88,7 +88,7 @@ class CodexConfigService(RegisteredAppConfigService):
     def mcp_config_key(self) -> str:
         return "mcp_servers"
 
-    def validate_config(self, payload: Any) -> None:
+    def _validate_schema(self, payload: dict[str, Any]) -> None:
         error = next(iter(self._validator.iter_errors(payload)), None)
         if error is not None:
             raise InvalidConfigSchemaError(

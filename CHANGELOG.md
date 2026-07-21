@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+### Changed
+- **Single `validate_config` contract for every editor.** Validation now lives
+  in the base service: empty/absent config is valid, any present config must be
+  a JSON object, and schema-backed editors (OpenCode/Cursor/Codex) plus
+  Copilot's `mcpServers` check run via a `_validate_schema` hook. Previously
+  Claude did no validation and each editor handled empty/non-object payloads
+  differently.
+
 ## 0.5.0
 
 Contract & type-safety hardening (pre-1.0). No user-facing behavior change.

@@ -12,7 +12,6 @@ from code_agnostic.apps.common.framework import RegisteredAppConfigService
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.interfaces.repositories import IAppConfigRepository
 from code_agnostic.apps.common.models import MCPServerDTO
-from code_agnostic.errors import InvalidConfigSchemaError
 from code_agnostic.models import Action, ActionKind, ActionStatus
 from code_agnostic.skills.compilers import ClaudeSkillCompiler
 from code_agnostic.skills.parser import parse_skill
@@ -56,12 +55,6 @@ class ClaudeConfigService(RegisteredAppConfigService):
     @property
     def mcp_config_key(self) -> str:
         return "mcpServers"
-
-    def validate_config(self, payload: Any) -> None:
-        if not isinstance(payload, dict):
-            raise InvalidConfigSchemaError(
-                self.repository.config_path, "must be a JSON object"
-            )
 
     def build_action_payload(self, payload: dict[str, Any]) -> Any:
         return payload

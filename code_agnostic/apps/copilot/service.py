@@ -55,11 +55,7 @@ class CopilotConfigService(RegisteredAppConfigService):
     def mcp_config_key(self) -> str:
         return "mcpServers"
 
-    def validate_config(self, payload: Any) -> None:
-        if not isinstance(payload, dict):
-            raise InvalidConfigSchemaError(
-                self.repository.config_path, "must be a JSON object"
-            )
+    def _validate_schema(self, payload: dict[str, Any]) -> None:
         mcp_servers = payload.get("mcpServers")
         if mcp_servers is not None and not isinstance(mcp_servers, dict):
             raise InvalidConfigSchemaError(
