@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+### Fixed
+- `test_file_lock` no longer asserts the lock file exists — on non-POSIX the
+  lock degrades to a no-op and never creates the file (Windows CI green).
+
 ## 0.9.0
 
 Enterprise-readiness cleanup — closes the remaining P1/P2 debt. No change to

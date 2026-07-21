@@ -12,12 +12,12 @@ from code_agnostic.utils import file_lock
 
 def test_file_lock_acquire_release_roundtrip(tmp_path: Path) -> None:
     lock = tmp_path / ".sync.lock"
+    # Acquire/release must not raise and must be re-acquirable once released.
+    # (On non-POSIX the lock degrades to a no-op, so the lock file may not exist.)
     with file_lock(lock):
         pass
-    # Re-acquirable once released.
     with file_lock(lock):
         pass
-    assert lock.exists()
 
 
 @pytest.mark.skipif(sys.platform.startswith("win"), reason="POSIX flock semantics")
