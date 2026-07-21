@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.0
+
+Enterprise-readiness cleanup — closes the remaining P1/P2 debt. No change to
+on-disk config/state layout.
+
+### Changed
+- **Rules standardized on `AGENTS.md`.** Rules compile to a single `AGENTS.md`
+  section format consumed natively by Cursor/OpenCode/Codex/Copilot (mirrored to
+  `CLAUDE.local.md` for Claude). The never-wired `.mdc` Cursor compiler and the
+  duplicate Codex compiler are removed; the README (which promised `.mdc` for
+  Cursor) is corrected to match. This documents reality — no output that was
+  actually produced before has changed.
+
+### Internal
+- Typed `WorkspaceConfig` for workspace/project entries (was `dict[str, str]`).
+- Removed vestigial `managed_*_links` state keys (no reader).
+- De-duplicated the planner's compiled-text emit (×5) and stale-cleanup blocks,
+  shared MCP mapper coercions, and the identity `build_action_payload`.
+- Removed dead code (`cursor.agent_action_removable_links`) and reordered
+  `codex.derive_status` to skip work before an early `CREATE`.
+- Advisory file lock around the executor's state write so parallel `apply` runs
+  can't race on `sync_state.json`.
+
 ## 0.8.0
 
 Contract & type-safety hardening (pre-1.0). No user-facing behavior change.

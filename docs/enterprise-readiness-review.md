@@ -131,22 +131,37 @@ tracked state, then clears its state entries.
   removing ~11 defensive `isinstance` read sites and the `_normalize_group` /
   `_normalize_managed_group` helpers. On-disk layout unchanged.
 
-### Follow-up (tracked)
-- P1: adopt `WorkspaceConfig` (still unused) for `load_workspaces()`/
-  `load_projects()` return types across the planner/status/CLI/TUI boundaries;
-  planner de-duplication (compiled-text emit ×5, stale-cleanup);
-  README/`.mdc` reconciliation.
-- P2: remove dead legacy state keys (`managed_skill_links`/…), remaining
-  mapper/service/repository de-duplication, concurrency lock.
+### 0.9.0 (shipped) — remaining P1/P2 cleanup
+- Typed `WorkspaceConfig` for `load_workspaces()`/`load_projects()` (was
+  `dict[str, str]`), threaded through ~15 planner/status/CLI sites.
+- Rules standardized on `AGENTS.md`; dead `.mdc`/codex rule compilers removed;
+  README corrected. (Rules concept is slated for removal later — Cursor-only.)
+- Planner de-duplication (compiled-text emit ×5 → `emit_compiled`; stale cleanup
+  → `emit_stale_links`/`emit_stale_files`).
+- P2: removed dead `managed_*_links` state keys; shared MCP mapper coercions
+  (`apps/common/mapper_utils.py`); base `build_action_payload` default; removed
+  `cursor.agent_action_removable_links`; reordered `codex.derive_status`;
+  advisory file lock around the executor state write.
+
+**All P0 + P1 done; substantive P2 done.** The enterprise-readiness effort is
+complete.
+
+### Consciously deferred (accepted debt, marginal value)
+- Remaining repository/service micro-dedup: `_load_base_config` (opencode/codex),
+  repo `load_config`/`load_mcp_payload` "differ only by key", schema repos
+  "differ only by URL", workspace/project CRUD in `core/repository.py`. These
+  touch config-loading crown code with per-resource error messages; generalizing
+  buys little and risks the core. Revisit only if a third consumer appears.
 
 ---
 
 ## Handoff notes for the next session
 
-State of the world: 0.4.0–0.7.0 shipped to PyPI + ghcr (tags `v*` trigger
+State of the world: 0.4.0–0.9.0 shipped to PyPI + ghcr (tags `v*` trigger
 `.github/workflows/publish_to_pypi.yml` + `publish-docker.yml`). `main` is the
-release branch, mypy `strict` is green, full suite green (~760 tests). Every
-merge-without-prune orphan class flagged in P0-1/P1 is now closed.
+release branch, mypy `strict` is green, full suite green (~760 tests).
+**The enterprise-readiness effort is complete** — all P0 + P1 done, substantive
+P2 done (see "Consciously deferred" above for the marginal remainder).
 
 **The ownership pattern to reuse** (this is the backbone of all cleanup work):
 - `apply_mcp_servers(existing, desired, previously_managed, replace=False)` in
@@ -166,18 +181,12 @@ merge-without-prune orphan class flagged in P0-1/P1 is now closed.
 - Generated/owned files (workspace/project) pass `replace_mcp=True` (full
   replace); user-shared global configs use ownership-aware (default).
 
-**Next: adopt `WorkspaceConfig`.** `SyncState` is done (0.8.0). The remaining
-typed-boundary work is the still-unused `WorkspaceConfig` dataclass
-(`models.py`): `CoreRepository.load_workspaces()` / `load_projects()` return
-`list[dict[str, str]]` (`{"name","path"}`) and ~15 sites consume
-`workspace["name"]`/`["path"]` (planner `_plan_single_workspace`/
-`_plan_single_project`, `status.py`, `apps_service.py`, `mcp_service.py`,
-`git_exclude_service.py`, `cli/helpers.py`, `cli/commands/{workspaces,projects,
-skills}.py`, `tui/tables.py`). Convert the return types to `list[WorkspaceConfig]`
-(projects can reuse it or get a sibling), thread it through, and update
-`save_workspaces`/`add`/`remove` + the tests that assert on the entry dicts.
-Then planner de-duplication (compiled-text emit block ×5, stale-cleanup logic)
-and README/`.mdc` reconciliation, then the P2 debt.
+**Next: no enterprise-readiness work remains.** Future direction (from the
+0.9.0 rules decision): the rules concept is slated for removal — only Cursor
+consumed them, and the API is being standardized on `AGENTS.md`. When picking
+that up, rip out `RulesRepository`/`AgentsRuleCompiler`/the rules planning
+branch in `_plan_single_workspace` and the `rules` scope, keeping the
+`AGENTS.md`/`CLAUDE.local.md` propagation driven directly from workspace config.
 
 **Release mechanics gotcha:** the pre-commit `ruff-format` hook can reformat a
 file and *reject* the commit; always `git add -A` again and re-commit. Bump
