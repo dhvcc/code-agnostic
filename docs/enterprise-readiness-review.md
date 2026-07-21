@@ -124,3 +124,47 @@ tracked state, then clears its state entries.
   README/`.mdc` reconciliation.
 - P2: remove dead legacy state keys (`managed_skill_links`/…), remaining
   mapper/service/repository de-duplication, concurrency lock.
+
+---
+
+## Handoff notes for the next session
+
+State of the world: 0.4.0–0.6.0 shipped to PyPI + ghcr (tags `v*` trigger
+`.github/workflows/publish_to_pypi.yml` + `publish-docker.yml`). `main` is the
+release branch, mypy `strict` is green, full suite green (~757 tests).
+
+**The ownership pattern to reuse** (this is the backbone of all cleanup work):
+- `apply_mcp_servers(existing, desired, previously_managed, replace=False)` in
+  `apps/common/utils.py` — preserve user entries, prune ones we previously wrote
+  that are now gone, upsert desired.
+- Ownership is recorded on `Action.managed_entries: dict[scope, list[str]]` and
+  persisted by `executor._persist_state` into `sync_state.json` under
+  `managed_mcp` (a generic `scope → names` map despite the name). Scopes so far:
+  `app:<app>:mcp`, `app:codex:agents_registry`.
+- `build_plan` reads previous names from state and threads them into
+  `build_action(..., previously_managed=..., previously_managed_agents=...)`.
+- Generated/owned files (workspace/project) pass `replace_mcp=True` (full
+  replace); user-shared global configs use ownership-aware (default).
+
+**Next: claude project-entry prune.** `ClaudeConfigService.build_project_mcp_action`
+(`apps/claude/service.py`) copies `projects` and only updates currently-desired
+paths, never removing the `mcpServers` sub-key of project paths we previously
+wrote but no longer sync (e.g. a repo removed from a workspace). Plan:
+1. Track managed project paths under a new scope, e.g. `app:claude:projects`, on
+   the merged Claude action's `managed_entries` (the action is assembled in
+   `planner._merge_claude_project_mcp`, which already carries `managed_entries`
+   from the global action — extend it there).
+2. Read previous project paths from state in the planner (it has `self.core`)
+   and pass them into `build_project_mcp_action`.
+3. For each previously-managed path NOT in the current desired set, delete only
+   its `mcpServers` sub-key (leave the rest of the Claude project entry — history
+   etc. — untouched). Never remove non-managed project entries.
+4. TDD: mirror `tests/test_cli_apply_mcp_cleanup.py` — sync two workspace repos,
+   then remove one, assert its `projects.<path>.mcpServers` is gone and the
+   other + any user project entry survive.
+
+**Release mechanics gotcha:** the pre-commit `ruff-format` hook can reformat a
+file and *reject* the commit; always `git add -A` again and re-commit. Bump
+`__version__` (`code_agnostic/__init__.py`) and `version` (`pyproject.toml`)
+together (test_version enforces match) — bump *after* the last full test run to
+avoid a version-race failure. Tag only after `git push origin main` succeeds.
