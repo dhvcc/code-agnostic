@@ -154,17 +154,14 @@ class SyncState:
     entries) happens once in `from_payload`; consumers read the typed fields
     directly instead of re-guarding with `isinstance` at every call site.
 
-    `managed_links`/`managed_paths`/`managed_mcp` are `scope -> names` maps (the
-    live ownership model). The three `managed_*_links` lists are vestigial — no
-    production reader consumes them — but are kept for on-disk round-trips.
+    `managed_links`/`managed_paths`/`managed_mcp` are `scope -> names` maps — the
+    live ownership model. Any legacy `managed_*_links` keys still on disk are
+    ignored on load (they had no reader).
     """
 
     managed_links: dict[str, list[str]] = field(default_factory=dict)
     managed_paths: dict[str, list[str]] = field(default_factory=dict)
     managed_mcp: dict[str, list[str]] = field(default_factory=dict)
-    managed_skill_links: list[str] = field(default_factory=list)
-    managed_agent_links: list[str] = field(default_factory=list)
-    managed_workspace_links: list[str] = field(default_factory=list)
     updated_at: str | None = None
     skipped: list[str] = field(default_factory=list)
 
@@ -177,15 +174,6 @@ class SyncState:
             managed_links=cls._coerce_group(payload.get("managed_links")),
             managed_paths=cls._coerce_group(payload.get("managed_paths")),
             managed_mcp=cls._coerce_group(payload.get("managed_mcp")),
-            managed_skill_links=cls._coerce_str_list(
-                payload.get("managed_skill_links")
-            ),
-            managed_agent_links=cls._coerce_str_list(
-                payload.get("managed_agent_links")
-            ),
-            managed_workspace_links=cls._coerce_str_list(
-                payload.get("managed_workspace_links")
-            ),
             updated_at=updated_at if isinstance(updated_at, str) else None,
             skipped=cls._coerce_str_list(payload.get("skipped")),
         )

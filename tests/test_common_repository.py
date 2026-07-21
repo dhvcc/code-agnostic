@@ -200,18 +200,17 @@ def test_load_state_with_corrupted_json(
     assert state == SyncState()
 
 
-def test_load_state_coerces_managed_skill_links_string_to_list(
+def test_load_state_ignores_legacy_managed_skill_links(
     tmp_path: Path, core_repo: CoreRepository
 ) -> None:
     repo = core_repo
     repo.state_json.parent.mkdir(parents=True, exist_ok=True)
     repo.state_json.write_text(
-        json.dumps({"managed_skill_links": "not-a-list"}), encoding="utf-8"
+        json.dumps({"managed_skill_links": ["/legacy"]}), encoding="utf-8"
     )
 
-    state = repo.load_state()
-
-    assert state.managed_skill_links == []
+    # Vestigial key is silently dropped; live groups default empty.
+    assert repo.load_state() == SyncState()
 
 
 def test_list_skill_sources_when_dir_missing(core_repo: CoreRepository) -> None:
