@@ -291,7 +291,7 @@ class SyncPlanner:
             # Carry global MCP ownership tracking onto the merged Claude action so
             # top-level `mcpServers` orphans still get pruned on later applies.
             project_action.scope = existing_action.scope
-            project_action.mcp_managed = existing_action.mcp_managed
+            project_action.managed_entries = existing_action.managed_entries
         actions = [
             action
             for action in plan.actions

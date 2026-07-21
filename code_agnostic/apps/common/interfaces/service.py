@@ -270,6 +270,7 @@ class IAppConfigService(ABC):
         common_servers: dict[str, MCPServerDTO],
         agent_sources: list[Path] | None = None,
         previously_managed: set[str] | None = None,
+        previously_managed_agents: set[str] | None = None,
         *,
         replace_mcp: bool = False,
     ) -> Action:
@@ -296,7 +297,9 @@ class IAppConfigService(ABC):
             # User-shared global config: track which servers we own so a later
             # source removal can be pruned without touching the user's servers.
             action.scope = app_scope(self.app_id, "mcp")
-            action.mcp_managed = sorted(desired_mcp)
+            action.managed_entries = {
+                app_scope(self.app_id, "mcp"): sorted(desired_mcp)
+            }
         return action
 
     def build_plan(
@@ -312,6 +315,9 @@ class IAppConfigService(ABC):
         agent_scope = app_scope(self.app_id, "agents")
         previously_managed_mcp = self._load_state_names(
             managed_mcp_group, app_scope(self.app_id, "mcp")
+        )
+        previously_managed_agents = self._load_state_names(
+            managed_mcp_group, app_scope(self.app_id, "agents_registry")
         )
 
         skill_actions, skill_skipped = self._build_compiled_group(
@@ -341,6 +347,7 @@ class IAppConfigService(ABC):
                     common_servers,
                     agent_sources=source_repository.list_agent_sources(),
                     previously_managed=previously_managed_mcp,
+                    previously_managed_agents=previously_managed_agents,
                 ),
                 *skill_actions,
                 *agent_actions,

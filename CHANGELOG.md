@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+### Fixed
+- **Codex agent-registry entries are now pruned when the agent is removed from
+  the source.** Previously an agent deleted from the hub left a stale
+  `[agents.<name>]` entry in `~/.codex/config.toml` (its generated `.toml` file
+  was removed, but the registry pointer lingered). Ownership is tracked
+  per-name, so base-config agent settings and user-added entries are preserved.
+  `apps disable` also prunes the registry entries it owns.
+
+### Internal
+- Generalized MCP ownership tracking (`Action.mcp_managed` → `managed_entries`,
+  a scope→names map) so the same preserve-user / prune-ours cleanup now backs
+  both MCP servers and the Codex agent registry. State layout
+  (`managed_mcp` scope→names) is unchanged.
+
 ## 0.5.1
 
 ### Changed

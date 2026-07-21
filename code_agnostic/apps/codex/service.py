@@ -16,6 +16,7 @@ from code_agnostic.apps.codex.config_repository import CodexConfigRepository
 from code_agnostic.apps.codex.mapper import CodexMCPMapper
 from code_agnostic.apps.codex.schema_repository import CodexSchemaRepository
 from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
+from code_agnostic.apps.common.utils import apply_mcp_servers
 from code_agnostic.apps.common.interfaces.repositories import (
     IAppConfigRepository,
     ISchemaRepository,
@@ -118,6 +119,7 @@ class CodexConfigService(RegisteredAppConfigService):
         common_servers: dict[str, MCPServerDTO],
         agent_sources: list[Path] | None = None,
         previously_managed: set[str] | None = None,
+        previously_managed_agents: set[str] | None = None,
         *,
         replace_mcp: bool = False,
     ) -> Action:
@@ -144,10 +146,17 @@ class CodexConfigService(RegisteredAppConfigService):
         self.set_mcp_payload(
             merged, desired_mcp, previously_managed, replace=replace_mcp
         )
-        if agent_sources:
-            merged["agents"] = self._merge_agents_payload(
-                merged.get("agents"),
-                self._build_agent_registry(agent_sources),
+        registry = self._build_agent_registry(agent_sources) if agent_sources else {}
+        if replace_mcp:
+            if registry:
+                merged["agents"] = self._merge_agents_payload(
+                    merged.get("agents"), registry
+                )
+        elif registry or previously_managed_agents:
+            # Ownership-aware: prune agent-registry entries we previously wrote
+            # that are gone from the source, keep base-config/user agents.
+            merged["agents"] = apply_mcp_servers(
+                merged.get("agents"), registry, previously_managed_agents
             )
         self.validate_config(merged)
 
@@ -161,7 +170,10 @@ class CodexConfigService(RegisteredAppConfigService):
         )
         if not replace_mcp:
             action.scope = app_scope(self.app_id, "mcp")
-            action.mcp_managed = sorted(desired_mcp)
+            action.managed_entries = {
+                app_scope(self.app_id, "mcp"): sorted(desired_mcp),
+                app_scope(self.app_id, "agents_registry"): sorted(registry),
+            }
         return action
 
     def _merge_agents_payload(

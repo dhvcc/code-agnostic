@@ -137,6 +137,7 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         common_servers: dict[str, MCPServerDTO],
         agent_sources: list[Path] | None = None,
         previously_managed: set[str] | None = None,
+        previously_managed_agents: set[str] | None = None,
         *,
         replace_mcp: bool = False,
     ) -> Action:
@@ -174,7 +175,9 @@ class OpenCodeConfigService(RegisteredAppConfigService):
         )
         if not replace_mcp:
             action.scope = app_scope(self.app_id, "mcp")
-            action.mcp_managed = sorted(desired_mcp)
+            action.managed_entries = {
+                app_scope(self.app_id, "mcp"): sorted(desired_mcp)
+            }
         return action
 
     def _validate_common_mcp(self, common_servers: dict[str, MCPServerDTO]) -> None:

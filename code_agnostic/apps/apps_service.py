@@ -201,14 +201,11 @@ class AppsService:
     def _cleanup_global_mcp(
         self, app_id: AppId, managed_mcp: dict[str, Any]
     ) -> list[Action]:
-        scope = app_scope(app_id, "mcp")
-        raw = managed_mcp.get(scope, [])
-        managed = (
-            {item for item in raw if isinstance(item, str)}
-            if isinstance(raw, list)
-            else set()
+        managed = self._names_for_scope(managed_mcp, app_scope(app_id, "mcp"))
+        managed_agents = self._names_for_scope(
+            managed_mcp, app_scope(app_id, "agents_registry")
         )
-        if not managed:
+        if not managed and not managed_agents:
             return []
         try:
             service = create_registered_app_service(app_id)
@@ -216,9 +213,23 @@ class AppsService:
             return []
         if not service.repository.config_path.exists():
             return []
-        # Empty desired + our previously-managed names → prune only our servers,
-        # keep the user's, and clear managed_mcp state (mcp_managed becomes []).
-        return [service.build_action({}, previously_managed=managed)]
+        # Empty desired + our previously-managed names → prune only what we wrote
+        # (MCP servers and agent-registry entries), keep the user's, and clear the
+        # ownership state (managed_entries becomes empty).
+        return [
+            service.build_action(
+                {},
+                previously_managed=managed,
+                previously_managed_agents=managed_agents,
+            )
+        ]
+
+    @staticmethod
+    def _names_for_scope(group: dict[str, Any], scope: str) -> set[str]:
+        raw = group.get(scope, [])
+        if not isinstance(raw, list):
+            return set()
+        return {item for item in raw if isinstance(item, str)}
 
     def list_status_rows(self) -> list[AppStatusRow]:
         apps = self.load_apps()

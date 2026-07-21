@@ -770,12 +770,14 @@ class SyncExecutor:
             if action.scope is None:
                 continue
 
-            if action.mcp_managed is not None:
-                # User-shared MCP config: track the server names we own, never the
-                # shared config file itself (so cleanup prunes our servers only).
-                global_mcp_touched.add(action.scope)
-                if action.mcp_managed:
-                    global_mcp[action.scope] = sorted(set(action.mcp_managed))
+            if action.managed_entries is not None:
+                # User-shared config: track the named entries we own (MCP servers,
+                # agent-registry names, …) by scope — never the shared config file
+                # itself, so cleanup prunes only what we wrote.
+                for entry_scope, names in action.managed_entries.items():
+                    global_mcp_touched.add(entry_scope)
+                    if names:
+                        global_mcp[entry_scope] = sorted(set(names))
                 continue
 
             if action.workspace is not None:

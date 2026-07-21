@@ -113,9 +113,14 @@ tracked state, then clears its state entries.
 - Unified `validate_config` into one base contract (empty-ok, object-required,
   `_validate_schema` hook); Claude/Copilot no longer skip validation.
 
+### 0.6.0 (shipped)
+- Codex agent-registry prune via a generalized ownership mechanism
+  (`Action.managed_entries`, scope→names); `apps disable` prunes it too.
+
 ### Follow-up (tracked)
+- P1: claude project-entry prune (bespoke `build_project_mcp_action` flow) —
+  next.
 - P1: typed `SyncState`/`WorkspaceConfig` model, planner de-duplication,
   README/`.mdc` reconciliation.
-- P1: codex agent-registry prune, claude project-entry prune.
 - P2: remove dead legacy state keys (`managed_skill_links`/…), remaining
   mapper/service/repository de-duplication, concurrency lock.

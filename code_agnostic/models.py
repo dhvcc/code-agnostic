@@ -74,7 +74,7 @@ class Action:
     scope: str | None = None
     workspace: str | None = None
     project: str | None = None
-    mcp_managed: list[str] | None = None
+    managed_entries: dict[str, list[str]] | None = None
 
 
 @dataclass
