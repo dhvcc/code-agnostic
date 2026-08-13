@@ -5,6 +5,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from code_agnostic.constants import SYNC_LOCK_FILENAME
+
 
 @contextmanager
 def file_lock(path: Path) -> Iterator[None]:
@@ -27,6 +29,14 @@ def file_lock(path: Path) -> Iterator[None]:
             yield
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+@contextmanager
+def sync_target_lock() -> Iterator[None]:
+    """Lock native client targets shared by independent source roots."""
+    target_lock = Path.home() / ".cache" / "code-agnostic" / SYNC_LOCK_FILENAME
+    with file_lock(target_lock):
+        yield
 
 
 def read_json(path: Path) -> Any:

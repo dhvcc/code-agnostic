@@ -17,7 +17,7 @@ from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.models import Action, ActionKind, ActionStatus, SyncPlan
-from code_agnostic.utils import file_lock, write_json
+from code_agnostic.utils import file_lock, sync_target_lock, write_json
 
 
 @dataclass
@@ -202,18 +202,28 @@ class SyncExecutor:
         }
 
     def execute(
-        self, plan: SyncPlan, persist_state: bool = True
+        self,
+        plan: SyncPlan,
+        persist_state: bool = True,
+        *,
+        target_lock_held: bool = False,
     ) -> tuple[int, int, list[str]]:
-        if not persist_state:
-            return self._execute(plan, persist_state=persist_state)
+        if target_lock_held:
+            return self._execute_with_source_lock(plan, persist_state=persist_state)
         # Different canonical source roots still mutate the same per-user client
         # configs. Acquire the stable target lock before the source-state lock so
         # independent compiler processes cannot lose each other's entries.
-        target_lock = Path.home() / ".cache" / "code-agnostic" / SYNC_LOCK_FILENAME
+        with sync_target_lock():
+            return self._execute_with_source_lock(plan, persist_state=persist_state)
+
+    def _execute_with_source_lock(
+        self, plan: SyncPlan, persist_state: bool
+    ) -> tuple[int, int, list[str]]:
+        if not persist_state:
+            return self._execute(plan, persist_state=persist_state)
         source_lock = self.context.core.root / SYNC_LOCK_FILENAME
-        with file_lock(target_lock):
-            with file_lock(source_lock):
-                return self._execute(plan, persist_state=persist_state)
+        with file_lock(source_lock):
+            return self._execute(plan, persist_state=persist_state)
 
     def _execute(
         self, plan: SyncPlan, persist_state: bool = True

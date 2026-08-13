@@ -67,7 +67,9 @@ def apply(obj: dict[str, str], app: str, apply_excludes: bool, verbose: bool) ->
     apps = AppsService(core)
 
     try:
-        scoped_plan = apps.plan_for_target(target, apply_excludes=apply_excludes)
+        scoped_plan, apply_result = apps.apply_target(
+            target, apply_excludes=apply_excludes
+        )
     except Exception as exc:
         raise click.ClickException(f"Fatal: {exc}")
 
@@ -82,7 +84,7 @@ def apply(obj: dict[str, str], app: str, apply_excludes: bool, verbose: bool) ->
             "Apply aborted due to planning/parsing errors above."
         )
 
-    applied, failed, failures = apps.execute_plan(scoped_plan)
+    applied, failed, failures = apply_result
     next_steps = (
         _apply_next_steps(scoped_plan, target) if applied > 0 and failed == 0 else None
     )
