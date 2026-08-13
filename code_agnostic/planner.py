@@ -26,7 +26,6 @@ from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.constants import (
     AGENTS_FILENAME,
     AGENTS_PROJECT_DIRNAME,
-    CLAUDE_FILENAME,
     CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
     MCP_SERVERS_KEY,
@@ -38,12 +37,6 @@ from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
-from code_agnostic.generated_artifacts import (
-    ArtifactKind,
-    GeneratedArtifact,
-    OwnershipPolicy,
-    plan_generated_artifact,
-)
 from code_agnostic.models import (
     Action,
     ActionKind,
@@ -353,60 +346,10 @@ class SyncPlanner:
                     mcp_base.get(MCP_SERVERS_KEY, {}), service.app_id
                 )
                 desired_common = common_mcp_to_dto(target_servers)
-                plans.append(
-                    _merge_plans(
-                        service.build_plan(desired_common, self.core),
-                        self._plan_global_instructions(service),
-                    )
-                )
+                plans.append(service.build_plan(desired_common, self.core))
             except SyncAppError as exc:
                 plans.append(SyncPlan(actions=[], errors=[exc], skipped=[]))
         return _merge_plans(*plans)
-
-    def _plan_global_instructions(self, service: IAppConfigService) -> SyncPlan:
-        filename = {
-            AppId.CODEX: AGENTS_FILENAME,
-            AppId.OPENCODE: AGENTS_FILENAME,
-            AppId.CLAUDE: CLAUDE_FILENAME,
-        }.get(service.app_id)
-        if filename is None:
-            return SyncPlan([], [], [])
-
-        scope = app_scope(service.app_id, "instructions")
-        target = service.repository.root / filename
-        managed_paths = load_state_paths(self.core.load_state().managed_paths, scope)
-        if not self.core.instructions_path.exists():
-            return SyncPlan(
-                plan_stale_files_group(
-                    old_paths=managed_paths,
-                    desired_paths=[],
-                    remove_detail="remove stale managed global instructions",
-                    conflict_detail="stale global instructions path is not a file",
-                    noop_detail="stale global instructions already absent",
-                    app=service.app_id.value,
-                    scope=scope,
-                    skipped=[],
-                    skipped_message="Stale global instructions cleanup skipped: {path}",
-                ),
-                [],
-                [],
-            )
-
-        action = plan_generated_artifact(
-            GeneratedArtifact(
-                path=target,
-                kind=ArtifactKind.TEXT,
-                payload=self.core.instructions_path.read_text(encoding="utf-8"),
-                ownership=OwnershipPolicy.MANAGED_REPLACE,
-                scope=scope,
-                app=service.app_id.value,
-                create_detail="create global instructions",
-                noop_detail="global instructions already up to date",
-                update_detail="update global instructions",
-            ),
-            managed_paths={path.resolve(strict=False) for path in managed_paths},
-        )
-        return SyncPlan([action], [], [])
 
     def _plan_workspaces(self) -> SyncPlan:
         plans = []
