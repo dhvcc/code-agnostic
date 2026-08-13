@@ -280,7 +280,6 @@ class CodexConfigService(RegisteredAppConfigService):
                 project = deepcopy(project)
 
             desired_trust = desired_config.get("trust_level")
-            current_trust = project.get("trust_level")
             if desired_trust is not None and not isinstance(desired_trust, str):
                 raise InvalidConfigSchemaError(
                     self._base_config_path or self.repository.config_path,
@@ -289,8 +288,7 @@ class CodexConfigService(RegisteredAppConfigService):
             if (
                 isinstance(desired_trust, str)
                 and project_path not in managed
-                and current_trust is not None
-                and current_trust != desired_trust
+                and "trust_level" in project
             ):
                 raise SyncAppError(
                     f"Codex project trust conflicts with unmanaged existing setting: "

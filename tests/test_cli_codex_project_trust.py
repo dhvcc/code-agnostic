@@ -156,6 +156,34 @@ def test_codex_project_trust_conflict_preserves_unmanaged_setting(
     )
 
 
+def test_codex_project_trust_same_value_unmanaged_setting_is_conflict(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+) -> None:
+    assert _enable_codex(cli_runner).exit_code == 0
+    project = tmp_path / "project"
+    project.mkdir()
+    config_path = tmp_path / ".codex" / "config.toml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        tomlkit.dumps(
+            {"projects": {str(project.resolve()): {"trust_level": "trusted"}}}
+        ),
+        encoding="utf-8",
+    )
+    _write_codex_base(
+        core_root,
+        {str(project): {"trust_level": "trusted"}},
+    )
+
+    result = _run(cli_runner, ["plan", "-a", "codex"])
+    assert result.exit_code == 1
+    assert "trust" in result.output.lower()
+    assert not (core_root / ".sync-state.json").exists()
+
+
 def test_independent_source_roots_preserve_each_codex_project_trust_entry(
     tmp_path: Path,
     cli_runner,
