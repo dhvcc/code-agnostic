@@ -7,6 +7,7 @@ from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
+from code_agnostic.core.repository import CoreRepository
 
 
 def _escape_toml_basic_string(value: str) -> str:
@@ -38,6 +39,15 @@ def test_opencode_repository_can_separate_asset_root_from_config_path(
     assert repo.config_path == config_path
     assert repo.skills_dir == root / "skills"
     assert repo.agents_dir == root / "agents"
+
+
+def test_config_root_env_does_not_change_app_target_defaults(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODE_AGNOSTIC_CONFIG_ROOT", str(tmp_path / "canonical-source"))
+
+    assert CoreRepository().root == tmp_path / "canonical-source"
+    assert OpenCodeConfigRepository().root == tmp_path / ".config" / "opencode"
 
 
 def test_opencode_repository_reads_legacy_config_path_when_new_path_is_missing(

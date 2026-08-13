@@ -1,3 +1,4 @@
+import os
 from abc import abstractmethod
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -126,7 +127,14 @@ class BaseSourceRepository(ISourceRepository):
 
 class CoreRepository(BaseSourceRepository):
     def __init__(self, root: Path | None = None) -> None:
-        super().__init__(root or (Path.home() / ".config" / "code-agnostic"))
+        if root is None:
+            configured_root = os.environ.get("CODE_AGNOSTIC_CONFIG_ROOT")
+            root = (
+                Path(configured_root).expanduser()
+                if configured_root
+                else Path.home() / ".config" / "code-agnostic"
+            )
+        super().__init__(root)
 
     @property
     def config_dir(self) -> Path:

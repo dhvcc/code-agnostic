@@ -21,6 +21,24 @@ def test_load_state_defaults_when_missing(core_repo: CoreRepository) -> None:
     assert state == SyncState()
 
 
+def test_default_core_repository_uses_config_root_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configured_root = tmp_path / "canonical-source"
+    monkeypatch.setenv("CODE_AGNOSTIC_CONFIG_ROOT", str(configured_root))
+
+    assert CoreRepository().root == configured_root
+
+
+def test_explicit_core_repository_root_takes_precedence_over_config_root_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODE_AGNOSTIC_CONFIG_ROOT", str(tmp_path / "canonical-source"))
+    explicit_root = tmp_path / "explicit-source"
+
+    assert CoreRepository(explicit_root).root == explicit_root
+
+
 def test_add_and_remove_workspace_persists_config(
     tmp_path: Path, core_repo: CoreRepository
 ) -> None:

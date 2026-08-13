@@ -38,6 +38,12 @@ Rules:
 - matching `x-*` blocks can override shared fields for that app and can carry app-native passthrough keys
 - unknown top-level keys fail validation
 
+The canonical source root defaults to `~/.config/code-agnostic/`. Set
+`CODE_AGNOSTIC_CONFIG_ROOT` to keep that source tree in an app-owned location.
+This setting affects only the canonical source repository; generated target
+outputs continue to use each app's own default home, including `CODEX_HOME`
+when configured.
+
 ## Schema URLs
 
 Compiler-owned source syntax is backed by publishable JSON Schemas in `code_agnostic/spec/schemas/`.
