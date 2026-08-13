@@ -50,3 +50,5 @@ def apps_disable(obj: dict[str, str], app: str) -> None:
     for failure in failures:
         console.print(f"[red]cleanup: {failure}[/red]")
     ui.render_apps(service.list_status_rows())
+    if failed:
+        raise click.exceptions.Exit(1)

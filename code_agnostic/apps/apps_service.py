@@ -107,7 +107,8 @@ class AppsService:
             result = SyncExecutor(core=self.core_repository).execute(
                 plan, persist_state=True
             )
-        self.set_enabled(app_name=normalized, enabled=False)
+        if result[1] == 0:
+            self.set_enabled(app_name=normalized, enabled=False)
         return result
 
     def _plan_app_cleanup(self, app_name: str) -> SyncPlan:
@@ -278,6 +279,34 @@ class AppsService:
             return False
         return True
 
+    @staticmethod
+    def _clear_native_ownership(
+        service: IAppConfigService,
+        *,
+        app: str,
+        scope: str,
+        entry_scopes: tuple[str, ...],
+        value_scopes: tuple[str, ...] = (),
+        workspace: str | None = None,
+        project: str | None = None,
+    ) -> Action:
+        return Action(
+            kind=service.action_kind,
+            path=service.repository.config_path,
+            status=ActionStatus.NOOP,
+            detail="clear stale native config ownership",
+            app=app,
+            scope=scope,
+            workspace=workspace,
+            project=project,
+            managed_entries={entry_scope: [] for entry_scope in entry_scopes},
+            managed_values=(
+                {value_scope: {} for value_scope in value_scopes}
+                if value_scopes
+                else None
+            ),
+        )
+
     def _cleanup_workspace_mcp(
         self,
         *,
@@ -330,21 +359,31 @@ class AppsService:
         seen_paths: set[Path] = set()
         for target_root, scope in targets:
             service = self._native_workspace_service(app_id, target_root)
-            if not service.repository.config_path.exists():
-                continue
             config_path = service.repository.config_path.resolve(strict=False)
             if config_path in seen_paths:
                 continue
             seen_paths.add(config_path)
-            action = service.build_action(
-                {},
-                previously_managed=managed,
-                previously_managed_agents=managed_agents,
-            )
-            if self._native_config_is_empty(action, service):
-                action.kind = ActionKind.REMOVE_FILE
-                action.status = ActionStatus.REMOVE
-                action.payload = None
+            if service.repository.config_path.exists():
+                action = service.build_action(
+                    {},
+                    previously_managed=managed,
+                    previously_managed_agents=managed_agents,
+                )
+                if self._native_config_is_empty(action, service):
+                    action.kind = ActionKind.REMOVE_FILE
+                    action.status = ActionStatus.REMOVE
+                    action.payload = None
+            else:
+                action = self._clear_native_ownership(
+                    service,
+                    app="workspace",
+                    scope=scope,
+                    entry_scopes=(
+                        app_scope(app_id, "mcp"),
+                        app_scope(app_id, "agents_registry"),
+                    ),
+                    workspace=workspace_name,
+                )
             action.app = "workspace"
             action.workspace = workspace_name
             action.scope = scope
@@ -385,21 +424,31 @@ class AppsService:
         seen_paths: set[Path] = set()
         for target_root in target_roots:
             service = self._native_workspace_service(app_id, target_root)
-            if not service.repository.config_path.exists():
-                continue
             config_path = service.repository.config_path.resolve(strict=False)
             if config_path in seen_paths:
                 continue
             seen_paths.add(config_path)
-            action = service.build_action(
-                {},
-                previously_managed=managed,
-                previously_managed_agents=managed_agents,
-            )
-            if self._native_config_is_empty(action, service):
-                action.kind = ActionKind.REMOVE_FILE
-                action.status = ActionStatus.REMOVE
-                action.payload = None
+            if service.repository.config_path.exists():
+                action = service.build_action(
+                    {},
+                    previously_managed=managed,
+                    previously_managed_agents=managed_agents,
+                )
+                if self._native_config_is_empty(action, service):
+                    action.kind = ActionKind.REMOVE_FILE
+                    action.status = ActionStatus.REMOVE
+                    action.payload = None
+            else:
+                action = self._clear_native_ownership(
+                    service,
+                    app=app_id.value,
+                    scope=scope,
+                    entry_scopes=(
+                        app_scope(app_id, "mcp"),
+                        app_scope(app_id, "agents_registry"),
+                    ),
+                    project=project_name,
+                )
             action.app = app_id.value
             action.project = project_name
             action.scope = scope
@@ -424,7 +473,22 @@ class AppsService:
         except (KeyError, ValueError):
             return []
         if not service.repository.config_path.exists():
-            return []
+            return [
+                self._clear_native_ownership(
+                    service,
+                    app=app_id.value,
+                    scope=app_scope(app_id, "mcp"),
+                    entry_scopes=(
+                        app_scope(app_id, "mcp"),
+                        app_scope(app_id, "agents_registry"),
+                    ),
+                    value_scopes=(
+                        (CodexConfigService.PROJECT_TRUST_SCOPE,)
+                        if app_id == AppId.CODEX
+                        else ()
+                    ),
+                )
+            ]
         if app_id == AppId.CODEX and isinstance(service, CodexConfigService):
             return [
                 service.build_action(
@@ -459,7 +523,15 @@ class AppsService:
         if not isinstance(service, ClaudeConfigService):
             return []
         if not service.repository.config_path.exists():
-            return []
+            projects_scope = app_scope(AppId.CLAUDE, "projects")
+            return [
+                self._clear_native_ownership(
+                    service,
+                    app=AppId.CLAUDE.value,
+                    scope=projects_scope,
+                    entry_scopes=(projects_scope,),
+                )
+            ]
         # Empty desired + our previously-managed project paths → prune only the
         # `mcpServers` sub-keys we wrote, keep the rest of each project entry, and
         # clear the ownership state (managed_entries becomes empty).

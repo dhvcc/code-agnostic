@@ -70,6 +70,102 @@ def test_disable_cursor_removes_skill_and_prunes_owned_mcp(
     assert apps_cfg["cursor"] is False
 
 
+def test_disable_failure_keeps_app_enabled_and_state_for_retry(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    enable_app("cursor")
+    _write_skill(core_root, "reviewer")
+
+    assert cli_runner.invoke(cli, ["apply", "-a", "cursor"]).exit_code == 0
+
+    skill_file = tmp_path / ".cursor" / "skills" / "reviewer" / "SKILL.md"
+    skill_file.unlink()
+    skill_file.mkdir()
+
+    disable = cli_runner.invoke(cli, ["apps", "disable", "-a", "cursor"])
+    assert disable.exit_code == 1
+    assert "cleanup" in disable.output.lower()
+
+    apps = json.loads((core_root / "config" / "apps.json").read_text())
+    assert apps["cursor"] is True
+    state = json.loads((core_root / ".sync-state.json").read_text())
+    assert any(scope.startswith("app:cursor:") for scope in state["managed_paths"])
+    assert skill_file.is_dir()
+
+    skill_file.rmdir()
+    retry = cli_runner.invoke(cli, ["apps", "disable", "-a", "cursor"])
+    assert retry.exit_code == 0, retry.output
+    assert not skill_file.exists()
+    apps = json.loads((core_root / "config" / "apps.json").read_text())
+    assert apps["cursor"] is False
+
+
+def test_disable_clears_ownership_when_native_configs_are_missing(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    enable_app("copilot")
+    write_json(
+        core_root / "config" / "mcp.base.json",
+        {"mcpServers": {"managed-global": {"url": "https://global.example/mcp"}}},
+    )
+
+    workspace_root = tmp_path / "workspace"
+    repo_root = workspace_root / "repo"
+    (repo_root / ".git").mkdir(parents=True)
+    core = CoreRepository(core_root)
+    core.add_workspace("team", workspace_root)
+    write_json(
+        core.workspace_config_dir("team") / "mcp.base.json",
+        {"mcpServers": {"managed-workspace": {"url": "https://workspace.example/mcp"}}},
+    )
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    core.add_project("service", project_root)
+    write_json(
+        core.project_config_dir("service") / "mcp.base.json",
+        {"mcpServers": {"managed-project": {"url": "https://project.example/mcp"}}},
+    )
+
+    assert cli_runner.invoke(cli, ["apply"]).exit_code == 0
+
+    global_config = tmp_path / ".copilot" / "mcp-config.json"
+    workspace_config = workspace_root / ".github" / "mcp.json"
+    repo_config = repo_root / ".github" / "mcp.json"
+    project_config = project_root / ".github" / "mcp.json"
+    for path in (global_config, workspace_config, repo_config, project_config):
+        assert path.exists()
+        path.unlink()
+
+    assert cli_runner.invoke(cli, ["apps", "disable", "-a", "copilot"]).exit_code == 0
+
+    for state_path, path_prefix in (
+        (core_root / ".sync-state.json", "app:copilot:"),
+        (core.workspace_config_dir("team") / ".sync-state.json", "ws:copilot:"),
+        (
+            core.project_config_dir("service") / ".sync-state.json",
+            "project:copilot:",
+        ),
+    ):
+        state = json.loads(state_path.read_text())
+        assert not any(
+            scope.startswith(path_prefix) for scope in state.get("managed_paths", {})
+        )
+        assert "app:copilot:mcp" not in state.get("managed_mcp", {})
+
+    apps = json.loads((core_root / "config" / "apps.json").read_text())
+    assert apps["copilot"] is False
+
+
 def test_disable_claude_prunes_project_mcp_keeps_user_project(
     minimal_shared_config: Path,
     core_root: Path,
