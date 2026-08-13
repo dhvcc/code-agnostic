@@ -271,7 +271,6 @@ def test_apply_codex_deep_merges_custom_config_tables(
         "\n".join(
             [
                 f'[projects."{escaped_project_a}"]',
-                'trust_level = "untrusted"',
                 "",
                 f'[projects."{escaped_project_b}"]',
                 'trust_level = "trusted"',
