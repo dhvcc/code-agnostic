@@ -266,6 +266,19 @@ class AppsService:
         apps = self.load_apps()
         return [name for name in self.available_apps() if apps.get(name, False)]
 
+    def _plan_disabled_app_cleanup(self) -> SyncPlan:
+        apps = self.load_apps()
+        plans = [
+            self._plan_app_cleanup(app_name)
+            for app_name in self.available_apps()
+            if not apps.get(app_name, False)
+        ]
+        return SyncPlan(
+            actions=[action for plan in plans for action in plan.actions],
+            errors=[error for plan in plans for error in plan.errors],
+            skipped=[item for plan in plans for item in plan.skipped],
+        )
+
     def plan_for_target(self, target: str, *, apply_excludes: bool = False) -> SyncPlan:
         normalized = target.lower()
         if normalized != "all" and not self.is_enabled(normalized):
@@ -279,6 +292,12 @@ class AppsService:
             include_git_excludes=apply_excludes,
         ).build()
         if normalized == "all":
+            cleanup = self._plan_disabled_app_cleanup()
+            plan = SyncPlan(
+                actions=[*plan.actions, *cleanup.actions],
+                errors=[*plan.errors, *cleanup.errors],
+                skipped=[*plan.skipped, *cleanup.skipped],
+            )
             if (
                 not app_services
                 and not plan.actions
