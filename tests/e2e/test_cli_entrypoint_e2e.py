@@ -203,6 +203,8 @@ def test_entrypoint_apply_fails_on_generated_skill_conflict(
     assert apply.returncode != 0
     assert "conflict" in apply.stdout
     assert "failed" in apply.stdout
+    assert "Conflict (not overwritten)" in apply.stderr
+    assert str(target_skill_file) in apply.stderr
     assert target_skill_file.is_dir()
 
 

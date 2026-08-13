@@ -89,4 +89,6 @@ def apply(obj: dict[str, str], app: str, apply_excludes: bool, verbose: bool) ->
     ui.render_apply_result(applied, failed, failures, next_steps=next_steps)
 
     if failed:
+        for failure in failures:
+            click.echo(f"code-agnostic apply: {failure}", err=True)
         raise click.exceptions.Exit(1)
