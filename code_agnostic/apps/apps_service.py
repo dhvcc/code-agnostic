@@ -39,7 +39,7 @@ from code_agnostic.models import (
 )
 from code_agnostic.planner import SyncPlanner
 from code_agnostic.project_artifacts import load_project_entries, project_config_dir
-from code_agnostic.utils import read_json_safe, write_json
+from code_agnostic.utils import read_json_safe, sync_target_lock, write_json
 from code_agnostic.workspaces import WorkspaceService
 
 
@@ -511,9 +511,10 @@ class AppsService:
         ]
 
     def _cleanup_claude_projects(self, managed_mcp: dict[str, Any]) -> list[Action]:
-        managed = self._names_for_scope(
-            managed_mcp, app_scope(AppId.CLAUDE, "projects")
-        )
+        projects_scope = ClaudeConfigService.PROJECTS_SCOPE
+        managed = self._names_for_scope(managed_mcp, projects_scope)
+        managed_project_servers = ClaudeConfigService.project_mcp_ownership(managed_mcp)
+        managed.update(managed_project_servers)
         if not managed:
             return []
         try:
@@ -523,20 +524,26 @@ class AppsService:
         if not isinstance(service, ClaudeConfigService):
             return []
         if not service.repository.config_path.exists():
-            projects_scope = app_scope(AppId.CLAUDE, "projects")
+            ownership_scopes = tuple(
+                service.project_mcp_scope(path) for path in managed_project_servers
+            )
             return [
                 self._clear_native_ownership(
                     service,
                     app=AppId.CLAUDE.value,
                     scope=projects_scope,
-                    entry_scopes=(projects_scope,),
+                    entry_scopes=(projects_scope, *ownership_scopes),
                 )
             ]
         # Empty desired + our previously-managed project paths → prune only the
         # `mcpServers` sub-keys we wrote, keep the rest of each project entry, and
         # clear the ownership state (managed_entries becomes empty).
         return [
-            service.build_project_mcp_action({}, previously_managed_projects=managed)
+            service.build_project_mcp_action(
+                {},
+                previously_managed_projects=managed,
+                previously_managed_project_servers=managed_project_servers,
+            )
         ]
 
     @staticmethod
@@ -607,10 +614,24 @@ class AppsService:
             return plan
         return plan.filter_for_target(normalized)
 
-    def execute_plan(self, scoped_plan: SyncPlan) -> tuple[int, int, list[str]]:
+    def apply_target(
+        self, target: str, *, apply_excludes: bool = False
+    ) -> tuple[SyncPlan, tuple[int, int, list[str]]]:
+        """Plan and apply one target while holding the shared target lock."""
+        with sync_target_lock():
+            scoped_plan = self.plan_for_target(target, apply_excludes=apply_excludes)
+            if not scoped_plan.actions or scoped_plan.errors:
+                return scoped_plan, (0, 0, [])
+            return scoped_plan, self.execute_plan(scoped_plan, target_lock_held=True)
+
+    def execute_plan(
+        self, scoped_plan: SyncPlan, *, target_lock_held: bool = False
+    ) -> tuple[int, int, list[str]]:
         persist_state = self._requires_state_persist(scoped_plan)
         return SyncExecutor(core=self.core_repository).execute(
-            scoped_plan, persist_state=persist_state
+            scoped_plan,
+            persist_state=persist_state,
+            target_lock_held=target_lock_held,
         )
 
     def _resolve_services_for_target(self, target: str) -> list[IAppConfigService]:

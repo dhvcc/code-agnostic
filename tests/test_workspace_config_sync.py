@@ -1086,6 +1086,60 @@ def test_workspace_claude_removed_repo_prunes_project_mcp_keeps_others(
     }
 
 
+def test_workspace_claude_project_mcp_preserves_user_servers_per_project(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"managed": {"url": "https://managed.example/mcp"}}},
+    )
+    config_path = tmp_path / ".claude.json"
+    service = _claude_service(tmp_path / ".claude")
+
+    def _apply() -> dict:
+        plan = SyncPlanner(core=core, app_services=[service]).build()
+        _applied, failed, failures = SyncExecutor(core=core).execute(plan)
+        assert failed == 0, failures
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    project_key = str(repo.resolve())
+    payload = _apply()
+    payload["projects"][project_key]["mcpServers"]["personal"] = {
+        "type": "http",
+        "url": "https://personal.example/mcp",
+    }
+    write_json(config_path, payload)
+
+    payload = _apply()
+    assert set(payload["projects"][project_key]["mcpServers"]) == {
+        "managed",
+        "personal",
+    }
+
+    ws_config.joinpath("mcp.base.json").unlink()
+    payload = _apply()
+    assert payload["projects"][project_key]["mcpServers"] == {
+        "personal": {
+            "type": "http",
+            "url": "https://personal.example/mcp",
+        }
+    }
+    state = json.loads((core_root / ".sync-state.json").read_text(encoding="utf-8"))
+    assert "app:claude:projects" not in state["managed_mcp"]
+    assert f"app:claude:project:{project_key}" not in state["managed_mcp"]
+
+
 def test_workspace_targeted_plan_does_not_cleanup_other_app_scopes(
     minimal_shared_config: Path,
     core_root: Path,

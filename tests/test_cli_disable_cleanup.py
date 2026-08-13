@@ -202,11 +202,22 @@ def test_disable_claude_prunes_project_mcp_keeps_user_project(
     state = json.loads((core_root / ".sync-state.json").read_text())
     assert repo_key in state["managed_mcp"]["app:claude:projects"]
 
+    projects[repo_key]["mcpServers"]["personal"] = {
+        "type": "http",
+        "url": "https://personal.example/mcp",
+    }
+    config_path.write_text(json.dumps({"projects": projects}), encoding="utf-8")
+
     # Disable → our project mcpServers pruned, user's project kept.
     assert cli_runner.invoke(cli, ["apps", "disable", "-a", "claude"]).exit_code == 0
 
     projects = json.loads(config_path.read_text())["projects"]
-    assert "mcpServers" not in projects.get(repo_key, {})
+    assert projects[repo_key]["mcpServers"] == {
+        "personal": {
+            "type": "http",
+            "url": "https://personal.example/mcp",
+        }
+    }
     assert projects[user_project] == {"mcpServers": {"personal": {"type": "http"}}}
 
     state = json.loads((core_root / ".sync-state.json").read_text())

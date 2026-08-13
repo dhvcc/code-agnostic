@@ -274,9 +274,6 @@ class SyncPlanner:
         )
 
     def _merge_claude_project_mcp(self, plan: SyncPlan) -> SyncPlan:
-        if not self._claude_project_mcp:
-            return plan
-
         claude_service = next(
             (
                 service
@@ -287,6 +284,17 @@ class SyncPlanner:
             None,
         )
         if claude_service is None:
+            return plan
+
+        state = self.core.load_state()
+        previously_managed_project_servers = claude_service.project_mcp_ownership(
+            state.managed_mcp
+        )
+        previously_managed_projects = set(
+            state.managed_mcp.get(claude_service.PROJECTS_SCOPE, [])
+        )
+        previously_managed_projects.update(previously_managed_project_servers)
+        if not self._claude_project_mcp and not previously_managed_projects:
             return plan
 
         config_path = claude_service.repository.config_path
@@ -303,14 +311,11 @@ class SyncPlanner:
             if existing_action is not None and isinstance(existing_action.payload, dict)
             else None
         )
-        state = self.core.load_state()
-        previously_managed_projects = set(
-            state.managed_mcp.get(app_scope(AppId.CLAUDE, "projects"), [])
-        )
         project_action = claude_service.build_project_mcp_action(
             self._claude_project_mcp,
             base_payload=base_payload,
             previously_managed_projects=previously_managed_projects,
+            previously_managed_project_servers=previously_managed_project_servers,
         )
         if existing_action is not None:
             # Carry global MCP ownership tracking onto the merged Claude action so
