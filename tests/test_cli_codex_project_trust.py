@@ -184,6 +184,35 @@ def test_codex_project_trust_same_value_unmanaged_setting_is_conflict(
     assert not (core_root / ".sync-state.json").exists()
 
 
+def test_codex_project_trust_user_change_after_apply_is_conflict(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+) -> None:
+    assert _enable_codex(cli_runner).exit_code == 0
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_codex_base(
+        core_root,
+        {str(project): {"trust_level": "trusted"}},
+    )
+    assert _run(cli_runner, ["apply", "-a", "codex"]).exit_code == 0
+
+    config_path = tmp_path / ".codex" / "config.toml"
+    config = _read_codex_config(tmp_path)
+    config["projects"][str(project.resolve())]["trust_level"] = "untrusted"
+    config_path.write_text(tomlkit.dumps(config), encoding="utf-8")
+
+    result = _run(cli_runner, ["plan", "-a", "codex"])
+    assert result.exit_code == 1
+    assert "user-modified" in result.output.lower()
+    assert (
+        _read_codex_config(tmp_path)["projects"][str(project.resolve())]["trust_level"]
+        == "untrusted"
+    )
+
+
 def test_independent_source_roots_preserve_each_codex_project_trust_entry(
     tmp_path: Path,
     cli_runner,

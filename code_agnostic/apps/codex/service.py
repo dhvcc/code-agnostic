@@ -294,6 +294,15 @@ class CodexConfigService(RegisteredAppConfigService):
                     f"Codex project trust conflicts with unmanaged existing setting: "
                     f"{project_path}"
                 )
+            if (
+                isinstance(desired_trust, str)
+                and project_path in managed
+                and project.get("trust_level") != managed[project_path]
+            ):
+                raise SyncAppError(
+                    f"Codex project trust conflicts with user-modified setting: "
+                    f"{project_path}"
+                )
             for key, value in desired_config.items():
                 project[key] = deepcopy(value)
             projects[project_path] = project
