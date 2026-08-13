@@ -315,6 +315,53 @@ def test_execute_persists_global_revision_manifest_on_success(
     assert artifact_path.read_text(encoding="utf-8") == payload
 
 
+def test_execute_does_not_store_owned_native_config_bytes_in_revision(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / ".cursor" / "mcp.json"
+    sentinel = "native-config-secret"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        json.dumps({"mcpServers": {"personal": {"token": sentinel}}}),
+        encoding="utf-8",
+    )
+    plan = SyncPlan(
+        actions=[
+            Action(
+                kind=ActionKind.WRITE_JSON,
+                path=target,
+                status=ActionStatus.UPDATE,
+                detail="update shared native config",
+                payload={"mcpServers": {"personal": {"token": sentinel}}},
+                app="cursor",
+                scope="app:cursor:mcp",
+                managed_entries={"app:cursor:mcp": ["managed"]},
+            )
+        ],
+        errors=[],
+        skipped=[],
+    )
+
+    applied, failed, failures = SyncExecutor(core=CoreRepository(core_root)).execute(
+        plan
+    )
+
+    assert applied == 1
+    assert failed == 0
+    assert failures == []
+    revision_root = core_root / ".sync-revisions"
+    assert all(
+        sentinel not in path.read_bytes().decode(errors="ignore")
+        for path in revision_root.rglob("*")
+        if path.is_file()
+    )
+    manifest = json.loads((revision_root / "active.json").read_text(encoding="utf-8"))
+    manifest_payload = json.loads(Path(manifest["manifest_path"]).read_text())
+    assert manifest_payload["targets"] == []
+
+
 def test_execute_persists_workspace_revision_manifest_on_success(
     minimal_shared_config: Path,
     core_root: Path,

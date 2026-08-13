@@ -1085,6 +1085,7 @@ class SyncExecutor:
                 "targets": [
                     self._serialize_manifest_target(record, action, index)
                     for index, action in enumerate(actions)
+                    if not self._skip_revision_target(action)
                 ],
             }
             self._place_json_via_staging(
@@ -1190,6 +1191,11 @@ class SyncExecutor:
             "target_checksum": payload["target_checksum"],
             "target_artifact_path": payload["target_artifact_path"],
         }
+
+    @staticmethod
+    def _skip_revision_target(action: Action) -> bool:
+        """Never persist bytes from ownership-tracked native configs."""
+        return action.managed_entries is not None or action.managed_values is not None
 
     def _serialize_manifest_sources(self, root: Path) -> list[dict[str, str]]:
         entries: list[dict[str, str]] = []
