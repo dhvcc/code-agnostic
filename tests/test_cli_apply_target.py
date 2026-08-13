@@ -6,6 +6,7 @@ from urllib.request import Request, urlopen
 from jsonschema import Draft202012Validator
 from code_agnostic.__main__ import cli
 from code_agnostic.constants import AGENTS_FILENAME
+from code_agnostic.cli.commands.apply import _planner_error_summary
 
 
 @functools.lru_cache(maxsize=1)
@@ -17,6 +18,14 @@ def _load_opencode_schema() -> dict:
     with urlopen(request, timeout=20) as response:
         payload = response.read().decode("utf-8")
     return json.loads(payload)
+
+
+def test_apply_planner_error_summary_is_bounded_and_printable() -> None:
+    summary = _planner_error_summary(Exception("line one\n\x1b[31m" + "x" * 3000))
+
+    assert "\n" not in summary
+    assert "\x1b" not in summary
+    assert len(summary) == 2_003
 
 
 def test_apply_opencode_generates_workspace_root_and_repo_config_files(

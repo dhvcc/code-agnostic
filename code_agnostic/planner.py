@@ -353,7 +353,13 @@ class SyncPlanner:
                 desired_common = common_mcp_to_dto(target_servers)
                 plans.append(service.build_plan(desired_common, self.core))
             except SyncAppError as exc:
-                plans.append(SyncPlan(actions=[], errors=[exc], skipped=[]))
+                plans.append(
+                    SyncPlan(
+                        actions=[],
+                        errors=[SyncAppError(f"{service.app_id.value}: {exc}")],
+                        skipped=[],
+                    )
+                )
         return _merge_plans(*plans)
 
     def _plan_workspaces(self) -> SyncPlan:

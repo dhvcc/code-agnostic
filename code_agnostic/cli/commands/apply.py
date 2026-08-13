@@ -8,6 +8,19 @@ from code_agnostic.cli.options import app_option, verbose_option
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.models import SyncPlan
 from code_agnostic.tui import SyncConsoleUI
+from code_agnostic.utils import compact_home_paths_in_text
+
+_MAX_PLANNER_ERROR_LENGTH = 2_000
+
+
+def _planner_error_summary(error: Exception) -> str:
+    summary = compact_home_paths_in_text(" ".join(str(error).split()))
+    summary = "".join(character for character in summary if character.isprintable())
+    if not summary:
+        return type(error).__name__
+    if len(summary) > _MAX_PLANNER_ERROR_LENGTH:
+        return f"{summary[:_MAX_PLANNER_ERROR_LENGTH]}..."
+    return summary
 
 
 def _apply_next_steps(plan: SyncPlan, target: str) -> str | None:
@@ -80,6 +93,11 @@ def apply(obj: dict[str, str], app: str, apply_excludes: bool, verbose: bool) ->
         return
 
     if scoped_plan.errors:
+        for error in scoped_plan.errors:
+            click.echo(
+                f"code-agnostic apply planning error: {_planner_error_summary(error)}",
+                err=True,
+            )
         raise click.ClickException(
             "Apply aborted due to planning/parsing errors above."
         )

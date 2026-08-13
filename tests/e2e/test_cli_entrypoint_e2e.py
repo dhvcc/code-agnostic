@@ -208,6 +208,46 @@ def test_entrypoint_apply_fails_on_generated_skill_conflict(
     assert target_skill_file.is_dir()
 
 
+def test_entrypoint_apply_reports_unmanaged_mcp_conflict_in_stderr(
+    tmp_path: Path,
+) -> None:
+    home = tmp_path / "home"
+
+    enable = _run_cli(home, "apps", "enable", "-a", "cursor")
+    assert enable.returncode == 0, enable.stderr
+
+    source = home / ".config" / "code-agnostic" / "config" / "mcp.base.json"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        json.dumps(
+            {"mcpServers": {"inno-ai-chat": {"command": "managed-chat", "args": []}}}
+        ),
+        encoding="utf-8",
+    )
+    target = home / ".cursor" / "mcp.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(
+            {"mcpServers": {"inno-ai-chat": {"command": "user-owned-chat", "args": []}}}
+        ),
+        encoding="utf-8",
+    )
+
+    apply = _run_cli(home, "apply", "-a", "cursor")
+    assert apply.returncode != 0
+    assert (
+        "cursor: MCP server 'inno-ai-chat' conflicts with an unmanaged existing server"
+        in apply.stderr
+    )
+    assert "Traceback" not in apply.stderr
+    assert (
+        json.loads(target.read_text(encoding="utf-8"))["mcpServers"]["inno-ai-chat"][
+            "command"
+        ]
+        == "user-owned-chat"
+    )
+
+
 def test_entrypoint_import_apply_preflights_before_writing(
     tmp_path: Path,
 ) -> None:
