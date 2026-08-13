@@ -7,6 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from code_agnostic.core.repository import CoreRepository
+from code_agnostic.executor import SyncExecutor
+from code_agnostic.models import SyncPlan
 from code_agnostic.utils import file_lock
 
 
@@ -51,3 +54,40 @@ def test_file_lock_serializes_concurrent_writers(tmp_path: Path) -> None:
 
     assert overlaps == 0, "lock holders overlapped"
     assert int(counter_file.read_text(encoding="utf-8")) == 20
+
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="POSIX flock semantics")
+def test_executors_with_independent_sources_share_target_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    active = 0
+    overlaps = 0
+    guard = threading.Lock()
+
+    class ProbeExecutor(SyncExecutor):
+        def _execute(self, plan: SyncPlan, persist_state: bool = True):
+            nonlocal active, overlaps
+            with guard:
+                active += 1
+                if active > 1:
+                    overlaps += 1
+            threading.Event().wait(0.02)
+            with guard:
+                active -= 1
+            return 0, 0, []
+
+    executors = [
+        ProbeExecutor(CoreRepository(tmp_path / "source-a")),
+        ProbeExecutor(CoreRepository(tmp_path / "source-b")),
+    ]
+    threads = [
+        threading.Thread(target=executor.execute, args=(SyncPlan([], [], []),))
+        for executor in executors
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert overlaps == 0

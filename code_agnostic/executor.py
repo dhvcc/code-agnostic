@@ -206,10 +206,14 @@ class SyncExecutor:
     ) -> tuple[int, int, list[str]]:
         if not persist_state:
             return self._execute(plan, persist_state=persist_state)
-        # Serialize concurrent applies so they can't race on shared sync state.
-        lock_path = self.context.core.root / SYNC_LOCK_FILENAME
-        with file_lock(lock_path):
-            return self._execute(plan, persist_state=persist_state)
+        # Different canonical source roots still mutate the same per-user client
+        # configs. Acquire the stable target lock before the source-state lock so
+        # independent compiler processes cannot lose each other's entries.
+        target_lock = Path.home() / ".cache" / "code-agnostic" / SYNC_LOCK_FILENAME
+        source_lock = self.context.core.root / SYNC_LOCK_FILENAME
+        with file_lock(target_lock):
+            with file_lock(source_lock):
+                return self._execute(plan, persist_state=persist_state)
 
     def _execute(
         self, plan: SyncPlan, persist_state: bool = True
