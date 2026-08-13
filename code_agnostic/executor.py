@@ -774,29 +774,111 @@ class SyncExecutor:
         global_values_touched: set[str] = set()
         workspace_links: dict[str, dict[str, list[str]]] = {}
         workspace_paths: dict[str, dict[str, list[str]]] = {}
+        workspace_mcp: dict[str, dict[str, list[str]]] = {}
+        workspace_mcp_touched: dict[str, set[str]] = {}
+        workspace_values: dict[str, dict[str, dict[str, str]]] = {}
+        workspace_values_touched: dict[str, set[str]] = {}
         workspace_touched_scopes: dict[str, set[str]] = {}
         project_links: dict[str, dict[str, list[str]]] = {}
         project_paths: dict[str, dict[str, list[str]]] = {}
+        project_mcp: dict[str, dict[str, list[str]]] = {}
+        project_mcp_touched: dict[str, set[str]] = {}
+        project_values: dict[str, dict[str, dict[str, str]]] = {}
+        project_values_touched: dict[str, set[str]] = {}
         project_touched_scopes: dict[str, set[str]] = {}
 
         for action in plan.actions:
             if action.scope is None:
                 continue
 
-            if action.managed_entries is not None:
-                # User-shared config: track the named entries we own (MCP servers,
-                # agent-registry names, …) by scope — never the shared config file
-                # itself, so cleanup prunes only what we wrote.
-                for entry_scope, names in action.managed_entries.items():
-                    global_mcp_touched.add(entry_scope)
-                    if names:
-                        global_mcp[entry_scope] = sorted(set(names))
-            if action.managed_values is not None:
-                for value_scope, values in action.managed_values.items():
-                    global_values_touched.add(value_scope)
-                    if values:
-                        global_values[value_scope] = dict(values)
-            if action.managed_entries is not None or action.managed_values is not None:
+            ownership_tracked = (
+                action.managed_entries is not None or action.managed_values is not None
+            )
+            owns_entries = bool(
+                action.managed_entries and any(action.managed_entries.values())
+            )
+            if action.workspace is not None:
+                ws_name = action.workspace
+                if ownership_tracked:
+                    workspace_touched_scopes.setdefault(ws_name, set()).add(
+                        action.scope
+                    )
+                    if (
+                        action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                        and action.status != ActionStatus.CONFLICT
+                        and action.path.exists()
+                        and owns_entries
+                    ):
+                        workspace_paths.setdefault(ws_name, {}).setdefault(
+                            action.scope, []
+                        ).append(str(action.path))
+                if action.managed_entries is not None:
+                    for entry_scope, names in action.managed_entries.items():
+                        workspace_mcp_touched.setdefault(ws_name, set()).add(
+                            entry_scope
+                        )
+                        if names:
+                            workspace_mcp.setdefault(ws_name, {})[entry_scope] = sorted(
+                                set(names)
+                            )
+                if action.managed_values is not None:
+                    for value_scope, values in action.managed_values.items():
+                        workspace_values_touched.setdefault(ws_name, set()).add(
+                            value_scope
+                        )
+                        if values:
+                            workspace_values.setdefault(ws_name, {})[value_scope] = (
+                                dict(values)
+                            )
+            elif action.project is not None:
+                project_name = action.project
+                if ownership_tracked:
+                    project_touched_scopes.setdefault(project_name, set()).add(
+                        action.scope
+                    )
+                    if (
+                        action.kind in (ActionKind.WRITE_TEXT, ActionKind.WRITE_JSON)
+                        and action.status != ActionStatus.CONFLICT
+                        and action.path.exists()
+                        and owns_entries
+                    ):
+                        project_paths.setdefault(project_name, {}).setdefault(
+                            action.scope, []
+                        ).append(str(action.path))
+                if action.managed_entries is not None:
+                    for entry_scope, names in action.managed_entries.items():
+                        project_mcp_touched.setdefault(project_name, set()).add(
+                            entry_scope
+                        )
+                        if names:
+                            project_mcp.setdefault(project_name, {})[entry_scope] = (
+                                sorted(set(names))
+                            )
+                if action.managed_values is not None:
+                    for value_scope, values in action.managed_values.items():
+                        project_values_touched.setdefault(project_name, set()).add(
+                            value_scope
+                        )
+                        if values:
+                            project_values.setdefault(project_name, {})[value_scope] = (
+                                dict(values)
+                            )
+            else:
+                if action.managed_entries is not None:
+                    # User-shared config: track the named entries we own (MCP
+                    # servers, agent-registry names, …) by scope — never the shared
+                    # config file itself, so cleanup prunes only what we wrote.
+                    for entry_scope, names in action.managed_entries.items():
+                        global_mcp_touched.add(entry_scope)
+                        if names:
+                            global_mcp[entry_scope] = sorted(set(names))
+                if action.managed_values is not None:
+                    for value_scope, values in action.managed_values.items():
+                        global_values_touched.add(value_scope)
+                        if values:
+                            global_values[value_scope] = dict(values)
+
+            if ownership_tracked:
                 continue
 
             if action.workspace is not None:
@@ -884,17 +966,28 @@ class SyncExecutor:
         for ws_name in workspace_touched_scopes:
             ws_repo = WorkspaceConfigRepository(root=core.workspace_config_dir(ws_name))
             existing_workspace_state = ws_repo.load_state()
+            workspace_scopes = workspace_touched_scopes[ws_name]
             ws_state = {
                 "updated_at": updated_at,
                 "managed_links": self._merge_managed_links(
                     existing=existing_workspace_state.managed_links,
-                    touched_scopes=workspace_touched_scopes[ws_name],
+                    touched_scopes=workspace_scopes,
                     current_links=workspace_links.get(ws_name, {}),
                 ),
                 "managed_paths": self._merge_managed_links(
                     existing=existing_workspace_state.managed_paths,
-                    touched_scopes=workspace_touched_scopes[ws_name],
+                    touched_scopes=workspace_scopes,
                     current_links=workspace_paths.get(ws_name, {}),
+                ),
+                "managed_mcp": self._merge_managed_links(
+                    existing=existing_workspace_state.managed_mcp,
+                    touched_scopes=workspace_mcp_touched.get(ws_name, set()),
+                    current_links=workspace_mcp.get(ws_name, {}),
+                ),
+                "managed_values": self._merge_managed_values(
+                    existing=existing_workspace_state.managed_values,
+                    touched_scopes=workspace_values_touched.get(ws_name, set()),
+                    current_values=workspace_values.get(ws_name, {}),
                 ),
             }
             self._place_json_via_staging(
@@ -914,17 +1007,28 @@ class SyncExecutor:
                 root=core.project_config_dir(project_name)
             )
             existing_project_state = project_repo.load_state()
+            project_scopes = project_touched_scopes[project_name]
             project_state = {
                 "updated_at": updated_at,
                 "managed_links": self._merge_managed_links(
                     existing=existing_project_state.managed_links,
-                    touched_scopes=project_touched_scopes[project_name],
+                    touched_scopes=project_scopes,
                     current_links=project_links.get(project_name, {}),
                 ),
                 "managed_paths": self._merge_managed_links(
                     existing=existing_project_state.managed_paths,
-                    touched_scopes=project_touched_scopes[project_name],
+                    touched_scopes=project_scopes,
                     current_links=project_paths.get(project_name, {}),
+                ),
+                "managed_mcp": self._merge_managed_links(
+                    existing=existing_project_state.managed_mcp,
+                    touched_scopes=project_mcp_touched.get(project_name, set()),
+                    current_links=project_mcp.get(project_name, {}),
+                ),
+                "managed_values": self._merge_managed_values(
+                    existing=existing_project_state.managed_values,
+                    touched_scopes=project_values_touched.get(project_name, set()),
+                    current_values=project_values.get(project_name, {}),
                 ),
             }
             self._place_json_via_staging(

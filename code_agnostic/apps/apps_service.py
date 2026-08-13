@@ -1,7 +1,12 @@
 from pathlib import Path
 from typing import Any
 
-from code_agnostic.apps.app_id import AppId, app_ids_by_capability, app_scope
+from code_agnostic.apps.app_id import (
+    AppId,
+    app_ids_by_capability,
+    app_metadata,
+    app_scope,
+)
 from code_agnostic.apps.common.framework import (
     create_registered_app_service,
     list_registered_app_services,
@@ -9,6 +14,11 @@ from code_agnostic.apps.common.framework import (
 from code_agnostic.apps.claude.service import ClaudeConfigService
 from code_agnostic.apps.codex.service import CodexConfigService
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
+from code_agnostic.apps.opencode.config_repository import OpenCodeConfigRepository
+from code_agnostic.apps.opencode.mapper import OpenCodeMCPMapper
+from code_agnostic.apps.opencode.schema_repository import OpenCodeSchemaRepository
+from code_agnostic.apps.opencode.service import OpenCodeConfigService
+from code_agnostic.constants import OPENCODE_CONFIG_FILENAME
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
     load_state_paths,
@@ -19,10 +29,18 @@ from code_agnostic.core.project_repository import ProjectConfigRepository
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.executor import SyncExecutor
-from code_agnostic.models import Action, AppStatusRow, AppSyncStatus, SyncPlan
+from code_agnostic.models import (
+    Action,
+    ActionKind,
+    ActionStatus,
+    AppStatusRow,
+    AppSyncStatus,
+    SyncPlan,
+)
 from code_agnostic.planner import SyncPlanner
 from code_agnostic.project_artifacts import load_project_entries, project_config_dir
 from code_agnostic.utils import read_json_safe, write_json
+from code_agnostic.workspaces import WorkspaceService
 
 
 class AppsService:
@@ -132,11 +150,28 @@ class AppsService:
                     action.workspace = ws_name
                     actions.append(action)
             for scope in sorted(s for s in ws_paths if s.startswith(ws_prefix)):
+                if scope.endswith("_mcp") and any(
+                    key in ws_state.managed_mcp
+                    for key in (
+                        app_scope(app_id, "mcp"),
+                        app_scope(app_id, "agents_registry"),
+                    )
+                ):
+                    continue
                 for action in self._cleanup_paths(
                     ws_paths, scope, "workspace", skipped
                 ):
                     action.workspace = ws_name
                     actions.append(action)
+            actions.extend(
+                self._cleanup_workspace_mcp(
+                    app_id=app_id,
+                    workspace_name=ws_name,
+                    workspace_path=workspace.path,
+                    managed_mcp=ws_state.managed_mcp,
+                    managed_paths=ws_state.managed_paths,
+                )
+            )
 
         # --- Project scopes (project:<app>:*) ---
         project_prefix = f"project:{app_id.value}:"
@@ -157,11 +192,28 @@ class AppsService:
             for scope in sorted(
                 s for s in project_paths if s.startswith(project_prefix)
             ):
+                if scope.endswith(":mcp") and any(
+                    key in project_state.managed_mcp
+                    for key in (
+                        app_scope(app_id, "mcp"),
+                        app_scope(app_id, "agents_registry"),
+                    )
+                ):
+                    continue
                 for action in self._cleanup_paths(
                     project_paths, scope, app_id.value, skipped
                 ):
                     action.project = project_name
                     actions.append(action)
+            actions.extend(
+                self._cleanup_project_mcp(
+                    app_id=app_id,
+                    project_name=project_name,
+                    project_path=project.path,
+                    managed_mcp=project_state.managed_mcp,
+                    managed_paths=project_state.managed_paths,
+                )
+            )
 
         return SyncPlan(actions=actions, errors=[], skipped=skipped)
 
@@ -194,6 +246,165 @@ class AppsService:
             skipped=skipped,
             skipped_message="Disable cleanup skipped (not file): {path}",
         )
+
+    @staticmethod
+    def _native_workspace_service(
+        app_id: AppId,
+        target_root: Path,
+    ) -> IAppConfigService:
+        if app_id == AppId.OPENCODE:
+            return OpenCodeConfigService(
+                repository=OpenCodeConfigRepository(
+                    root=target_root,
+                    config_path=target_root.parent / OPENCODE_CONFIG_FILENAME,
+                    legacy_config_path=target_root / OPENCODE_CONFIG_FILENAME,
+                ),
+                mapper=OpenCodeMCPMapper(),
+                schema_repository=OpenCodeSchemaRepository(),
+                base_config_path=None,
+            )
+        return create_registered_app_service(app_id, root=target_root)
+
+    @staticmethod
+    def _native_config_is_empty(action: Action, service: IAppConfigService) -> bool:
+        payload = action.payload
+        if isinstance(payload, str):
+            return not payload.strip()
+        if not isinstance(payload, dict):
+            return False
+        for key, value in payload.items():
+            if key == service.mcp_config_key and isinstance(value, dict) and not value:
+                continue
+            return False
+        return True
+
+    def _cleanup_workspace_mcp(
+        self,
+        *,
+        app_id: AppId,
+        workspace_name: str,
+        workspace_path: Path,
+        managed_mcp: dict[str, Any],
+        managed_paths: dict[str, Any],
+    ) -> list[Action]:
+        if app_id == AppId.CLAUDE:
+            return []
+        managed = self._names_for_scope(managed_mcp, app_scope(app_id, "mcp"))
+        managed_agents = self._names_for_scope(
+            managed_mcp, app_scope(app_id, "agents_registry")
+        )
+        if not managed and not managed_agents:
+            return []
+
+        metadata = app_metadata(app_id)
+        if metadata.project_dir_name is None:
+            return []
+
+        targets: list[tuple[Path, str]] = [
+            (
+                workspace_path / metadata.project_dir_name,
+                f"ws:{app_id.value}:workspace_root_mcp",
+            )
+        ]
+        targets.extend(
+            (
+                repo / metadata.project_dir_name,
+                f"ws:{app_id.value}:repo_mcp",
+            )
+            for repo in WorkspaceService().discover_git_repos(workspace_path)
+        )
+        for scope in (
+            f"ws:{app_id.value}:workspace_root_mcp",
+            f"ws:{app_id.value}:repo_mcp",
+        ):
+            for path in load_state_paths(managed_paths, scope):
+                target_root = (
+                    path.parent / ".opencode"
+                    if app_id == AppId.OPENCODE
+                    and path.name == OPENCODE_CONFIG_FILENAME
+                    else path.parent
+                )
+                targets.append((target_root, scope))
+
+        actions: list[Action] = []
+        seen_paths: set[Path] = set()
+        for target_root, scope in targets:
+            service = self._native_workspace_service(app_id, target_root)
+            if not service.repository.config_path.exists():
+                continue
+            config_path = service.repository.config_path.resolve(strict=False)
+            if config_path in seen_paths:
+                continue
+            seen_paths.add(config_path)
+            action = service.build_action(
+                {},
+                previously_managed=managed,
+                previously_managed_agents=managed_agents,
+            )
+            if self._native_config_is_empty(action, service):
+                action.kind = ActionKind.REMOVE_FILE
+                action.status = ActionStatus.REMOVE
+                action.payload = None
+            action.app = "workspace"
+            action.workspace = workspace_name
+            action.scope = scope
+            actions.append(action)
+        return actions
+
+    def _cleanup_project_mcp(
+        self,
+        *,
+        app_id: AppId,
+        project_name: str,
+        project_path: Path,
+        managed_mcp: dict[str, Any],
+        managed_paths: dict[str, Any],
+    ) -> list[Action]:
+        if app_id == AppId.CLAUDE:
+            return []
+        managed = self._names_for_scope(managed_mcp, app_scope(app_id, "mcp"))
+        managed_agents = self._names_for_scope(
+            managed_mcp, app_scope(app_id, "agents_registry")
+        )
+        if not managed and not managed_agents:
+            return []
+
+        metadata = app_metadata(app_id)
+        if metadata.project_dir_name is None:
+            return []
+        target_roots = [project_path / metadata.project_dir_name]
+        scope = f"project:{app_id.value}:{project_name}:mcp"
+        for path in load_state_paths(managed_paths, scope):
+            target_roots.append(
+                path.parent
+                if app_id != AppId.OPENCODE or path.name != OPENCODE_CONFIG_FILENAME
+                else path.parent / ".opencode"
+            )
+
+        actions: list[Action] = []
+        seen_paths: set[Path] = set()
+        for target_root in target_roots:
+            service = self._native_workspace_service(app_id, target_root)
+            if not service.repository.config_path.exists():
+                continue
+            config_path = service.repository.config_path.resolve(strict=False)
+            if config_path in seen_paths:
+                continue
+            seen_paths.add(config_path)
+            action = service.build_action(
+                {},
+                previously_managed=managed,
+                previously_managed_agents=managed_agents,
+            )
+            if self._native_config_is_empty(action, service):
+                action.kind = ActionKind.REMOVE_FILE
+                action.status = ActionStatus.REMOVE
+                action.payload = None
+            action.app = app_id.value
+            action.project = project_name
+            action.scope = scope
+            actions.append(action)
+        return actions
 
     def _cleanup_global_mcp(
         self,

@@ -4,6 +4,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
@@ -16,6 +18,9 @@ from code_agnostic.apps.codex.service import CodexConfigService
 from code_agnostic.apps.claude.config_repository import ClaudeConfigRepository
 from code_agnostic.apps.claude.mapper import ClaudeMCPMapper
 from code_agnostic.apps.claude.service import ClaudeConfigService
+from code_agnostic.apps.copilot.config_repository import CopilotConfigRepository
+from code_agnostic.apps.copilot.mapper import CopilotMCPMapper
+from code_agnostic.apps.copilot.service import CopilotConfigService
 from code_agnostic.apps.cursor.config_repository import CursorConfigRepository
 from code_agnostic.apps.cursor.mapper import CursorMCPMapper
 from code_agnostic.apps.cursor.schema_repository import CursorSchemaRepository
@@ -31,6 +36,7 @@ from code_agnostic.constants import (
 )
 from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
+from code_agnostic.errors import SyncAppError
 from code_agnostic.executor import SyncExecutor
 from code_agnostic.models import ActionKind, ActionStatus, SyncState
 from code_agnostic.planner import SyncPlanner
@@ -70,6 +76,13 @@ def _claude_service(claude_root: Path) -> ClaudeConfigService:
             config_path=claude_root.parent / ".claude.json",
         ),
         mapper=ClaudeMCPMapper(),
+    )
+
+
+def _copilot_service(copilot_root: Path) -> CopilotConfigService:
+    return CopilotConfigService(
+        repository=CopilotConfigRepository(root=copilot_root),
+        mapper=CopilotMCPMapper(),
     )
 
 
@@ -270,6 +283,255 @@ def test_workspace_mcp_sync_writes_cursor_workspace_outputs(
         == "https://test.example.com/mcp"
     )
     assert not any(ws_config in action.path.parents for action in plan.actions)
+
+
+def test_workspace_mcp_merge_owns_entries_and_preserves_native_config(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"managed": {"url": "https://managed.example/mcp"}}},
+    )
+
+    for path in (workspace_root, repo):
+        write_json(
+            path / ".cursor" / "mcp.json",
+            {
+                "mcpServers": {"personal": {"url": "https://personal.example/mcp"}},
+                "editor": {"theme": "user"},
+            },
+        )
+
+    service = _cursor_service(tmp_path / ".cursor")
+    first = SyncPlanner(core=core, app_services=[service]).build()
+    applied, failed, failures = SyncExecutor(core=core).execute(first)
+    assert failed == 0
+    assert failures == []
+    assert applied == 3  # global config plus workspace root and repo outputs
+
+    for path in (workspace_root, repo):
+        payload = json.loads(
+            (path / ".cursor" / "mcp.json").read_text(encoding="utf-8")
+        )
+        assert set(payload["mcpServers"]) == {"managed", "personal"}
+        assert payload["editor"] == {"theme": "user"}
+
+    state = json.loads((ws_config / ".sync-state.json").read_text(encoding="utf-8"))
+    assert state["managed_mcp"]["app:cursor:mcp"] == ["managed"]
+    assert "app:cursor:mcp" not in json.loads(
+        (core_root / ".sync-state.json").read_text(encoding="utf-8")
+    ).get("managed_mcp", {})
+
+    second = SyncPlanner(core=core, app_services=[service]).build()
+    reapplied, failed, failures = SyncExecutor(core=core).execute(second)
+    assert reapplied == 0
+    assert failed == 0
+    assert failures == []
+
+    # A user-added server after the first apply survives updates and source removal.
+    for path in (workspace_root, repo):
+        config_path = path / ".cursor" / "mcp.json"
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        payload["mcpServers"]["after-apply"] = {
+            "url": "https://after-apply.example/mcp"
+        }
+        write_json(config_path, payload)
+
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"managed": {"url": "https://updated.example/mcp"}}},
+    )
+    update = SyncPlanner(core=core, app_services=[service]).build()
+    applied, failed, failures = SyncExecutor(core=core).execute(update)
+    assert failed == 0
+    assert failures == []
+    assert applied == 2
+    for path in (workspace_root, repo):
+        payload = json.loads(
+            (path / ".cursor" / "mcp.json").read_text(encoding="utf-8")
+        )
+        assert set(payload["mcpServers"]) == {"managed", "personal", "after-apply"}
+        assert payload["mcpServers"]["managed"]["url"] == (
+            "https://updated.example/mcp"
+        )
+
+    (ws_config / "mcp.base.json").unlink()
+    cleanup = SyncPlanner(core=core, app_services=[service]).build()
+    applied, failed, failures = SyncExecutor(core=core).execute(cleanup)
+    assert failed == 0
+    assert failures == []
+    assert applied == 2
+    for path in (workspace_root, repo):
+        payload = json.loads(
+            (path / ".cursor" / "mcp.json").read_text(encoding="utf-8")
+        )
+        assert set(payload["mcpServers"]) == {"personal", "after-apply"}
+        assert payload["editor"] == {"theme": "user"}
+
+    state = WorkspaceConfigRepository(root=ws_config).load_state()
+    assert "app:cursor:mcp" not in state.managed_mcp
+
+
+def test_workspace_mcp_unmanaged_collision_fails_without_mutation(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    (workspace_root / "repo-a" / ".git").mkdir(parents=True)
+
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"collision": {"url": "https://managed.example/mcp"}}},
+    )
+    target = workspace_root / ".cursor" / "mcp.json"
+    write_json(
+        target,
+        {"mcpServers": {"collision": {"url": "https://user.example/mcp"}}},
+    )
+    before = target.read_text(encoding="utf-8")
+
+    with pytest.raises(SyncAppError, match="collision"):
+        SyncPlanner(
+            core=core, app_services=[_cursor_service(tmp_path / ".cursor")]
+        ).build()
+
+    assert target.read_text(encoding="utf-8") == before
+
+
+def test_workspace_mcp_stale_repo_prunes_owned_entries_preserves_native_fields(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    repo = workspace_root / "repo-a"
+    (repo / ".git").mkdir(parents=True)
+    core = CoreRepository(core_root)
+    core.add_workspace("myws", workspace_root)
+    ws_config = core.workspace_config_dir("myws")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"managed": {"url": "https://managed.example/mcp"}}},
+    )
+
+    service = _cursor_service(tmp_path / ".cursor")
+    first = SyncPlanner(core=core, app_services=[service]).build()
+    applied, failed, failures = SyncExecutor(core=core).execute(first)
+    assert applied == 3
+    assert failed == 0
+    assert failures == []
+
+    config_path = repo / ".cursor" / "mcp.json"
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    payload["mcpServers"]["personal"] = {"url": "https://personal.example/mcp"}
+    payload["native"] = {"owner": "repo"}
+    write_json(config_path, payload)
+    (repo / ".git").rmdir()
+    (ws_config / "mcp.base.json").unlink()
+
+    cleanup = SyncPlanner(core=core, app_services=[service]).build()
+    stale_action = next(
+        action for action in cleanup.actions if action.path == config_path
+    )
+    assert stale_action.scope == "ws:cursor:repo_mcp"
+    applied, failed, failures = SyncExecutor(core=core).execute(cleanup)
+    assert applied == 2
+    assert failed == 0
+    assert failures == []
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert payload["mcpServers"] == {
+        "personal": {"url": "https://personal.example/mcp"}
+    }
+    assert payload["native"] == {"owner": "repo"}
+    state = WorkspaceConfigRepository(root=ws_config).load_state()
+    assert "app:cursor:mcp" not in state.managed_mcp
+    assert "ws:cursor:repo_mcp" not in state.managed_paths
+
+
+def test_project_copilot_mcp_merge_owns_entries_and_prunes_only_stale_owned(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    write_json,
+) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    core = CoreRepository(core_root)
+    core.add_project("myproject", project_root)
+    project_config = core.project_config_dir("myproject")
+    write_json(
+        project_config / "mcp.base.json",
+        {"mcpServers": {"managed": {"url": "https://managed.example/mcp"}}},
+    )
+    config_path = project_root / ".github" / "mcp.json"
+    write_json(
+        config_path,
+        {
+            "mcpServers": {"personal": {"url": "https://personal.example/mcp"}},
+            "repository": {"visibility": "private"},
+        },
+    )
+
+    service = _copilot_service(tmp_path / ".copilot")
+    first = SyncPlanner(core=core, app_services=[service]).build()
+    applied, failed, failures = SyncExecutor(core=core).execute(first)
+    assert failed == 0
+    assert failures == []
+    assert applied == 2
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert set(payload["mcpServers"]) == {"managed", "personal"}
+    assert payload["repository"] == {"visibility": "private"}
+
+    state = json.loads(
+        (project_config / ".sync-state.json").read_text(encoding="utf-8")
+    )
+    assert state["managed_mcp"]["app:copilot:mcp"] == ["managed"]
+    assert "app:copilot:mcp" not in json.loads(
+        (core_root / ".sync-state.json").read_text(encoding="utf-8")
+    ).get("managed_mcp", {})
+
+    second = SyncPlanner(core=core, app_services=[service]).build()
+    reapplied, failed, failures = SyncExecutor(core=core).execute(second)
+    assert reapplied == 0
+    assert failed == 0
+    assert failures == []
+
+    payload["mcpServers"]["after-apply"] = {"url": "https://after-apply.example/mcp"}
+    write_json(config_path, payload)
+    (project_config / "mcp.base.json").unlink()
+
+    cleanup = SyncPlanner(core=core, app_services=[service]).build()
+    applied, failed, failures = SyncExecutor(core=core).execute(cleanup)
+    assert failed == 0
+    assert failures == []
+    assert applied == 1
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert set(payload["mcpServers"]) == {"personal", "after-apply"}
+    assert payload["repository"] == {"visibility": "private"}
+    assert (
+        "app:copilot:mcp"
+        not in WorkspaceConfigRepository(root=project_config).load_state().managed_mcp
+    )
 
 
 def test_workspace_plan_never_writes_generated_app_dirs_to_source_of_truth(

@@ -141,3 +141,69 @@ def test_bare_apply_reclaims_outputs_after_apps_config_disable(
             for group in ("managed_links", "managed_paths", "managed_mcp")
             for scope in state.get(group, {})
         )
+
+
+def test_bare_apply_disable_preserves_workspace_and_project_native_mcp(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+    write_json,
+) -> None:
+    enable_app("copilot")
+    write_json(
+        core_root / "config" / "mcp.base.json",
+        {"mcpServers": {"managed-global": {"url": "https://global.example/mcp"}}},
+    )
+
+    workspace_root = tmp_path / "workspace"
+    repo_root = workspace_root / "repo"
+    (repo_root / ".git").mkdir(parents=True)
+    core = CoreRepository(core_root)
+    core.add_workspace("team", workspace_root)
+    ws_config = core.workspace_config_dir("team")
+    write_json(
+        ws_config / "mcp.base.json",
+        {"mcpServers": {"managed-workspace": {"url": "https://workspace.example/mcp"}}},
+    )
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    core.add_project("service", project_root)
+    project_config = core.project_config_dir("service")
+    write_json(
+        project_config / "mcp.base.json",
+        {"mcpServers": {"managed-project": {"url": "https://project.example/mcp"}}},
+    )
+
+    native_configs = {
+        tmp_path / ".copilot" / "mcp-config.json": "global",
+        workspace_root / ".github" / "mcp.json": "workspace",
+        repo_root / ".github" / "mcp.json": "repo",
+        project_root / ".github" / "mcp.json": "project",
+    }
+    for path, label in native_configs.items():
+        write_json(
+            path,
+            {
+                "mcpServers": {"personal": {"url": f"https://{label}.example/mcp"}},
+                "native": {"owner": label},
+            },
+        )
+
+    initial_apply = cli_runner.invoke(cli, ["apply"])
+    assert initial_apply.exit_code == 0, initial_apply.output
+
+    apps_path = core_root / "config" / "apps.json"
+    apps = json.loads(apps_path.read_text(encoding="utf-8"))
+    apps["copilot"] = False
+    apps_path.write_text(json.dumps(apps), encoding="utf-8")
+
+    cleanup = cli_runner.invoke(cli, ["apply"])
+    assert cleanup.exit_code == 0, cleanup.output
+
+    for path, label in native_configs.items():
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert set(payload["mcpServers"]) == {"personal"}
+        assert payload["native"] == {"owner": label}

@@ -26,6 +26,7 @@ from code_agnostic.apps.opencode.service import OpenCodeConfigService
 from code_agnostic.constants import (
     AGENTS_FILENAME,
     AGENTS_PROJECT_DIRNAME,
+    CLAUDE_FILENAME,
     CLAUDE_LOCAL_FILENAME,
     CODEX_AGENTS_OVERRIDE_FILENAME,
     MCP_SERVERS_KEY,
@@ -37,11 +38,18 @@ from code_agnostic.core.repository import CoreRepository
 from code_agnostic.core.workspace_repository import WorkspaceConfigRepository
 from code_agnostic.errors import MissingConfigFileError, SyncAppError
 from code_agnostic.git_exclude_service import GitExcludeService
+from code_agnostic.generated_artifacts import (
+    ArtifactKind,
+    GeneratedArtifact,
+    OwnershipPolicy,
+    plan_generated_artifact,
+)
 from code_agnostic.models import (
     Action,
     ActionKind,
     ActionStatus,
     SyncPlan,
+    SyncState,
     WorkspaceConfig,
 )
 from code_agnostic.project_artifacts import (
@@ -232,6 +240,19 @@ def _prepare_project_action(action: Action, *, project_name: str) -> Action:
     return action
 
 
+def _managed_names(state: SyncState, app_id: AppId, resource: str) -> set[str]:
+    names = state.managed_mcp.get(app_scope(app_id, resource), [])
+    if not isinstance(names, list):
+        return set()
+    return {name for name in names if isinstance(name, str)}
+
+
+def _workspace_mcp_target_root(app_id: AppId, path: Path) -> Path:
+    if app_id == AppId.OPENCODE and path.name == OPENCODE_CONFIG_FILENAME:
+        return path.parent / ".opencode"
+    return path.parent
+
+
 class SyncPlanner:
     def __init__(
         self,
@@ -332,10 +353,60 @@ class SyncPlanner:
                     mcp_base.get(MCP_SERVERS_KEY, {}), service.app_id
                 )
                 desired_common = common_mcp_to_dto(target_servers)
-                plans.append(service.build_plan(desired_common, self.core))
+                plans.append(
+                    _merge_plans(
+                        service.build_plan(desired_common, self.core),
+                        self._plan_global_instructions(service),
+                    )
+                )
             except SyncAppError as exc:
                 plans.append(SyncPlan(actions=[], errors=[exc], skipped=[]))
         return _merge_plans(*plans)
+
+    def _plan_global_instructions(self, service: IAppConfigService) -> SyncPlan:
+        filename = {
+            AppId.CODEX: AGENTS_FILENAME,
+            AppId.OPENCODE: AGENTS_FILENAME,
+            AppId.CLAUDE: CLAUDE_FILENAME,
+        }.get(service.app_id)
+        if filename is None:
+            return SyncPlan([], [], [])
+
+        scope = app_scope(service.app_id, "instructions")
+        target = service.repository.root / filename
+        managed_paths = load_state_paths(self.core.load_state().managed_paths, scope)
+        if not self.core.instructions_path.exists():
+            return SyncPlan(
+                plan_stale_files_group(
+                    old_paths=managed_paths,
+                    desired_paths=[],
+                    remove_detail="remove stale managed global instructions",
+                    conflict_detail="stale global instructions path is not a file",
+                    noop_detail="stale global instructions already absent",
+                    app=service.app_id.value,
+                    scope=scope,
+                    skipped=[],
+                    skipped_message="Stale global instructions cleanup skipped: {path}",
+                ),
+                [],
+                [],
+            )
+
+        action = plan_generated_artifact(
+            GeneratedArtifact(
+                path=target,
+                kind=ArtifactKind.TEXT,
+                payload=self.core.instructions_path.read_text(encoding="utf-8"),
+                ownership=OwnershipPolicy.MANAGED_REPLACE,
+                scope=scope,
+                app=service.app_id.value,
+                create_detail="create global instructions",
+                noop_detail="global instructions already up to date",
+                update_detail="update global instructions",
+            ),
+            managed_paths={path.resolve(strict=False) for path in managed_paths},
+        )
+        return SyncPlan([action], [], [])
 
     def _plan_workspaces(self) -> SyncPlan:
         plans = []
@@ -375,6 +446,14 @@ class SyncPlanner:
 
         def emit_stale_files(scope: str, desired: list[Path]) -> None:
             app_name = scope.split(":", 2)[1]
+            if scope.endswith("_mcp") and any(
+                key in state.managed_mcp
+                for key in (
+                    f"app:{app_name}:mcp",
+                    f"app:{app_name}:agents_registry",
+                )
+            ):
+                return
             stale = plan_stale_files_group(
                 old_paths=load_state_paths(managed_paths, scope),
                 desired_paths=desired,
@@ -409,12 +488,22 @@ class SyncPlanner:
                 project_source,
                 self.core.opencode_base_path,
             )
-            if svc.app_id == AppId.COPILOT and project_common_servers is not None:
+            previously_managed_mcp = _managed_names(state, svc.app_id, "mcp")
+            previously_managed_agents = _managed_names(
+                state, svc.app_id, "agents_registry"
+            )
+            if svc.app_id == AppId.COPILOT and (
+                project_common_servers is not None or previously_managed_mcp
+            ):
                 scope = f"project:{svc.app_id.value}:{project_name}:mcp"
                 mcp_payload = common_mcp_to_dto(
-                    mcp_servers_for_app(project_common_servers, svc.app_id)
+                    mcp_servers_for_app(project_common_servers or {}, svc.app_id)
                 )
-                mcp_action = target_service.build_action(mcp_payload, replace_mcp=True)
+                mcp_action = target_service.build_action(
+                    mcp_payload,
+                    previously_managed=previously_managed_mcp,
+                    previously_managed_agents=previously_managed_agents,
+                )
                 mcp_action.scope = scope
                 _prepare_project_action(mcp_action, project_name=project_name)
                 actions.append(mcp_action)
@@ -474,7 +563,7 @@ class SyncPlanner:
         managed_paths = state.managed_paths
 
         has_config = ws_source.has_any_config()
-        if not has_config and not repos:
+        if not has_config and not repos and not state.managed_mcp:
             return SyncPlan([], [], [])
 
         actions: list[Action] = []
@@ -542,6 +631,15 @@ class SyncPlanner:
             actions.extend(stale)
 
         def emit_stale_files(scope: str, desired: list[Path]) -> None:
+            app_name = scope.split(":", 2)[1]
+            if scope.endswith("_mcp") and any(
+                key in state.managed_mcp
+                for key in (
+                    f"app:{app_name}:mcp",
+                    f"app:{app_name}:agents_registry",
+                )
+            ):
+                return
             stale = plan_stale_files_group(
                 old_paths=load_state_paths(managed_paths, scope),
                 desired_paths=desired,
@@ -652,6 +750,15 @@ class SyncPlanner:
                     self._claude_project_mcp[workspace_path] = mcp_payload
                 should_render_workspace_config = False
 
+            previously_managed_mcp = _managed_names(state, svc.app_id, "mcp")
+            previously_managed_agents = _managed_names(
+                state, svc.app_id, "agents_registry"
+            )
+            if svc.app_id != AppId.CLAUDE:
+                should_render_workspace_config = should_render_workspace_config or bool(
+                    previously_managed_mcp or previously_managed_agents
+                )
+
             # Workspace root outputs
             workspace_target_service = _create_workspace_project_service(
                 svc.app_id,
@@ -664,7 +771,8 @@ class SyncPlanner:
                 mcp_action = workspace_target_service.build_action(
                     mcp_payload,
                     agent_sources=agent_sources,
-                    replace_mcp=True,
+                    previously_managed=previously_managed_mcp,
+                    previously_managed_agents=previously_managed_agents,
                 )
                 _set_workspace_opencode_instructions(
                     workspace_target_service,
@@ -751,7 +859,8 @@ class SyncPlanner:
                     mcp_action = repo_target_service.build_action(
                         mcp_payload,
                         agent_sources=agent_sources,
-                        replace_mcp=True,
+                        previously_managed=previously_managed_mcp,
+                        previously_managed_agents=previously_managed_agents,
                     )
                     _set_workspace_opencode_instructions(
                         repo_target_service,
@@ -814,6 +923,41 @@ class SyncPlanner:
                     actions.extend(agent_actions)
                     desired_paths_by_scope.setdefault(scope, []).extend(desired_paths)
                     skipped.extend(agent_skipped)
+
+            if should_render_workspace_config and svc.app_id != AppId.CLAUDE:
+                scope = f"ws:{svc.app_id.value}:repo_mcp"
+                desired_paths_set = {
+                    path.resolve(strict=False)
+                    for path in desired_paths_by_scope.get(scope, [])
+                }
+                for stale_path in load_state_paths(managed_paths, scope):
+                    stale_key = stale_path.resolve(strict=False)
+                    if stale_key in desired_paths_set or not stale_path.exists():
+                        continue
+                    stale_service = _create_workspace_project_service(
+                        svc.app_id,
+                        _workspace_mcp_target_root(svc.app_id, stale_path),
+                        ws_source,
+                        self.core.opencode_base_path,
+                    )
+                    stale_action = stale_service.build_action(
+                        {},
+                        agent_sources=agent_sources,
+                        previously_managed=previously_managed_mcp,
+                        previously_managed_agents=previously_managed_agents,
+                    )
+                    _set_workspace_opencode_instructions(
+                        stale_service,
+                        stale_action,
+                        workspace_agents_target,
+                    )
+                    _prepare_workspace_action(
+                        stale_action,
+                        workspace_name=workspace_name,
+                        scope=scope,
+                        removable_links=load_state_links(managed_links, scope),
+                    )
+                    actions.append(stale_action)
 
         if self.include_git_excludes:
             exclude_service = GitExcludeService(self.core)
