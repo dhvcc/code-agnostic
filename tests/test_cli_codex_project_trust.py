@@ -65,6 +65,26 @@ def test_codex_project_trust_is_normalized_owned_and_idempotent(
     assert "applied  0" in second.output
 
 
+def test_codex_project_trust_syncs_without_global_mcp_source(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+) -> None:
+    assert _enable_codex(cli_runner).exit_code == 0
+    (core_root / "config" / "mcp.base.json").unlink()
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_codex_base(core_root, {str(project): {"trust_level": "trusted"}})
+
+    result = _run(cli_runner, ["apply", "-a", "codex"])
+
+    assert result.exit_code == 0, result.output
+    assert _read_codex_config(tmp_path)["projects"] == {
+        str(project.resolve()): {"trust_level": "trusted"}
+    }
+
+
 def test_codex_project_trust_source_removal_preserves_unmanaged_and_user_changed(
     minimal_shared_config: Path,
     core_root: Path,

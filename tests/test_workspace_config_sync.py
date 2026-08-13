@@ -1100,6 +1100,7 @@ def test_workspace_claude_project_mcp_preserves_user_servers_per_project(
     core = CoreRepository(core_root)
     core.add_workspace("myws", workspace_root)
     ws_config = core.workspace_config_dir("myws")
+    (core_root / "config" / "mcp.base.json").unlink()
     write_json(
         ws_config / "mcp.base.json",
         {"mcpServers": {"managed": {"url": "https://managed.example/mcp"}}},

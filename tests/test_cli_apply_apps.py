@@ -31,6 +31,25 @@ def test_apply_cursor_target_writes_only_cursor_config(
     assert not (tmp_path / ".config" / "opencode" / "opencode.json").exists()
 
 
+def test_apply_without_global_mcp_does_not_create_empty_global_configs(
+    minimal_shared_config: Path,
+    core_root: Path,
+    tmp_path: Path,
+    cli_runner,
+    enable_app,
+) -> None:
+    for app in ("cursor", "opencode", "copilot"):
+        enable_app(app)
+    (core_root / "config" / "mcp.base.json").unlink()
+
+    result = cli_runner.invoke(cli, ["apply"])
+
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / ".cursor" / "mcp.json").exists()
+    assert not (tmp_path / ".config" / "opencode" / "opencode.json").exists()
+    assert not (tmp_path / ".copilot" / "mcp-config.json").exists()
+
+
 def test_apply_target_does_not_show_plan_next_steps(
     minimal_shared_config: Path, cli_runner, enable_app
 ) -> None:

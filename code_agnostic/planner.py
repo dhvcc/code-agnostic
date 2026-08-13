@@ -240,6 +240,13 @@ def _managed_names(state: SyncState, app_id: AppId, resource: str) -> set[str]:
     return {name for name in names if isinstance(name, str)}
 
 
+def _has_global_mcp_ownership(state: SyncState, app_id: AppId) -> bool:
+    return bool(
+        _managed_names(state, app_id, "mcp")
+        or _managed_names(state, app_id, "agents_registry")
+    )
+
+
 def _workspace_mcp_target_root(app_id: AppId, path: Path) -> Path:
     if app_id == AppId.OPENCODE and path.name == OPENCODE_CONFIG_FILENAME:
         return path.parent / ".opencode"
@@ -344,6 +351,10 @@ class SyncPlanner:
         except SyncAppError as exc:
             return SyncPlan(actions=[], errors=[exc], skipped=[])
 
+        has_global_mcp_source = (
+            self.core.mcp_base_path.exists() or self.core.mcp_base_yaml_path.exists()
+        )
+        state = self.core.load_state()
         plans: list[SyncPlan] = []
         for service in self.app_services:
             try:
@@ -351,7 +362,35 @@ class SyncPlanner:
                     mcp_base.get(MCP_SERVERS_KEY, {}), service.app_id
                 )
                 desired_common = common_mcp_to_dto(target_servers)
-                plans.append(service.build_plan(desired_common, self.core))
+                service_plan = service.build_plan(desired_common, self.core)
+                if not has_global_mcp_source and not _has_global_mcp_ownership(
+                    state, service.app_id
+                ):
+                    preserve_codex_source = service.app_id == AppId.CODEX and (
+                        self.core.codex_base_path.exists()
+                        or bool(
+                            state.managed_values.get(
+                                CodexConfigService.PROJECT_TRUST_SCOPE
+                            )
+                        )
+                    )
+                    if not preserve_codex_source:
+                        config_path = service.repository.config_path
+                        service_plan = SyncPlan(
+                            actions=[
+                                action
+                                for action in service_plan.actions
+                                if not (
+                                    action.app == service.app_id.value
+                                    and action.workspace is None
+                                    and action.project is None
+                                    and action.path == config_path
+                                )
+                            ],
+                            errors=service_plan.errors,
+                            skipped=service_plan.skipped,
+                        )
+                plans.append(service_plan)
             except SyncAppError as exc:
                 plans.append(
                     SyncPlan(
