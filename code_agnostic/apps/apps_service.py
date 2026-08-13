@@ -7,6 +7,7 @@ from code_agnostic.apps.common.framework import (
     list_registered_app_services,
 )
 from code_agnostic.apps.claude.service import ClaudeConfigService
+from code_agnostic.apps.codex.service import CodexConfigService
 from code_agnostic.apps.common.interfaces.service import IAppConfigService
 from code_agnostic.apps.common.symlink_planning import (
     load_state_links,
@@ -106,6 +107,7 @@ class AppsService:
         global_links = global_state.managed_links
         global_paths = global_state.managed_paths
         global_mcp = global_state.managed_mcp
+        global_values = global_state.managed_values
         global_prefix = f"app:{app_id.value}:"
         for scope in sorted(s for s in global_links if s.startswith(global_prefix)):
             actions.extend(self._cleanup_links(global_links, scope, app_id.value))
@@ -113,7 +115,7 @@ class AppsService:
             actions.extend(
                 self._cleanup_paths(global_paths, scope, app_id.value, skipped)
             )
-        actions.extend(self._cleanup_global_mcp(app_id, global_mcp))
+        actions.extend(self._cleanup_global_mcp(app_id, global_mcp, global_values))
         if app_id == AppId.CLAUDE:
             actions.extend(self._cleanup_claude_projects(global_mcp))
 
@@ -194,13 +196,17 @@ class AppsService:
         )
 
     def _cleanup_global_mcp(
-        self, app_id: AppId, managed_mcp: dict[str, Any]
+        self,
+        app_id: AppId,
+        managed_mcp: dict[str, Any],
+        managed_values: dict[str, dict[str, str]],
     ) -> list[Action]:
         managed = self._names_for_scope(managed_mcp, app_scope(app_id, "mcp"))
         managed_agents = self._names_for_scope(
             managed_mcp, app_scope(app_id, "agents_registry")
         )
-        if not managed and not managed_agents:
+        managed_trust = managed_values.get(CodexConfigService.PROJECT_TRUST_SCOPE, {})
+        if not managed and not managed_agents and not managed_trust:
             return []
         try:
             service = create_registered_app_service(app_id)
@@ -208,6 +214,16 @@ class AppsService:
             return []
         if not service.repository.config_path.exists():
             return []
+        if app_id == AppId.CODEX and isinstance(service, CodexConfigService):
+            return [
+                service.build_action(
+                    {},
+                    previously_managed=managed,
+                    previously_managed_agents=managed_agents,
+                    previously_managed_trust=managed_trust,
+                    project_trust={},
+                )
+            ]
         # Empty desired + our previously-managed names → prune only what we wrote
         # (MCP servers and agent-registry entries), keep the user's, and clear the
         # ownership state (managed_entries becomes empty).

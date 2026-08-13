@@ -302,6 +302,21 @@ class IAppConfigService(ABC):
             }
         return action
 
+    def build_source_action(
+        self,
+        common_servers: dict[str, MCPServerDTO],
+        source_repository: ISourceRepository,
+        agent_sources: list[Path] | None = None,
+        previously_managed: set[str] | None = None,
+        previously_managed_agents: set[str] | None = None,
+    ) -> Action:
+        return self.build_action(
+            common_servers,
+            agent_sources=agent_sources,
+            previously_managed=previously_managed,
+            previously_managed_agents=previously_managed_agents,
+        )
+
     def build_plan(
         self,
         common_servers: dict[str, MCPServerDTO],
@@ -343,8 +358,9 @@ class IAppConfigService(ABC):
         )
         return SyncPlan(
             actions=[
-                self.build_action(
+                self.build_source_action(
                     common_servers,
+                    source_repository,
                     agent_sources=source_repository.list_agent_sources(),
                     previously_managed=previously_managed_mcp,
                     previously_managed_agents=previously_managed_agents,

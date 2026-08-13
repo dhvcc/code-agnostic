@@ -19,12 +19,14 @@ from code_agnostic.apps.common.interfaces.mapper import IAppMCPMapper
 from code_agnostic.apps.common.utils import apply_mcp_servers
 from code_agnostic.apps.common.interfaces.repositories import (
     IAppConfigRepository,
+    ISourceRepository,
     ISchemaRepository,
 )
 from code_agnostic.apps.common.models import MCPServerDTO
 from code_agnostic.errors import (
     InvalidConfigSchemaError,
     InvalidJsonFormatError,
+    SyncAppError,
 )
 from code_agnostic.models import Action, ActionKind, ActionStatus
 from code_agnostic.utils import merge_dict_overlay, read_json_safe
@@ -35,6 +37,7 @@ from code_agnostic.skills.parser import parse_skill
 class CodexConfigService(RegisteredAppConfigService):
     APP_ID = AppId.CODEX
     APP_LABEL = app_label(APP_ID)
+    PROJECT_TRUST_SCOPE = app_scope(APP_ID, "project_trust")
 
     def __init__(
         self,
@@ -116,6 +119,8 @@ class CodexConfigService(RegisteredAppConfigService):
         agent_sources: list[Path] | None = None,
         previously_managed: set[str] | None = None,
         previously_managed_agents: set[str] | None = None,
+        previously_managed_trust: dict[str, str] | None = None,
+        project_trust: dict[str, dict[str, Any]] | None = None,
         *,
         replace_mcp: bool = False,
     ) -> Action:
@@ -127,7 +132,7 @@ class CodexConfigService(RegisteredAppConfigService):
         merged = dict(existing)
         base = self._load_base_config()
         for key, value in base.items():
-            if key == "mcp_servers":
+            if key in ("mcp_servers", "projects"):
                 continue
             if key == "agents" and isinstance(value, dict):
                 merged["agents"] = self._merge_agents_payload(
@@ -139,6 +144,20 @@ class CodexConfigService(RegisteredAppConfigService):
                 merged[key] = merge_dict_overlay(current, value)
                 continue
             merged[key] = deepcopy(value)
+
+        desired_projects = (
+            self._normalize_project_configs(base.get("projects"))
+            if project_trust is None
+            else project_trust
+        )
+        merged_projects = self._merge_project_trust(
+            merged.get("projects"),
+            desired_projects,
+            previously_managed_trust,
+        )
+        if merged_projects or "projects" in merged or desired_projects:
+            merged["projects"] = merged_projects
+
         self.set_mcp_payload(
             merged, desired_mcp, previously_managed, replace=replace_mcp
         )
@@ -170,7 +189,118 @@ class CodexConfigService(RegisteredAppConfigService):
                 app_scope(self.app_id, "mcp"): sorted(desired_mcp),
                 app_scope(self.app_id, "agents_registry"): sorted(registry),
             }
+            action.managed_values = {
+                self.PROJECT_TRUST_SCOPE: {
+                    path: entry["trust_level"]
+                    for path, entry in desired_projects.items()
+                    if isinstance(entry.get("trust_level"), str)
+                }
+            }
         return action
+
+    def build_source_action(
+        self,
+        common_servers: dict[str, MCPServerDTO],
+        source_repository: ISourceRepository,
+        agent_sources: list[Path] | None = None,
+        previously_managed: set[str] | None = None,
+        previously_managed_agents: set[str] | None = None,
+    ) -> Action:
+        state = source_repository.load_state()
+        return self.build_action(
+            common_servers,
+            agent_sources=agent_sources,
+            previously_managed=previously_managed,
+            previously_managed_agents=previously_managed_agents,
+            previously_managed_trust=state.managed_values.get(
+                self.PROJECT_TRUST_SCOPE, {}
+            ),
+        )
+
+    def _normalize_project_configs(self, projects: Any) -> dict[str, dict[str, Any]]:
+        if projects is None:
+            return {}
+        if not isinstance(projects, dict):
+            raise InvalidConfigSchemaError(
+                self._base_config_path or self.repository.config_path,
+                "projects must be an object",
+            )
+
+        normalized: dict[str, dict[str, Any]] = {}
+        for project_path, config in projects.items():
+            if not isinstance(project_path, str) or not isinstance(config, dict):
+                raise InvalidConfigSchemaError(
+                    self._base_config_path or self.repository.config_path,
+                    "projects entries must map paths to objects",
+                )
+            try:
+                normalized_path = str(Path(project_path).expanduser().resolve())
+            except OSError as exc:
+                raise InvalidConfigSchemaError(
+                    self._base_config_path or self.repository.config_path,
+                    f"invalid project path: {project_path}",
+                ) from exc
+            normalized[normalized_path] = deepcopy(config)
+        return normalized
+
+    def _merge_project_trust(
+        self,
+        existing: Any,
+        desired: dict[str, dict[str, Any]],
+        previously_managed: dict[str, str] | None,
+    ) -> dict[str, Any]:
+        projects = deepcopy(existing) if isinstance(existing, dict) else {}
+        managed = previously_managed or {}
+
+        for project_path, previous_trust in managed.items():
+            if project_path in desired:
+                continue
+            project = projects.get(project_path)
+            if not isinstance(project, dict):
+                continue
+            if project.get("trust_level") != previous_trust:
+                continue
+            project = deepcopy(project)
+            project.pop("trust_level", None)
+            if project:
+                projects[project_path] = project
+            else:
+                projects.pop(project_path, None)
+
+        for project_path, desired_config in desired.items():
+            project = projects.get(project_path)
+            if project is None:
+                project = {}
+            elif not isinstance(project, dict):
+                raise InvalidConfigSchemaError(
+                    self.repository.config_path,
+                    f"projects entry is not an object: {project_path}",
+                )
+            else:
+                project = deepcopy(project)
+
+            desired_trust = desired_config.get("trust_level")
+            current_trust = project.get("trust_level")
+            if desired_trust is not None and not isinstance(desired_trust, str):
+                raise InvalidConfigSchemaError(
+                    self._base_config_path or self.repository.config_path,
+                    f"invalid trust_level for project: {project_path}",
+                )
+            if (
+                isinstance(desired_trust, str)
+                and project_path not in managed
+                and current_trust is not None
+                and current_trust != desired_trust
+            ):
+                raise SyncAppError(
+                    f"Codex project trust conflicts with unmanaged existing setting: "
+                    f"{project_path}"
+                )
+            for key, value in desired_config.items():
+                project[key] = deepcopy(value)
+            projects[project_path] = project
+
+        return projects
 
     def _merge_agents_payload(
         self, existing: Any, overlay: dict[str, Any]

@@ -44,6 +44,13 @@ This setting affects only the canonical source repository; generated target
 outputs continue to use each app's own default home, including `CODEX_HOME`
 when configured.
 
+Codex project trust is declared in `config/codex.base.json` under
+`projects.<absolute_path>.trust_level`. The compiler canonicalizes project
+paths before writing `config.toml` and records the owned trust values in the
+source root's `.sync-state.json`. It updates only entries it owns, reports a
+conflict instead of overwriting a different unmanaged trust setting, and
+removes a stale trust field only when its value is still the owned value.
+
 ## Schema URLs
 
 Compiler-owned source syntax is backed by publishable JSON Schemas in `code_agnostic/spec/schemas/`.

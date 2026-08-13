@@ -770,6 +770,8 @@ class SyncExecutor:
         global_mcp: dict[str, list[str]] = {}
         global_touched_scopes: set[str] = set()
         global_mcp_touched: set[str] = set()
+        global_values: dict[str, dict[str, str]] = {}
+        global_values_touched: set[str] = set()
         workspace_links: dict[str, dict[str, list[str]]] = {}
         workspace_paths: dict[str, dict[str, list[str]]] = {}
         workspace_touched_scopes: dict[str, set[str]] = {}
@@ -789,6 +791,12 @@ class SyncExecutor:
                     global_mcp_touched.add(entry_scope)
                     if names:
                         global_mcp[entry_scope] = sorted(set(names))
+            if action.managed_values is not None:
+                for value_scope, values in action.managed_values.items():
+                    global_values_touched.add(value_scope)
+                    if values:
+                        global_values[value_scope] = dict(values)
+            if action.managed_entries is not None or action.managed_values is not None:
                 continue
 
             if action.workspace is not None:
@@ -836,7 +844,7 @@ class SyncExecutor:
 
         # Persist global state
         core = self.context.core
-        if global_touched_scopes or global_mcp_touched:
+        if global_touched_scopes or global_mcp_touched or global_values_touched:
             existing_global_state = core.load_state()
             global_state = {
                 "updated_at": updated_at,
@@ -854,6 +862,11 @@ class SyncExecutor:
                     existing=existing_global_state.managed_mcp,
                     touched_scopes=global_mcp_touched,
                     current_links=global_mcp,
+                ),
+                "managed_values": self._merge_managed_values(
+                    existing=existing_global_state.managed_values,
+                    touched_scopes=global_values_touched,
+                    current_values=global_values,
                 ),
                 "skipped": plan.skipped,
             }
@@ -1155,6 +1168,40 @@ class SyncExecutor:
 
         for scope, paths in current_links.items():
             current = sorted({path for path in paths if isinstance(path, str)})
+            if current:
+                merged[scope] = current
+
+        return merged
+
+    @staticmethod
+    def _merge_managed_values(
+        *,
+        existing: Any,
+        touched_scopes: set[str],
+        current_values: dict[str, dict[str, str]],
+    ) -> dict[str, dict[str, str]]:
+        merged: dict[str, dict[str, str]] = {}
+
+        if isinstance(existing, dict):
+            for scope, values in existing.items():
+                if scope in touched_scopes or not isinstance(scope, str):
+                    continue
+                if not isinstance(values, dict):
+                    continue
+                kept_values = {
+                    key: value
+                    for key, value in values.items()
+                    if isinstance(key, str) and isinstance(value, str)
+                }
+                if kept_values:
+                    merged[scope] = kept_values
+
+        for scope, values in current_values.items():
+            current = {
+                key: value
+                for key, value in values.items()
+                if isinstance(key, str) and isinstance(value, str)
+            }
             if current:
                 merged[scope] = current
 

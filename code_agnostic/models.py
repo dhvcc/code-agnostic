@@ -75,6 +75,7 @@ class Action:
     workspace: str | None = None
     project: str | None = None
     managed_entries: dict[str, list[str]] | None = None
+    managed_values: dict[str, dict[str, str]] | None = None
 
 
 @dataclass
@@ -155,13 +156,15 @@ class SyncState:
     directly instead of re-guarding with `isinstance` at every call site.
 
     `managed_links`/`managed_paths`/`managed_mcp` are `scope -> names` maps — the
-    live ownership model. Any legacy `managed_*_links` keys still on disk are
-    ignored on load (they had no reader).
+    live ownership model. `managed_values` tracks scalar values for owned
+    settings that need user-change detection. Any legacy `managed_*_links` keys
+    still on disk are ignored on load (they had no reader).
     """
 
     managed_links: dict[str, list[str]] = field(default_factory=dict)
     managed_paths: dict[str, list[str]] = field(default_factory=dict)
     managed_mcp: dict[str, list[str]] = field(default_factory=dict)
+    managed_values: dict[str, dict[str, str]] = field(default_factory=dict)
     updated_at: str | None = None
     skipped: list[str] = field(default_factory=list)
 
@@ -174,6 +177,7 @@ class SyncState:
             managed_links=cls._coerce_group(payload.get("managed_links")),
             managed_paths=cls._coerce_group(payload.get("managed_paths")),
             managed_mcp=cls._coerce_group(payload.get("managed_mcp")),
+            managed_values=cls._coerce_values(payload.get("managed_values")),
             updated_at=updated_at if isinstance(updated_at, str) else None,
             skipped=cls._coerce_str_list(payload.get("skipped")),
         )
@@ -194,6 +198,23 @@ class SyncState:
         if not isinstance(value, list):
             return []
         return [item for item in value if isinstance(item, str)]
+
+    @staticmethod
+    def _coerce_values(value: Any) -> dict[str, dict[str, str]]:
+        if not isinstance(value, dict):
+            return {}
+        result: dict[str, dict[str, str]] = {}
+        for scope, entries in value.items():
+            if not isinstance(scope, str) or not isinstance(entries, dict):
+                continue
+            normalized = {
+                key: item
+                for key, item in entries.items()
+                if isinstance(key, str) and isinstance(item, str)
+            }
+            if normalized:
+                result[scope] = normalized
+        return result
 
 
 @dataclass(frozen=True)
