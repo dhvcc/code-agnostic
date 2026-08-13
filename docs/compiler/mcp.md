@@ -91,3 +91,7 @@ Target markers are recognized only for known targetable app ids.
 - GitHub Copilot output always emits `tools: ["*"]` for compiled MCP servers.
   Canonical OAuth servers are rejected because current Copilot repository MCP
   docs do not support OAuth remote servers.
+- Shared/global MCP sync never overwrites an existing unmanaged server with the
+  same name; resolve the name conflict or record the server as managed first.
+  Workspace and project outputs remain fully replaced because they are owned by
+  the compiler.

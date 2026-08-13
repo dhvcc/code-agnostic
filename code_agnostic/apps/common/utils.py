@@ -9,6 +9,7 @@ from code_agnostic.constants import (
     MCP_APP_INCLUDE_PREFIX,
     MCP_APP_TARGET_SEPARATOR,
 )
+from code_agnostic.errors import SyncAppError
 
 
 _TARGETABLE_APP_NAMES = {
@@ -50,18 +51,23 @@ def apply_mcp_servers(
       (``~/.codex``, ``~/.claude.json``, ``~/.cursor/mcp.json`` …). Servers the
       user added by hand are preserved; servers we previously wrote
       (``previously_managed``) that are no longer desired are pruned; desired
-      servers are upserted. This is ownership-aware cleanup: our orphans go, the
-      user's stay.
+      servers are added or updated only when absent or previously managed. A
+      desired server that collides with an unmanaged name is a conflict.
     """
 
     if replace:
         return {name: deepcopy(config) for name, config in desired.items()}
 
+    managed_names = set(previously_managed or ())
     result: dict[str, Any] = deepcopy(existing) if isinstance(existing, dict) else {}
-    for name in previously_managed or ():
+    for name in managed_names:
         if name not in desired:
             result.pop(name, None)
     for name, config in desired.items():
+        if name in result and name not in managed_names:
+            raise SyncAppError(
+                f"MCP server '{name}' conflicts with an unmanaged existing server"
+            )
         result[name] = deepcopy(config)
     return result
 

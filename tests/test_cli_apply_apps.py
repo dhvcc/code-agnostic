@@ -324,6 +324,10 @@ def test_apply_codex_preserves_unmanaged_mcp_servers_when_syncing_managed_mcp(
         ),
         encoding="utf-8",
     )
+    (core_root / ".sync-state.json").write_text(
+        json.dumps({"managed_mcp": {"app:codex:mcp": ["managed"]}}),
+        encoding="utf-8",
+    )
     (core_root / "config" / "mcp.base.json").write_text(
         json.dumps(
             {
@@ -444,7 +448,8 @@ def test_codex_mcp_plan_updates_only_same_named_managed_mcp(
                 command="uvx",
                 args=["new-managed-tool"],
             )
-        }
+        },
+        previously_managed={"managed"},
     )
 
     assert action.status == ActionStatus.UPDATE
