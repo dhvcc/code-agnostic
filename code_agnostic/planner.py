@@ -389,11 +389,15 @@ class SyncPlanner:
 
         def emit_stale_files(scope: str, desired: list[Path]) -> None:
             app_name = scope.split(":", 2)[1]
-            if scope.endswith("_mcp") and any(
-                key in state.managed_mcp
-                for key in (
-                    f"app:{app_name}:mcp",
-                    f"app:{app_name}:agents_registry",
+            if (
+                ":" in scope
+                and scope.endswith("_mcp")
+                and any(
+                    key in state.managed_mcp
+                    for key in (
+                        f"app:{scope.split(':', 2)[1]}:mcp",
+                        f"app:{scope.split(':', 2)[1]}:agents_registry",
+                    )
                 )
             ):
                 return
@@ -574,12 +578,15 @@ class SyncPlanner:
             actions.extend(stale)
 
         def emit_stale_files(scope: str, desired: list[Path]) -> None:
-            app_name = scope.split(":", 2)[1]
-            if scope.endswith("_mcp") and any(
-                key in state.managed_mcp
-                for key in (
-                    f"app:{app_name}:mcp",
-                    f"app:{app_name}:agents_registry",
+            if (
+                ":" in scope
+                and scope.endswith("_mcp")
+                and any(
+                    key in state.managed_mcp
+                    for key in (
+                        f"app:{scope.split(':', 2)[1]}:mcp",
+                        f"app:{scope.split(':', 2)[1]}:agents_registry",
+                    )
                 )
             ):
                 return
